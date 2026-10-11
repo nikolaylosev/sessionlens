@@ -20,13 +20,6 @@
   next analysis.
 
 ### Fixed
-- **"User frustration" no longer fires on the Russian word «нет» ("no") inside a task.** A task like «…Нет ограничения
-  на длину строки» ("…there is no limit on the string length") or a question like «нет ли у нас мелких доработок?»
-  ("are there any small fixes left?") was a medium `user_frustration`; in 38 real sessions, 19 of the 40 findings were
-  like this. «Нет» now counts only as a reply: at the start of a message or a sentence, before a comma, a full stop or
-  the end of the message («Нет, не так», "No, not like that"). A question about what the agent did now counts, in
-  English and in Russian: "why did you…", «где вообще assertions?» ("where are the assertions?"), «зачем ты…» ("why
-  did you…"), at the start of a message or a sentence. Saved sessions get this on their next analysis.
 - **"Edit churn" counts one request at a time, and not docs.** Five edits of a file over the whole session were
   "poking instead of understanding", even when you had asked for a new change in between, and the readme the agent
   updated along with each change counted too. Now the edits of a file are counted between two of your messages, and
