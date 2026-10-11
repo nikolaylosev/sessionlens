@@ -228,7 +228,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `duplicate_assert` | Low | The same assertion repeated |
 | `raw_locator` | Low | A raw CSS selector instead of a role, label or text locator |
 | `positional_locator` | Low | Selection by position, such as `.first()` or `.nth()` |
-| `no_assertion_after_action` | High | A test has no assertion at all (Playwright, via ESLint `expect-expect`; the other languages in their sections below) |
+| `no_assertion_after_action` | High | A test has no assertion at all (Playwright, via ESLint `expect-expect`; a call to a Page Object method named `expect…`, such as `searchPage.expectSearchOpen()`, counts as one; the other languages in their sections below) |
 | `lint_valid_title` | Low | A Playwright test or `describe` title is empty, not a string, or starts or ends with a space (ESLint `valid-title`) |
 | `focused_test` | High | `.only`, `fit` or `fdescribe` was left in a test, so only it runs and the rest of the suite is silently skipped (TypeScript, Cypress, Detox, API and mobile profiles) |
 | `debug_leftover` | Medium | Debugging was left in a test: `page.pause()`, `cy.pause()`, `cy.debug()`, `debugger`, `breakpoint()`, `pdb.set_trace()` |

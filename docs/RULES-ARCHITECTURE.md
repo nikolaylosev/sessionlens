@@ -427,7 +427,7 @@ parser×1 = 7 engines), changed its dispatching logic**. Every engine
 
 ```ts
 {
-  lint(code: string, opts: { rules: Record<string, "warn">, filename: string })
+  lint(code: string, opts: { rules: Record<string, "warn" | ["warn", ...options]>, filename: string })
     -> { messages: Array<{ ruleId: string, message: string, line?: number }>, error?: string },
   RULES: { <engineKey>: string[] },   // the list of rule ids the engine can check
 }
@@ -497,6 +497,12 @@ function run(session, cfg, settings) {
   "invent" new check names on the fly** — worth checking in review
   whether anyone mistakenly relies on this fallback instead of an explicit entry in a
   `*_RULE_MAP`.
+- **Rule options** (`RULE_OPTIONS`, since 0.1.125). Every rule runs as `"warn"` with the engine's defaults, except
+  `playwright/expect-expect`, which gets `assertFunctionPatterns: ["^expect[A-Z]"]`: a spec written with Page Objects
+  asserts through a method (`await searchPage.expectSearchOpen()`, the `expect()` inside it), and with the defaults
+  every such test was "no assertions". The plugin matches the called method's own name, not its object's, so
+  `expected()` and `expectation()` still count as actions. A method named `expect…` with no `expect()` inside is
+  taken at its word.
 - The message cap (`CAP = 3`) works **within one call of
   `run()`**, per `(check, seq)` pair, that is per file — if one file gives
   30 identical findings of one check in one analysis, the first 3 are shown

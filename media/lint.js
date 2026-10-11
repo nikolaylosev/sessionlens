@@ -268,9 +268,16 @@
     return !!(e && e.core() && typeof e.core().lint === "function");
   };
 
+  /* engine rule → its options (every other rule runs with the engine's defaults). A spec written with Page Objects
+     asserts through them: `await searchPage.expectSearchOpen()`, the expect() inside the method. expect-expect counts
+     only expect() itself, so every such test had "no assertions" (0.1.125). The plugin matches the called method's own
+     name, not the object's: "^expect[A-Z]" takes expectSearchOpen and expectResultsFor, not expected() or expectation(). */
+  const RULE_OPTIONS = {
+    "playwright/expect-expect": [{ assertFunctionPatterns: ["^expect[A-Z]"] }],
+  };
   function rulesConfig(map, extra) {
     const rules = {};
-    for (const r of Object.keys(map)) rules[r] = "warn";
+    for (const r of Object.keys(map)) rules[r] = RULE_OPTIONS[r] ? ["warn", ...RULE_OPTIONS[r]] : "warn";
     for (const r of extra || []) rules[r] = "warn";
     return rules;
   }
