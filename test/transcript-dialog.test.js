@@ -1,7 +1,7 @@
 "use strict";
 /* Where the "choose a transcript" dialog opens (open:transcript) for each answer to "Where is the transcript from?":
-   the real extension.js under the fake "vscode" module, with a temporary home. Cursor (0.1.121) opens this workspace's
-   ~/.cursor/projects/<slug>/agent-transcripts, the slug named the way Cursor's CLI names it. */
+   the real extension.js under the fake "vscode" module, with a temporary home. Cursor opens ~/.cursor/projects, one
+   folder per workspace (0.1.121–0.1.124 went straight into this workspace's agent-transcripts, with no way up). */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -36,39 +36,21 @@ const mk = (...p) => {
   return path.join(...p);
 };
 
-test("Cursor Agent: the workspace's agent-transcripts, its name as Cursor's CLI makes it", async () => {
+test("Cursor Agent: ~/.cursor/projects, even when this workspace has an agent-transcripts folder", async () => {
   const h = home();
-  const want = mk(h, ".cursor", "projects", "Users-me-my-app-v2", "agent-transcripts");
-  mk(h, ".cursor", "projects", "Users-me-other", "agent-transcripts");
-  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/my_app.v2/"]), want); // "_", "." and the last "/" too
+  const projects = mk(h, ".cursor", "projects");
+  mk(projects, "Users-me-shop", "agent-transcripts");
+  mk(projects, "Users-me-other", "agent-transcripts");
+  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/shop"]), projects);
+  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/web", "/Users/me/shop"]), projects);
+  assert.equal(await dialogFolder(h, "cursor", undefined), projects); // no workspace open
 });
 
-test("Cursor Agent: the first workspace folder that has one", async () => {
-  const h = home();
-  const want = mk(h, ".cursor", "projects", "Users-me-api", "agent-transcripts");
-  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/web", "/Users/me/api"]), want);
-});
-
-test("Cursor Agent: a workspace opened through a symlink is found by its real path", { skip: process.platform === "win32" && "symlinks" }, async () => {
-  const h = home();
-  const real = mk(h, "real", "shop");
-  const link = path.join(h, "link");
-  fs.symlinkSync(path.join(h, "real"), link);
-  const slug = fs
-    .realpathSync(real)
-    .replace(/[^a-zA-Z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  const want = mk(h, ".cursor", "projects", slug, "agent-transcripts");
-  assert.equal(await dialogFolder(h, "cursor", [path.join(link, "shop")]), want);
-});
-
-test("Cursor Agent: no folder for this workspace → ~/.cursor/projects; no Cursor at all → the home folder", async () => {
+test("Cursor Agent: no Cursor at all → the home folder", async () => {
   const h = home();
   assert.equal(await dialogFolder(h, "cursor", ["/Users/me/shop"]), h);
-  const projects = mk(h, ".cursor", "projects");
-  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/shop"]), projects);
-  assert.equal(await dialogFolder(h, "cursor", undefined), projects); // no workspace open
+  mk(h, ".cursor"); // Cursor, but no agent session yet
+  assert.equal(await dialogFolder(h, "cursor", ["/Users/me/shop"]), h);
 });
 
 test("Claude Code, Codex and somewhere else open where they did before", async () => {

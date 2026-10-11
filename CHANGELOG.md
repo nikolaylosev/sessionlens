@@ -61,6 +61,10 @@
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an
   assertion. A test that only calls actions is still reported. Saved sessions get this on their next analysis.
+- **Choose file → Cursor Agent opens `~/.cursor/projects`.** It used to open this workspace's `agent-transcripts`
+  folder, and from there you could not get to another workspace's sessions: the dialog hides `~/.cursor`, so there was
+  no way up. Now it opens the folder with one folder per workspace, as Claude Code's and Codex's choices do; a session
+  is in `<workspace>/agent-transcripts/<id>/<id>.jsonl`. Paths in the session are made relative the same way as before.
 
 ## 0.1.124
 

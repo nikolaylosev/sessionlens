@@ -460,11 +460,12 @@ flowchart TD
   `fromCursorJsonl` makes them relative to the folder above them whose name, made by the same rule
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps
   absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** → Cursor Agent opens
-  the dialog at the workspace's `agent-transcripts` folder. The folder's name follows `cursorProjectSlug` in `cli.js`,
-  the same rule as `Lens.cursorProjectSlug` and as Cursor's CLI: every character that is not a Latin letter or
-  a digit becomes `-`, a run of them becomes one `-`, and none are left at either end (`/Users/me/my_app` becomes
-  `Users-me-my-app`). Windows is not checked. If that folder does not exist, the dialog opens at `~/.cursor/projects`
-  when that directory exists, and at the home folder when it does not (`guessTranscriptDefaultUri` in `extension.js`).
+  the dialog at `~/.cursor/projects`, one folder per workspace, and at the home folder when that directory does not
+  exist (`guessTranscriptDefaultUri` in `extension.js`). Until 0.1.125 it opened the workspace's own `agent-transcripts`
+  folder, and the dialog, which hides `~/.cursor`, had no way up to another workspace. A folder's name follows
+  `cursorProjectSlug` in `cli.js`, the same rule as `Lens.cursorProjectSlug` and as Cursor's CLI: every character that
+  is not a Latin letter or a digit becomes `-`, a run of them becomes one `-`, and none are left at either end
+  (`/Users/me/my_app` becomes `Users-me-my-app`). Windows is not checked.
 - **Cursor Agent CLI log** (since 0.1.121; `agent -p --output-format stream-json`): `tool_call` lines, started and
   completed, each with `args` and `result` under `<kind>ToolCall`. `isCursorStreamJson` looks for such a line (Claude
   Code's own stream-json has `tool_use` blocks and an init with `tools`), and `fromCursorStreamJson` rewrites the calls
