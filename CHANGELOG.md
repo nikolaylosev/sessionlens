@@ -45,6 +45,11 @@
   red and every test as having no reference. A pasted code review taken for the spec looked like a spec nothing
   covered, while "no specification" was gone. Now the header says "numbered automatically, coverage not checked", a
   line above the table says why and how to check it (IDs `R1.`, `R2.` … named in the tests), and an empty cell is "—".
+- **A file edited with a `$` in its new code is no longer mangled.** SessionLens rebuilds a file from the agent's
+  edits. When the new code had `$&`, `` $` ``, `$'` or `$$` in it, the usual way to escape a regular expression
+  (`'\\$&'`) or a template that ends in `$`, the rebuilt file got the old text or the start of the file pasted into it:
+  ESLint could not parse it ("Parsing error"), and the other checks read the wrong code. Claude Code's Edit and Cursor's
+  edits alike. A session imported before with such an edit shows **Import again**.
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an

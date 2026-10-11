@@ -863,7 +863,8 @@
             if (o == null)
               files[f] = inp.new_string || ""; // first sight of this file: only the fragment is known
             else {
-              const n = inp.old_string ? o.replace(inp.old_string, inp.new_string || "") : o + "\n" + (inp.new_string || "");
+              // the new text as it is: a string would read $&, $`, $' and $$ in it as patterns (0.1.125)
+              const n = inp.old_string ? o.replace(inp.old_string, () => inp.new_string || "") : o + "\n" + (inp.new_string || "");
               files[f] = n;
               if (isCode(f, cfg)) {
                 const d = compareAsserts(o, n, cfg, f);
@@ -892,7 +893,7 @@
             // `newString`, so the new file has to be reconstructed — a fragment is not parseable code.
             let after = typeof tur.content === "string" ? tur.content : null;
             if (after == null && before != null && typeof tur.oldString === "string" && typeof tur.newString === "string")
-              after = tur.replaceAll ? before.split(tur.oldString).join(tur.newString) : before.replace(tur.oldString, tur.newString);
+              after = tur.replaceAll ? before.split(tur.oldString).join(tur.newString) : before.replace(tur.oldString, () => tur.newString);
             const full = r.file ? (cwd && !r.file.startsWith("/") ? cwd + "/" + r.file : r.file) : "";
             if (after != null) {
               files[full] = after;
@@ -1675,8 +1676,16 @@
         a weakened assertion shows the change, not 40 characters of each line (0.1.122).
      5: a path or a command in the home folder starts with ~, without the person's user name (fromHome, 0.1.124).
      6: a Cursor session's MCP calls are named mcp__<server>__<tool>, so browser_check_not_in_test sees a browser
-        (0.1.125). */
-  const IMPORT_GEN = 6;
+        (0.1.125).
+     7: an edit is applied with its new text as it is (0.1.125). String.replace(old, new) read $&, $`, $' and $$ in the
+        new text as patterns: code that escapes a regular expression ('\\$&') or ends a template with `…${x}$` put the
+        old text and the start of the file into the file, which no longer parsed. */
+  const IMPORT_GEN = 7;
+  /* A session imported before that edited a file with such a $ in the new text: by its kept text, an edit's new_string
+     (Claude Code's Edit, Cursor's StrReplace) or newString (Claude Code's result) with $&, $`, $' or $$. $1 stays as
+     it is: the old text is no regular expression. A session without the kept text is not asked: nothing tells it. */
+  const DOLLAR_EDIT = /"(?:new_string|newString)"\s*:\s*"(?:[^"\\]|\\.)*?\$[&`'$]/;
+  const dollarEditBefore125 = (s) => typeof s.source_text === "string" && DOLLAR_EDIT.test(s.source_text);
   /* A Cursor session imported before 0.1.125 that wrote a test and called an MCP server: by its kept text, a
      transcript's CallDynamicTool outside Cursor's own namespace or an Agent CLI log's mcpToolCall that names its
      server; without the text, a CallDynamicTool step (it may be only Cursor's own TodoWrite: importing it again then
@@ -1724,6 +1733,7 @@
     if ((s.importGen || 0) < 4 && changedBy122(s)) return true; // a 0.1.122 import already reads these the new way
     if (homeSpelled(s)) return true;
     if ((s.importGen || 0) < 6 && cursorMcpBefore125(s)) return true;
+    if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;

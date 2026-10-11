@@ -1507,7 +1507,10 @@ What the import keeps for them:
   (`IMPORT_GEN` 6) it is true below generation 6 for a Cursor session that wrote a test and called an MCP server: by
   the kept text, a `CallDynamicTool` outside the namespace `cursor` or an `mcpToolCall` with its server; without the
   text, a stored `CallDynamicTool` step. The new import names such a call `mcp__<server>__<tool>`, so
-  `browser_check_not_in_test` sees a browser. The session's tab then shows
+  `browser_check_not_in_test` sees a browser. Below generation 7 it is true for a session whose kept text has an edit
+  (`new_string`, `newString`) with `$&`, `` $` ``, `$'` or `$$` in its new text: `String.replace(old, new)` read them
+  as patterns and put the old text or the start of the file into it (0.1.125; the edit is now applied with a function).
+  The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's
   own conversation of a file with several; "Back to regex parsing" uses it too since 0.1.115): id, name, spec and verdicts stay, `events`
