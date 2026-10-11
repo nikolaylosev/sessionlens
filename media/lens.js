@@ -128,7 +128,7 @@
         /expect\s*\([^)]*\)\s*\.toBeTruthy\s*\(\)/g,
         /expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/g,
       ],
-      assert_line_patterns: [/\bexpect\s*\(/],
+      assert_line_patterns: [/\bexpect(?:\.(?:soft|poll))?\s*\(/],
       test_fn_pattern: /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g,
       weaken_pairs: [
         [
@@ -286,7 +286,7 @@
       ],
       assert_line_patterns: [
         /^\s*assert\b/,
-        /\bexpect\s*\(/,
+        /\bexpect(?:\.(?:soft|poll))?\s*\(/,
         /\bassert\w*\s*\(/,
         /\bAssert\.\w+\s*\(/,
         /\.Should\(\)/,
@@ -700,6 +700,62 @@
     const part = (s) => (from ? "…" : "") + capLine(s.slice(from));
     return `${part(a)} → ${part(b)}`;
   }
+  /* The blocks of a file with no test in it (0.1.125): a page object, a helper, a fixture file. Its functions and
+     methods, by the file's language, so their assertions count: until then only the lines inside test('…') / it('…') /
+     def test_… did, and a page object, where the rules of Page Object Model put every expect(), was 0 assertions before
+     and after any edit. A weakened or removed assertion in it went unseen (the owner's Cursor session of 11 Oct 2026,
+     Tests-mcp). A name that repeats gets "#2"; a language with no pattern here, or no function found: the whole file. */
+  const NOT_A_NAME = new Set([
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "with",
+    "return",
+    "function",
+    "do",
+    "else",
+    "try",
+    "using",
+    "lock",
+    "foreach",
+    "new",
+    "await",
+    "typeof",
+    "super",
+  ]);
+  const FN_HEADS = {
+    js: [
+      // async expectPath(path: string): Promise<void> {   function open(page) {   static get x() {   export async function f() {
+      /^[ \t]*(?:export\s+)?(?:default\s+)?(?:(?:public|private|protected|static|readonly|override|abstract|async|get|set)\s+)*(?:function\s*\*?\s*)?([A-Za-z_$][\w$]*)\s*(?:<[^>\n]*>)?\s*\([^()]*\)\s*(?::\s*[^{=;\n]+)?\{/gm,
+      // const open = async (page: Page) => {
+      /^[ \t]*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*(?:async\s*)?(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*(?::\s*[^=\n]+)?=>\s*\{/gm,
+    ],
+    py: [/^[ \t]*(?:async\s+)?def\s+(\w+)\s*\(/gm],
+    // Java, Kotlin, C#: annotations and modifiers, a return type or fun, the name, the parameters, then {
+    jvm: [
+      /^[ \t]*(?:@\w+(?:\([^)\n]*\))?\s+)*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async|suspend|open|synchronized)\s+)*(?:fun\s+|[\w<>[\],.?]+\s+)([A-Za-z_]\w*)\s*\([^()]*\)\s*(?::\s*[\w<>?,. ]+)?\s*(?:throws\s+[\w., ]+)?\{/gm,
+    ],
+  };
+  function helperBlocks(src, file) {
+    const f = file || "";
+    const family = /\.[cm]?[jt]sx?$/i.test(f) ? "js" : /\.pyi?$/i.test(f) ? "py" : /\.(?:java|kts?|cs)$/i.test(f) ? "jvm" : null;
+    const heads = family
+      ? FN_HEADS[family]
+          .flatMap((rx) => [...src.matchAll(rx)])
+          .filter((m) => !NOT_A_NAME.has(m[1]))
+          .sort((a, b) => a.index - b.index)
+      : [];
+    if (!heads.length) return { "<file>": src };
+    const out = {};
+    heads.forEach((m, i) => {
+      let name = m[1];
+      for (let k = 2; name in out; k++) name = `${m[1]}#${k}`;
+      out[name] = src.slice(m.index, i + 1 < heads.length ? heads[i + 1].index : src.length);
+    });
+    return out;
+  }
   // file: whose comments to read (the extension says which); none for code in a message
   function compareAsserts(oldSrc, newSrc, cfg, file) {
     if (!cfg.assert_line_patterns) return null;
@@ -711,8 +767,13 @@
         .split("\n")
         .map((l) => l.trim())
         .filter(isA);
-    const om = blocksByTest(oldSrc, cfg.test_fn_pattern),
+    let om = blocksByTest(oldSrc, cfg.test_fn_pattern),
       nm = blocksByTest(newSrc, cfg.test_fn_pattern);
+    // no test in either version (a page object, a helper): its functions and methods (0.1.125)
+    if (cfg.test_fn_pattern && !Object.keys(om).length && !Object.keys(nm).length) {
+      om = helperBlocks(oldSrc, file);
+      nm = helperBlocks(newSrc, file);
+    }
     const res = { old: 0, new: 0, weakened: [], removed: [] };
     for (const v of Object.values(om)) res.old += asserts(v).length;
     for (const v of Object.values(nm)) res.new += asserts(v).length;
@@ -1679,8 +1740,26 @@
         (0.1.125).
      7: an edit is applied with its new text as it is (0.1.125). String.replace(old, new) read $&, $`, $' and $$ in the
         new text as patterns: code that escapes a regular expression ('\\$&') or ends a template with `…${x}$` put the
-        old text and the start of the file into the file, which no longer parsed. */
-  const IMPORT_GEN = 7;
+        old text and the start of the file into the file, which no longer parsed.
+     8: the assertions of a file with no test in it (a page object, a helper) are counted by its functions and methods,
+        and expect.soft() / expect.poll() count (0.1.125). assert_delta is made at import. */
+  const IMPORT_GEN = 8;
+  /* A session imported before with an edit counted as 0 assertions before and after although the file has assertion
+     lines: a page object or a helper, or a test with soft assertions only. */
+  function assertsUncountedBefore125(s) {
+    const cfg = profile(s.profile);
+    if (!(cfg.assert_line_patterns || []).length) return false;
+    return s.events.some(
+      (e) =>
+        e.assert_delta &&
+        !e.assert_delta.old &&
+        !e.assert_delta.new &&
+        e.new_content &&
+        linesOf(e)
+          .split("\n")
+          .some((l) => isAssertLine(l, cfg)),
+    );
+  }
   /* A session imported before that edited a file with such a $ in the new text: by its kept text, an edit's new_string
      (Claude Code's Edit, Cursor's StrReplace) or newString (Claude Code's result) with $&, $`, $' or $$. $1 stays as
      it is: the old text is no regular expression. A session without the kept text is not asked: nothing tells it. */
@@ -1734,6 +1813,7 @@
     if (homeSpelled(s)) return true;
     if ((s.importGen || 0) < 6 && cursorMcpBefore125(s)) return true;
     if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
+    if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;

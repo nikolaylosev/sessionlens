@@ -216,7 +216,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 
 | Check | Default | Raised when |
 |---|---|---|
-| `assert_weakened` | High | An existing assertion was made weaker, or assertions were removed |
+| `assert_weakened` | High | An existing assertion was made weaker, or assertions were removed. In a test, and in a page object or helper (by its methods), where Page Object Model puts the assertions |
 | `weak_assert` | High | An assertion only checks "didn't crash" instead of a value. In Playwright also, at medium, an assertion that reads the page once and never retries, such as `expect(await x.isVisible()).toBeTruthy()` instead of `await expect(x).toBeVisible()` (ESLint `prefer-web-first-assertions`), in a spec or a Page Object |
 | `sleep_or_skip_added` | High | A fixed sleep, a skipped test (`skip`, `@Disabled`, `[Ignore]`) or a retry on a test (`@flaky`, `[Retry]`, `describe.configure({ retries })`) was added. Retries in the runner's config are `config_weakened` |
 | `hardcoded_date` | Medium | A date is asserted and will break when content changes |

@@ -45,6 +45,13 @@
   red and every test as having no reference. A pasted code review taken for the spec looked like a spec nothing
   covered, while "no specification" was gone. Now the header says "numbered automatically, coverage not checked", a
   line above the table says why and how to check it (IDs `R1.`, `R2.` … named in the tests), and an empty cell is "—".
+- **Assertions in a page object are seen.** SessionLens counted only the assertions inside `test(…)` / `it(…)` /
+  `def test_…`. With Page Object Model every `expect()` is in a page object and a test calls `expectSearchOpen()`, so
+  each edit was "0 → 0" in **Assertions**, and a weakened or removed assertion in a page object was no
+  `assert_weakened`. Now a file with no test in it is counted by its functions and methods (TypeScript and JavaScript,
+  Python, Java, Kotlin, C#; another language as one block), and the finding names the method: "expectResults —
+  assertion weakened". `expect.soft()` and `expect.poll()` count as assertions too. A session imported before shows
+  **Import again** for this.
 - **A file edited with a `$` in its new code is no longer mangled.** SessionLens rebuilds a file from the agent's
   edits. When the new code had `$&`, `` $` ``, `$'` or `$$` in it, the usual way to escape a regular expression
   (`'\\$&'`) or a template that ends in `$`, the rebuilt file got the old text or the start of the file pasted into it:

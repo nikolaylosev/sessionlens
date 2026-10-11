@@ -1471,6 +1471,7 @@ not be parsed is skipped), `TEST_FILE_RX` (a test file by its name) and
 
 | Check | Group | What it compares | Not a finding |
 |---|---|---|---|
+| `assert_weakened` (0.1.125) | code | `compareAsserts` of two versions of a file: by test (`blocksByTest`), and for a file with no test (a page object, a helper) by its functions and methods (`helperBlocks`: TS/JS, Python, Java/Kotlin/C#; another language as one block); `expect.soft()` / `expect.poll()` count in qa-ts and qa-api | an `if` or a loop inside a method (no block of its own); an edit that keeps the assertions |
 | `test_deleted` | code | the tests (`blocksByTest`) of two consecutive versions of a file the session saw; `rm`/`git rm`/`unlink`/`del`/`Remove-Item` of a test file or folder; a `delete` event | a test renamed with the same body, moved to another file, or restored later; `rm` of files that are not tests; a file first seen as an edit fragment |
 | `product_code_edited` | process | a write or an edit of a file in the profile's `src_dirs` (anywhere in the path: Claude Code started in a parent folder writes `shop/src/…`) | test-side code inside `src`, a runner config, a file named in the approved plan |
 | `snapshot_overwritten` | process | a test run with an update flag after the runner (`jest -u`, `--update-snapshots`, `--snapshot-update`, `UPDATE_SNAPSHOTS=1`); a snapshot or baseline file written by hand | `-u` of another command (`env -u`, `git push -u`), a runner named in a heredoc or a string |
@@ -1510,6 +1511,8 @@ What the import keeps for them:
   `browser_check_not_in_test` sees a browser. Below generation 7 it is true for a session whose kept text has an edit
   (`new_string`, `newString`) with `$&`, `` $` ``, `$'` or `$$` in its new text: `String.replace(old, new)` read them
   as patterns and put the old text or the start of the file into it (0.1.125; the edit is now applied with a function).
+  Below generation 8 it is true for a session with an edit counted as 0 assertions before and after whose file has
+  assertion lines: a page object or a helper, now counted by its methods, or soft assertions only (0.1.125).
   The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's
