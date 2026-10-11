@@ -589,7 +589,8 @@ same list when you hover over it. In everything sent, secrets are masked first: 
 can still get through; keep secrets out of test code anyway.
 
 - **Semantic review (model)** and **Verify again:** the specification, the regex findings, the test code the agent
-  wrote (up to **Code limit in the prompt**, 40000 characters by default) and a shortened transcript. Verification
+  wrote (up to **Code limit in the prompt**, 40000 characters by default) and a shortened transcript: one line per
+  step, the start and the end of a long session with one line for what is in between. Verification
   also sends the model's findings it checks.
 - **Segment with model:** the session's steps as numbered lines, up to the same limit.
 - **Compress rules.md:** the rules you picked, each with one line of code from your sessions ("Not like this") and its

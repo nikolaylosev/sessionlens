@@ -45,21 +45,95 @@ At most 15 items. Do not invent: if something is not visible in the data — do 
   const pick = (key, built) => (OVERRIDES[key] && OVERRIDES[key].trim() ? OVERRIDES[key] : built);
   const SYSTEM = () => pick("review", SYSTEM_TPL).replace("{LANG}", LANG_NAME());
 
+  /* The session as the model reads it (0.1.126): one line per step, but steps of one kind in a row are one line (a
+     browser's clicks and snapshots, reads, searches, other tools), with the tools' names, and a command is one line of
+     at most CMD_MAX characters. If that is still too long, the start (the task, the plan) and the end (the last edits,
+     the final runs, what the agent said it did) are kept, HEAD_SHARE of the room for the start; one line says what the
+     steps in between had, and the user's messages among them follow it while they fit. Until 0.1.126 the end was cut:
+     in 15 of the owner's 20 long sessions with test runs the model never saw the last run, and 18 browser steps were
+     18 lines of "tool". */
+  const CMD_MAX = 200,
+    MSG_MAX = 400,
+    HEAD_SHARE = 0.3,
+    USER_SHARE = 0.2;
+  const cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  const toolName = (e) => {
+    const p = Ls().mcpParts(e.tool);
+    return p ? p[1] : String(e.tool || "tool");
+  };
+  // what a run of steps is grouped by: a browser's tools, other tools, reads, searches; null for a step of its own
+  const groupOf = (e) => (e.kind === "tool" ? (Ls().browserTool(e.tool) ? "browser" : "tool") : e.kind === "read" || e.kind === "search" ? e.kind : null);
+  function stepLine(e) {
+    if (e.kind === "message" || e.kind === "user") {
+      const t = (e.text || "").replace(/```[\s\S]*?```/g, "[code]").replace(/\s+/g, " ");
+      return `${e.seq} ${e.kind === "user" ? "USER" : "AGENT"}: ${t.slice(0, MSG_MAX)}`;
+    }
+    const what = e.kind === "tool" ? toolName(e) : e.file || cut((e.cmd || "").replace(/\s+/g, " ").trim(), CMD_MAX);
+    let s = `${e.seq} ${groupOf(e) === "browser" ? "browser" : e.kind} ${what}`;
+    if (e.tests)
+      s += ` → ${e.tests.passed} passed, ${e.tests.failed} failed${e.tests.failed_names && e.tests.failed_names.length ? " (" + e.tests.failed_names.slice(0, 3).join(", ") + ")" : ""}`;
+    if (e.assert_delta && (e.assert_delta.weakened.length || e.assert_delta.removed.length)) s += " ⚠ assertions changed";
+    return s;
+  }
+  function groupLine(g, steps) {
+    const names = [...new Set(steps.map((e) => (e.kind === "tool" ? toolName(e) : e.file || e.cmd || "")).filter(Boolean))];
+    const list = names.slice(0, 4).join(", ") + (names.length > 4 ? ", …" : "");
+    return `${steps[0].seq}–${steps[steps.length - 1].seq} ${g} ×${steps.length}${list ? ": " + cut(list, CMD_MAX) : ""}`;
+  }
+  // what the steps left out had, in one line; `kept` of the user's messages among them follow it
+  function gapLine(steps, kept) {
+    const n = (f) => steps.filter(f).length;
+    const runs = steps.filter((e) => e.kind === "run_tests");
+    const last = [...runs].reverse().find((e) => e.tests);
+    const parts = [
+      [n((e) => e.kind === "write" || e.kind === "edit"), "edits"],
+      [runs.length, "test runs" + (last ? ` (the last: ${last.tests.passed} passed, ${last.tests.failed} failed)` : "")],
+      [n((e) => e.kind === "user") - kept, kept ? "other user messages" : "user messages"],
+      [n((e) => e.kind === "message"), "agent messages"],
+    ]
+      .filter(([k]) => k)
+      .map(([k, w]) => `${k} ${w}`);
+    const range = `${steps[0].seq}–${steps[steps.length - 1].seq}`;
+    return `[… steps ${range} left out${parts.length ? ": " + parts.join(", ") : ""}${kept ? `; the user's messages among them follow` : ""}]`;
+  }
   function compact(events, maxChars) {
-    const lines = events.map((e) => {
-      if (e.kind === "message" || e.kind === "user") {
-        const t = (e.text || "").replace(/```[\s\S]*?```/g, "[code]").replace(/\s+/g, " ");
-        return `${e.seq} ${e.kind === "user" ? "USER" : "AGENT"}: ${t.slice(0, 400)}`;
+    const items = []; // { line, steps }
+    for (let i = 0; i < events.length;) {
+      const g = groupOf(events[i]);
+      let k = i + 1;
+      if (g) while (k < events.length && groupOf(events[k]) === g) k++;
+      const steps = events.slice(i, k);
+      items.push({ line: steps.length > 1 ? groupLine(g, steps) : stepLine(steps[0]), steps });
+      i = k;
+    }
+    const size = (list) => list.reduce((a, x) => a + x.line.length + 1, 0);
+    if (size(items) <= maxChars) return items.map((x) => x.line).join("\n");
+    // the start, then the end; at least one line of each
+    let h = 0,
+      used = 0;
+    while (h < items.length && (h === 0 || used + items[h].line.length + 1 <= maxChars * HEAD_SHARE)) used += items[h++].line.length + 1;
+    const GAP_ROOM = 200;
+    // room for the user's messages that may fall in the middle, at most USER_SHARE; the rest is the end's
+    const userSize = size(items.slice(h).filter((x) => x.steps[0].kind === "user"));
+    const reserve = Math.min(userSize, maxChars * USER_SHARE);
+    let t = items.length,
+      tail = 0;
+    while (t > h && (t === items.length || tail + items[t - 1].line.length + 1 <= maxChars - used - GAP_ROOM - reserve)) tail += items[--t].line.length + 1;
+    const middle = items.slice(h, t);
+    if (!middle.length) return items.map((x) => x.line).join("\n");
+    // the user's messages in the middle, while they fit in what is left
+    let room = maxChars - used - tail - GAP_ROOM;
+    const users = [];
+    for (const x of middle)
+      if (x.steps[0].kind === "user" && x.line.length + 1 <= room) {
+        users.push(x.line);
+        room -= x.line.length + 1;
       }
-      let s = `${e.seq} ${e.kind} ${e.file || e.cmd || ""}`;
-      if (e.tests)
-        s += ` → ${e.tests.passed} passed, ${e.tests.failed} failed${e.tests.failed_names && e.tests.failed_names.length ? " (" + e.tests.failed_names.slice(0, 3).join(", ") + ")" : ""}`;
-      if (e.assert_delta && (e.assert_delta.weakened.length || e.assert_delta.removed.length)) s += " ⚠ assertions changed";
-      return s;
-    });
-    let out = lines.join("\n");
-    if (out.length > maxChars) out = out.slice(0, maxChars) + "\n[transcript truncated]";
-    return out;
+    const gap = gapLine(
+      middle.flatMap((x) => x.steps),
+      users.length,
+    );
+    return [...items.slice(0, h).map((x) => x.line), gap, ...users, ...items.slice(t).map((x) => x.line)].join("\n");
   }
 
   function codeOf(events, maxChars) {
