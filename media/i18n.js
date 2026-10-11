@@ -214,7 +214,7 @@
       m_runs: "runs",
       m_to_green: "edits to green",
       spec_none: "(none)",
-      spec_auto: " · numbered automatically",
+      spec_auto: " · numbered automatically, coverage not checked",
       spec_unparsed: "(text given, no requirements recognised — number them or use R1., R2.)",
       spec_count: "({n} {n|requirement|requirements}{oos})",
       spec_oos: ", {n} out of scope",
@@ -253,6 +253,8 @@
       cov_requirement: "requirement",
       cov_tests: "tests",
       cov_unlinked: "No requirement reference",
+      cov_no_ids:
+        "These requirements have no IDs, so no test can name one: their coverage is not checked, and no finding is made about it. To check it, number them R1., R2. … and name the ID in each test's title or in a comment above it.",
       no_readable_tests:
         "Coverage is not computed: SessionLens cannot find tests in the files of this session for this profile. The profile's details under Profile list the file types it reads.",
       user: "User",

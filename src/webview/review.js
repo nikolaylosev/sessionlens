@@ -496,12 +496,19 @@ export function renderCoverage(s) {
     return;
   }
   const spec = LensSpec.parse(s.spec);
-  el.innerHTML = `<table class="cov"><tr><th>ID</th><th>${T("cov_requirement")}</th><th>${T("cov_tests")}</th></tr>${spec.requirements
+  /* 0.1.125: requirements without IDs (R1, R2… numbered by the parser) cannot be named by a test, so their coverage is
+     not checked and no spec finding is made (LensSpec.checks). Until then the table showed every one as "none" in red,
+     with every test under "No requirement reference", and nothing said why: a pasted code review taken for the spec
+     looked like a spec nothing covered, while the high no_spec was gone. Now it says so, and an empty cell is no
+     failure. A coverage stored before 0.1.121 has no hasIds and reads as one with IDs, as it did. */
+  const ids = c.hasIds !== false;
+  el.innerHTML = `${ids ? "" : `<p class="muted">${T("cov_no_ids")}</p>`}<table class="cov"><tr><th>ID</th><th>${T("cov_requirement")}</th><th>${T("cov_tests")}</th></tr>${spec.requirements
     .map((r) => {
       const t = c.covered[r.id] || [];
-      return `<tr><td>${esc(r.id)}</td><td>${esc(r.text.slice(0, 70))}</td><td class="${t.length ? "yes" : "no"}">${t.length ? esc(t.join(", ")) : T("md_none")}</td></tr>`;
+      const cell = t.length ? ["yes", esc(t.join(", "))] : ids ? ["no", T("md_none")] : ["", "—"];
+      return `<tr><td>${esc(r.id)}</td><td>${esc(r.text.slice(0, 70))}</td><td class="${cell[0]}">${cell[1]}</td></tr>`;
     })
-    .join("")}</table>${c.unlinked.length ? `<p class="muted">${T("cov_unlinked")}: ${esc(c.unlinked.map((t) => t.name).join(", "))}</p>` : ""}`;
+    .join("")}</table>${ids && c.unlinked.length ? `<p class="muted">${T("cov_unlinked")}: ${esc(c.unlinked.map((t) => t.name).join(", "))}</p>` : ""}`;
 }
 
 export async function setVerdict(k, v, note) {

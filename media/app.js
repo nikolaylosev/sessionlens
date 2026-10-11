@@ -2107,10 +2107,12 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
       return;
     }
     const spec = LensSpec.parse(s.spec);
-    el.innerHTML = `<table class="cov"><tr><th>ID</th><th>${T("cov_requirement")}</th><th>${T("cov_tests")}</th></tr>${spec.requirements.map((r) => {
+    const ids = c.hasIds !== false;
+    el.innerHTML = `${ids ? "" : `<p class="muted">${T("cov_no_ids")}</p>`}<table class="cov"><tr><th>ID</th><th>${T("cov_requirement")}</th><th>${T("cov_tests")}</th></tr>${spec.requirements.map((r) => {
       const t = c.covered[r.id] || [];
-      return `<tr><td>${esc(r.id)}</td><td>${esc(r.text.slice(0, 70))}</td><td class="${t.length ? "yes" : "no"}">${t.length ? esc(t.join(", ")) : T("md_none")}</td></tr>`;
-    }).join("")}</table>${c.unlinked.length ? `<p class="muted">${T("cov_unlinked")}: ${esc(c.unlinked.map((t) => t.name).join(", "))}</p>` : ""}`;
+      const cell = t.length ? ["yes", esc(t.join(", "))] : ids ? ["no", T("md_none")] : ["", "—"];
+      return `<tr><td>${esc(r.id)}</td><td>${esc(r.text.slice(0, 70))}</td><td class="${cell[0]}">${cell[1]}</td></tr>`;
+    }).join("")}</table>${ids && c.unlinked.length ? `<p class="muted">${T("cov_unlinked")}: ${esc(c.unlinked.map((t) => t.name).join(", "))}</p>` : ""}`;
   }
   async function setVerdict(k, v, note) {
     const vd = { v, note: note || "", at: (/* @__PURE__ */ new Date()).toISOString() };
