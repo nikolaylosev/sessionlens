@@ -59,6 +59,53 @@ test("TypeScript: a value assertion replaced by a weaker one, at the later versi
   );
 });
 
+test("Playwright: a web-first assertion of a value or a state replaced by toBeVisible() or toBeAttached() (0.1.125)", () => {
+  const box = (m) => `  await expect(page.getByRole("searchbox")).${m};`;
+  const weakened = (from, to = "toBeVisible()") =>
+    found("qa-ts", [
+      ["write", F, ts(box(from))],
+      ["write", F, ts(box(to))],
+    ]);
+  for (const m of [
+    "toHaveValue(q)",
+    "toHaveValues(['a', 'b'])",
+    "toContainText('Owls')",
+    "toHaveClass(/active/)",
+    "toHaveCSS('color', 'red')",
+    "toHaveId('q')",
+    "toHaveAccessibleName('Search')",
+    "toHaveAccessibleDescription('Type to search')",
+    "toHaveRole('searchbox')",
+    "toHaveJSProperty('value', 'q')",
+    "toHaveScreenshot()",
+    "toBeChecked()",
+    "toBeEnabled()",
+    "toBeDisabled()",
+    "toBeEditable()",
+    "toBeFocused()",
+    "toBeEmpty()",
+  ])
+    assert.equal(weakened(m).length, 1, m);
+  assert.deepEqual(weakened("toHaveValue(q)", "toBeAttached()"), [
+    'high: e2e/cart.spec.ts: total — assertion weakened (await expect(page.getByRole("searchbox")).toHaveValue(q); → await expect(page.getByRole("searchbox")).toBeAttached();)',
+  ]);
+  assert.equal(weakened("toHaveText(q)", "toBeAttached()").length, 1);
+  // as strong as before: another value, another state, one weak assertion for another
+  assert.deepEqual(weakened("toHaveValue(q)", "toHaveValue('owls')"), []);
+  assert.deepEqual(weakened("toBeEnabled()", "toBeDisabled()"), []);
+  assert.deepEqual(weakened("toBeVisible()", "toBeAttached()"), []);
+  // toBeVisible() of another locator, with the value in it, is a rewrite (seen in an owner's session)
+  const rewrite = (a, b) =>
+    found("qa-ts", [
+      ["write", F, ts(`  await expect(${a};`)],
+      ["write", F, ts(`  await expect(${b};`)],
+    ]);
+  assert.deepEqual(rewrite("page.locator('body')).toContainText(/owls/i)", "page.getByText(/owls/i).first()).toBeVisible()"), []);
+  assert.deepEqual(rewrite("page.locator('body')).toHaveClass(/search-open/)", "page.getByText('Start typing')).toBeVisible()"), []);
+  // toBeTruthy() needs no same locator, as before
+  assert.equal(rewrite("page.locator('body')).toContainText(/owls/i)", "page.getByText(/owls/i)).toBeTruthy()").length, 1);
+});
+
 test("a test that loses assertions", () => {
   assert.deepEqual(
     found("qa-ts", [

@@ -65,6 +65,13 @@
   folder, and from there you could not get to another workspace's sessions: the dialog hides `~/.cursor`, so there was
   no way up. Now it opens the folder with one folder per workspace, as Claude Code's and Codex's choices do; a session
   is in `<workspace>/agent-transcripts/<id>/<id>.jsonl`. Paths in the session are made relative the same way as before.
+- **"Assertion weakened" knows Playwright's other assertions.** `toHaveValue(q)` → `toBeVisible()` was not reported,
+  in a test or a Page Object; now an assertion of a value or a state (`toHaveValue`, `toContainText`, `toHaveClass`,
+  `toHaveCSS`, `toHaveAccessibleName`, `toBeChecked`, `toBeEnabled` and the rest) replaced by `toBeVisible()` or
+  `toBeAttached()` is. Only for the same element: `locator('body').toContainText(q)` → `getByText(q).toBeVisible()`
+  checks the same text another way and is no longer reported, nor are two different assertions that happen to stand
+  at the same place after one was removed ("fewer assertions" still is). Saved sessions get this on their next
+  analysis.
 
 ## 0.1.124
 
