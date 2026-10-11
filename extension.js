@@ -3,7 +3,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, cursorProjectSlug, PATH_RX } = require("./cli.js");
+const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, PATH_RX } = require("./cli.js");
 const { cursorOutputs } = require("./cursor-db.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
@@ -295,7 +295,8 @@ function broadcastRefresh(except, what = { scope: "keys" }) {
 // project/date subfolder underneath is a perfectly ordinary, visible entry.
 // `source` is what the person picked in the "Where is the transcript from?" prompt in app.js:
 // "claude" or "codex" go straight to that folder (or the home folder if it turns out not to exist);
-// "cursor" goes to this workspace's agent-transcripts folder (cursorTranscriptsDir);
+// "cursor" goes to ~/.cursor/projects, one folder per workspace, so a transcript of another workspace is a click away
+// (until 0.1.125 it went straight into this workspace's agent-transcripts, and there was no way up from there);
 // anything else ("somewhere else", or no prompt at all) goes to the home folder, same as a plain
 // "Choose file" always did — the person is browsing for it themselves, not being pointed anywhere.
 function guessTranscriptDefaultUri(source) {
@@ -306,7 +307,7 @@ function guessTranscriptDefaultUri(source) {
       : source === "claude"
         ? path.join(home, ".claude", "projects")
         : source === "cursor"
-          ? cursorTranscriptsDir(home)
+          ? path.join(home, ".cursor", "projects")
           : null;
   return vscode.Uri.file(wanted && isDir(wanted) ? wanted : home);
 }
@@ -317,27 +318,6 @@ function isDir(p) {
   } catch {
     return false;
   }
-}
-
-// ~/.cursor/projects/<workspace>/agent-transcripts for the first workspace folder that has one (by its path or, for a
-// symlink, its real path, which Cursor's CLI uses; the name: cursorProjectSlug in cli.js); otherwise ~/.cursor/projects
-function cursorTranscriptsDir(home) {
-  const projects = path.join(home, ".cursor", "projects");
-  for (const f of vscode.workspace.workspaceFolders || []) {
-    if (f.uri.scheme !== "file") continue;
-    const paths = [f.uri.fsPath];
-    try {
-      paths.push(fs.realpathSync(f.uri.fsPath));
-    } catch {
-      /* the path as it is */
-    }
-    for (const p of paths) {
-      const slug = cursorProjectSlug(p);
-      const dir = path.join(projects, slug, "agent-transcripts");
-      if (slug && isDir(dir)) return dir;
-    }
-  }
-  return projects;
 }
 
 // API keys (phase 2): SecretStorage + host-side provider calls. Set up in activate(); `ready` is the one-time
