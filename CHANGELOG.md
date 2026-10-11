@@ -20,15 +20,17 @@
   next analysis.
 
 ### Fixed
-- **"User frustration" no longer fires on the word «нет» in a task.** «…Нет ограничения на длину строки» or «нет ли у
-  нас мелких доработок?» was a medium `user_frustration`; on the owner's 38 sessions 19 of the 40 findings were such.
-  «Нет» now counts only as a reply: at the start of a message or a sentence, before a comma, a stop or the end
-  («Нет, не так»). A question about what the agent did now counts: «где вообще assertions?», «зачем ты…» at the start
-  of a message or a sentence, and "why did you…". Saved sessions get this on their next analysis.
+- **"User frustration" no longer fires on the Russian word «нет» ("no") inside a task.** A task like «…Нет ограничения
+  на длину строки» ("…there is no limit on the string length") or a question like «нет ли у нас мелких доработок?»
+  ("are there any small fixes left?") was a medium `user_frustration`; in 38 real sessions, 19 of the 40 findings were
+  like this. «Нет» now counts only as a reply: at the start of a message or a sentence, before a comma, a full stop or
+  the end of the message («Нет, не так», "No, not like that"). A question about what the agent did now counts, in
+  English and in Russian: "why did you…", «где вообще assertions?» ("where are the assertions?"), «зачем ты…» ("why
+  did you…"), at the start of a message or a sentence. Saved sessions get this on their next analysis.
 - **"Edit churn" counts one request at a time, and not docs.** Five edits of a file over the whole session were
   "poking instead of understanding", even when you had asked for a new change in between, and the readme the agent
   updated along with each change counted too. Now the edits of a file are counted between two of your messages, and
-  `.md`, `.txt` and `.rst` files are left out. On the owner's 38 sessions 10 of 13 such findings are gone. The text
+  `.md`, `.txt` and `.rst` files are left out. In 38 real sessions, 10 of the 13 such findings are gone. The text
   says "for one request" instead of "in one session". Saved sessions get this on their next analysis.
 - **Reading back its own file is no "peek at product code".** With page objects in `src/pages/`, an agent that read
   back the page object it had just written got a high `peeked_at_src_before_plan`. A file the agent wrote or edited
@@ -37,8 +39,8 @@
 - **Segment with model no longer takes a code review for the specification.** Asked to "rewrite the tests with this
   review in mind", the model labelled the review as the spec, and **spec found** put its five headings in as
   requirements no test can cover; the high `no_spec` went away with nothing in its place. The prompts now say that a
-  specification is what the product under test must do, and a review of the tests or code themselves is prose. On the
-  owner's session the review came back as prose in both of two runs, and a ticket with requirements next to it was
+  specification is what the product under test must do, and a review of the tests or code themselves is prose. In a real
+  session, the review came back as prose in both of two runs, and a ticket with requirements next to it was
   still found as the specification. A prompt you changed in Settings stays as you wrote it.
 - **A specification without IDs says that its coverage is not checked.** No test can name a requirement the parser
   numbered itself, so no coverage finding is made about it, yet the table showed every such requirement as "none" in
