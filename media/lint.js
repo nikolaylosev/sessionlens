@@ -29,6 +29,8 @@
     "playwright/no-useless-not": ["weak_assert", "low"],
     "playwright/valid-expect": ["weak_assert", "medium"],
     "playwright/no-standalone-expect": ["weak_assert", "medium"],
+    // expect(await x.isVisible()).toBeTruthy() reads the page once and never retries: toBeVisible() does (0.1.125)
+    "playwright/prefer-web-first-assertions": ["weak_assert", "medium"],
     "playwright/no-conditional-in-test": ["conditional_logic", "low"],
     "playwright/no-conditional-expect": ["conditional_logic", "medium"],
     "playwright/no-element-handle": ["fragile_wait", "low"],

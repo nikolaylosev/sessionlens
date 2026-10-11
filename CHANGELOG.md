@@ -8,6 +8,11 @@
   so after its last change of a test file and changes no test after that, its last check was by hand, and no test
   asserts what it saw. Looking at the site before writing the tests, or while finding out why a test failed and then
   changing the test, does not count. Saved sessions get this on their next analysis.
+- **An assertion that never retries** (`weak_assert`, medium, Playwright). `expect(await x.isVisible()).toBeTruthy()`
+  reads the page once, at that moment, and fails if the page is a little slow; `await expect(x).toBeVisible()` waits
+  for it. The same for `textContent()`, `inputValue()`, `getAttribute()` and the other reads ESLint's
+  `prefer-web-first-assertions` knows. Found in a spec and in a Page Object alike. Saved sessions get this on their
+  next analysis.
 
 ### Fixed
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright

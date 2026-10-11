@@ -245,6 +245,40 @@ test("weak_assert from the engines, not reported: toBeHidden(), an awaited match
   );
 });
 
+test("weak_assert from Playwright: an assertion that reads the page once and never retries, in a spec or a Page Object (0.1.125)", async () => {
+  const PO = (body) =>
+    'import { type Page, expect } from "@playwright/test";\nexport class SearchPage {\n  constructor(readonly page: Page) {}\n  async expectOpen() {\n' +
+    body +
+    "  }\n}\n";
+  assert.deepEqual(
+    await lintFound("qa-ts", "tests/pages/SearchPage.ts", PO('    expect(await this.page.getByRole("textbox").isVisible()).toBeTruthy();\n'), "weak_assert"),
+    ["weak_assert/lint medium: tests/pages/SearchPage.ts:5 — Replace isVisible() with toBeVisible() [playwright/prefer-web-first-assertions]"],
+  );
+  assert.deepEqual(
+    await lintFound(
+      "qa-ts",
+      "e2e/cart.spec.ts",
+      PW + 'test("total", async ({ page }) => {\n  expect(await page.getByTestId("total").textContent()).toBe("42");\n});\n',
+      "weak_assert",
+    ),
+    ["weak_assert/lint medium: e2e/cart.spec.ts:3 — Replace textContent() with toHaveText() [playwright/prefer-web-first-assertions]"],
+  );
+  // not reported: the web-first form, and a value that is not the page's (a response status)
+  assert.deepEqual(
+    await lintFound("qa-ts", "tests/pages/SearchPage.ts", PO('    await expect(this.page.getByRole("textbox")).toBeVisible();\n'), "weak_assert"),
+    [],
+  );
+  assert.deepEqual(
+    await lintFound(
+      "qa-ts",
+      "e2e/cart.spec.ts",
+      PW + 'test("total", async ({ page }) => {\n  const r = await page.goto("/cart");\n  expect(r?.status()).toBeLessThan(400);\n});\n',
+      "weak_assert",
+    ),
+    [],
+  );
+});
+
 test("raw_locator: a CSS locator in Playwright; chained get, xpath and a class selector in Cypress", async () => {
   assert.deepEqual(
     await lintFound(
