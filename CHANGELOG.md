@@ -34,6 +34,12 @@
   back the page object it had just written got a high `peeked_at_src_before_plan`. A file the agent wrote or edited
   earlier in the session no longer counts; a product file next to it, a file read before it was written and a search
   over the whole folder still do. Saved sessions get this on their next analysis.
+- **Segment with model no longer takes a code review for the specification.** Asked to "rewrite the tests with this
+  review in mind", the model labelled the review as the spec, and **spec found** put its five headings in as
+  requirements no test can cover; the high `no_spec` went away with nothing in its place. The prompts now say that a
+  specification is what the product under test must do, and a review of the tests or code themselves is prose. On the
+  owner's session the review came back as prose in both of two runs, and a ticket with requirements next to it was
+  still found as the specification. A prompt you changed in Settings stays as you wrote it.
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an

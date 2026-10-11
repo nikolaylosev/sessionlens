@@ -576,7 +576,8 @@ The reviewer pastes requirements (`R1. …`, `AUTH-142/R3 …`, an "Out of scope
 `spec.js` parses them; `LensSpec.checks` finds the tests in the session's code (per language, RA §17) and links a
 requirement to a test when the test's name, docstring, the comment above it or its first lines mention the ID.
 Results: the coverage matrix on the tab and the `spec` findings. The model can segment the spec out of the
-conversation (`segment.js`) when it was pasted into a message.
+conversation (`segment.js`) when it was pasted into a message. Its prompts call a spec what the product under test
+must do; a review of the tests or code themselves is prose (since 0.1.125).
 
 ### 6.7 Model features
 

@@ -3,7 +3,10 @@
    The regex importer stays as the default and as the fallback; this module asks the model to label the
    boundaries of an already-imported session: which message parts are prose, spec, plan, or code, and which
    code blocks are versions of the same tests. The model returns only line ranges and labels — never text —
-   so the result can be validated mechanically and rejected if it does not line up. */
+   so the result can be validated mechanically and rejected if it does not line up.
+   Since 0.1.125 the prompts say that a review of the tests or code themselves is prose: the owner's request "rewrite
+   the tests with this review in mind" (refactor to page objects, separate actions from assertions) came back as a
+   spec, and "spec found" put five review headings in as requirements, none of which a test can cover. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else /** @type {any} */ (root).LensSeg = factory();
@@ -18,7 +21,9 @@
   const SYSTEM = `You segment a transcript of an AI-agent session that writes automated tests.
 You are given the session as numbered lines, grouped by event. Label the line ranges. Kinds:
 - "prose": the agent's or user's explanation, commentary, plans in words
-- "spec": requirements, acceptance criteria, Given/When/Then, a ticket description — text that states what MUST be true
+- "spec": requirements, acceptance criteria, Given/When/Then, a ticket description — text that states what the PRODUCT
+  under test MUST do. A review or critique of the tests or code themselves (how to structure them, which locators,
+  assertions or page objects to change), even with "should", "must" or "Solution:" in it, is "prose", not "spec"
 - "plan": an enumerated plan of tests the agent is going to write (a list or table of test names)
 - "code": test code or helper code
 - "output": tool or test-runner output pasted into the message
@@ -36,8 +41,9 @@ non-empty line. Split a message into several ranges when it mixes kinds. Do not 
      dozen lines, and the ranges are shifted back into session coordinates here. A chunk that fails is simply left
      to the regex parser instead of failing the whole segmentation. */
   const LOCAL_SYSTEM = `Label the parts of one message from a coding session. Line numbers are given at the start of each line.
-Kinds: "prose" (explanation), "spec" (requirements, acceptance criteria, what MUST be true), "plan" (a list of tests
-to be written), "code" (test or helper code), "output" (tool or test-runner output).
+Kinds: "prose" (explanation, and a review of the tests or code themselves), "spec" (requirements, acceptance criteria,
+what the product under test MUST do), "plan" (a list of tests to be written), "code" (test or helper code), "output"
+(tool or test-runner output).
 For a "code" range also list the test names defined in it.
 Reply with a JSON array and nothing else:
 [{"from":1,"to":5,"kind":"prose"},{"from":6,"to":20,"kind":"code","tests":["test name"]}]
