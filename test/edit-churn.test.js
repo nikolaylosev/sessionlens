@@ -1,6 +1,7 @@
 "use strict";
-/* edit_churn: more writes/edits of one file than the profile threshold (4). What must not count: four writes,
-   two files each edited a few times. */
+/* edit_churn: more writes/edits of one file than the profile threshold (4) for one request of the person (0.1.125:
+   until then for the whole session). What must not count: four writes, two files each edited a few times, edits split
+   by a new message of the person, docs. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -11,6 +12,7 @@ function transcript(steps) {
   const L = [JSON.stringify({ type: "user", message: { role: "user", content: "Write the tests" } })];
   steps.forEach(([kind, a, b], i) => {
     const id = "t" + i;
+    if (kind === "user") return L.push(JSON.stringify({ type: "user", message: { role: "user", content: a } }));
     const [name, input] = kind === "write" ? ["Write", { file_path: a, content: b || "export const x = 1;\n" }] : ["Bash", { command: a }];
     L.push(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } }));
     L.push(JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } }));
@@ -31,7 +33,7 @@ test("five writes of one file: medium, counted at the fifth write", () => {
       "qa-ts",
       Array.from({ length: 5 }, () => ["write", file]),
     ),
-    ["medium: e2e/cart.spec.ts: 5 edits in one session — poking instead of understanding"],
+    ["medium: e2e/cart.spec.ts: 5 edits for one request — poking instead of understanding"],
   );
 });
 
@@ -52,5 +54,33 @@ test("not reported: four writes of one file, or five writes split across two fil
       ["write", "e2e/a.spec.ts"],
     ]),
     [],
+  );
+});
+
+test("per request: edits split by a new message of the person start from zero; five in one request still count", () => {
+  const w = (n, file = "e2e/cart.spec.ts") => Array.from({ length: n }, () => ["write", file]);
+  assert.deepEqual(found("qa-ts", [...w(3), ["user", "Now cover the navigation too"], ...w(2)]), []);
+  assert.deepEqual(found("qa-ts", [...w(2), ["user", "Now cover the navigation too"], ...w(5)]), [
+    "medium: e2e/cart.spec.ts: 5 edits for one request — poking instead of understanding",
+  ]);
+});
+
+test("docs are not counted: the readme updated along with every change", () => {
+  for (const file of ["README.md", "docs/notes.txt", "docs/guide.rst"])
+    assert.deepEqual(
+      found(
+        "qa-ts",
+        Array.from({ length: 6 }, () => ["write", file]),
+      ),
+      [],
+      file,
+    );
+  // a config next to it still counts
+  assert.equal(
+    found(
+      "qa-ts",
+      Array.from({ length: 5 }, () => ["write", "playwright.config.ts"]),
+    ).length,
+    1,
   );
 });

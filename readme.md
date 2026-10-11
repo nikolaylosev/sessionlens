@@ -205,7 +205,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `tests_never_run` | High | Tests were written but never executed |
 | `scope_creep` | Medium | A file was edited that is not in the plan |
 | `browser_check_not_in_test` | Medium | The agent looked at the page through a browser tool (Claude in Chrome, Playwright MCP, Chrome DevTools MCP, Puppeteer), or through a Node or Python script of its own that opens the site with Playwright or Puppeteer, after its last test change and changed no test after it: its last check was by hand, and no test asserts what it saw. Looking before writing the tests, or while finding out why a test failed and then changing it, does not count. Claude Code and Cursor sessions alike |
-| `edit_churn` | Medium | The same file was edited over and over |
+| `edit_churn` | Medium | The same file was edited over and over (more than 4 times) for one request of yours. Docs (`.md`, `.txt`, `.rst`) are not counted |
 | `assumption_instead_of_question` | Medium | The agent assumed ("I assume", "presumably") instead of asking |
 | `user_frustration` | Medium | The user corrected the agent ("not what I asked", «нет, не так»), asked why it did something ("why did you…", «где вообще…») or repeated a request |
 | `product_code_edited` | High | The agent changed product code (a file in the profile's source folders) in a testing task. High right after a failing run, medium otherwise. Tests, fixtures, page objects, mocks, a runner's config and a file named in the approved plan do not count |

@@ -2107,12 +2107,24 @@
         .filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !e.file.endsWith("README.md"))
         .map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
     },
+    /* Since 0.1.125 per request: the edits of a file between two messages of the person, so a file the person asks to
+       change again starts from zero (the owner's README.md: 3 edits while rewriting the search tests, 2 more while
+       rewriting the navigation, one finding for the whole session). Docs (.md, .txt, .rst…) are not counted: an agent
+       updates the readme along with each change, which is no poking. */
     edit_churn(ev, cfg) {
-      const c = {};
-      for (const e of ev) if (["edit", "write"].includes(e.kind) && e.file) (c[e.file] = c[e.file] || []).push(e.seq);
-      return Object.entries(c)
-        .filter(([, s]) => s.length > cfg.edit_churn_threshold)
-        .map(([f, s]) => F("edit_churn", "medium", s[cfg.edit_churn_threshold], T("churn", { file: f, n: s.length })));
+      const DOCS = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
+      const c = new Map(); // "request|file" → the steps
+      let request = 0;
+      for (const e of ev) {
+        if (e.kind === "user") request++;
+        else if (["edit", "write"].includes(e.kind) && e.file && !DOCS.test(e.file)) {
+          const k = request + "|" + e.file;
+          c.set(k, [...(c.get(k) || []), { file: e.file, seq: e.seq }]);
+        }
+      }
+      return [...c.values()]
+        .filter((s) => s.length > cfg.edit_churn_threshold)
+        .map((s) => F("edit_churn", "medium", s[cfg.edit_churn_threshold].seq, T("churn", { file: s[0].file, n: s.length })));
     },
     sleep_or_skip_added(ev, cfg) {
       const out = [];
