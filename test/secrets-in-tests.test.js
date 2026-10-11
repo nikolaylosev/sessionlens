@@ -44,6 +44,20 @@ test("not reported: the base URL in a runner's config, a relative goto, a typed 
   assert.equal(found("qa-ts", "playwright.config.ts", "const token = 'sk_live_51HxQ2bE8aZ0kLmN';\n").length, 1, "a key in a config is still a key");
 });
 
+test("a host in a regular expression is one host, with its escaped dots; a bare www is not a host (0.1.125)", () => {
+  const F = "e2e/pages/header.page.ts";
+  const host = (h) => `hardcoded_base_url: ${F}: hard-coded host ${h} — take the base URL from configuration`;
+  // the same host three ways in one file: one finding, not "shop-acme" and "shop-acme.io"
+  const src = [
+    "await page.goto('https://shop-acme.io/catalog');",
+    "await expect(page).toHaveURL(new RegExp(`^https://shop-acme\\\\.io${path}$`));",
+    "const rx = 'https://shop-acme\\\\.io';",
+  ].join("\n");
+  assert.deepEqual(found("qa-ts", F, src), [host("shop-acme.io")]);
+  assert.deepEqual(found("qa-ts", F, "await expect(page).toHaveURL(new RegExp(`^https://api\\\\.shop-acme\\\\.io/`));\n"), [host("api.shop-acme.io")]);
+  assert.deepEqual(found("qa-ts", F, "test('http:// and no www redirect to https://www', async () => {});\n"), []);
+});
+
 test("Java, C# and Python profiles are not changed", () => {
   for (const p of ["qa-java", "qa-c#", "qa-python"]) {
     const cks = Lens.profile(p).checks;

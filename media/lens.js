@@ -2639,7 +2639,7 @@
     },
     hardcoded_base_url(ev) {
       const SKIP =
-        /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|host\.docker\.internal|(?:[\w-]+\.)*(?:example\.(?:com|org|net)|test|invalid|local|localhost)|(?:www\.)?(?:w3\.org|json-schema\.org|swagger\.io|openapis\.org|github\.com|githubusercontent\.com|npmjs\.com|mozilla\.org|wikipedia\.org|apache\.org|postman\.com|getpostman\.com|schemas\.microsoft\.com))$/i;
+        /^(?:localhost|www|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|host\.docker\.internal|(?:[\w-]+\.)*(?:example\.(?:com|org|net)|test|invalid|local|localhost)|(?:www\.)?(?:w3\.org|json-schema\.org|swagger\.io|openapis\.org|github\.com|githubusercontent\.com|npmjs\.com|mozilla\.org|wikipedia\.org|apache\.org|postman\.com|getpostman\.com|schemas\.microsoft\.com))$/i;
       const out = [],
         seen = new Set();
       // a runner's config file is where the base URL belongs (baseURL in playwright.config.ts): what the rule asks for
@@ -2647,8 +2647,9 @@
         if (!e.new_content || RUNNER_CONFIG_RX.test(e.file || "")) continue;
         for (const line of linesOf(e).split("\n")) {
           if (/^\s*(?:#|\/\/|\*)|\$schema|xmlns|href\s*=|@see/.test(line)) continue;
-          for (const m of line.matchAll(/https?:\/\/([A-Za-z0-9.-]+|\[[0-9a-f:]+\])(?::\d+)?/gi)) {
-            const host = m[1];
+          // a dot escaped for a regular expression (`^https://shop\\.io`) is part of the host (0.1.125)
+          for (const m of line.matchAll(/https?:\/\/((?:[A-Za-z0-9-]|\\{0,2}\.)+|\[[0-9a-f:]+\])(?::\d+)?/gi)) {
+            const host = m[1].replace(/\\/g, "");
             if (SKIP.test(host)) continue;
             const k = `${e.file || ""}|${host}`;
             if (seen.has(k)) continue;

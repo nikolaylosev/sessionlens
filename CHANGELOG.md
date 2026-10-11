@@ -72,6 +72,9 @@
   checks the same text another way and is no longer reported, nor are two different assertions that happen to stand
   at the same place after one was removed ("fewer assertions" still is). Saved sessions get this on their next
   analysis.
+- **"Hard-coded host" once per host.** A host in a regular expression, ``new RegExp(`^https://shop\\.io…`)``, was cut
+  at the first `\`, so the file got a second finding for `shop` next to `shop.io`. The escaped dots are now part of the
+  host. `https://www` in a test's title is no longer a host either. Saved sessions get this on their next analysis.
 
 ## 0.1.124
 
