@@ -1219,8 +1219,8 @@ importers make a file inside the agent's folder relative first, so this only cha
 commands. Before, a session started in one folder that worked in another (the owner's, from `~/.claude/skills/…`) had
 the user name in its findings and its PR report. Three comparisons take either spelling, for a session imported
 before: `test_deleted`'s match of an `rm` target with a known file, `inPlan`, and `transcriptMatch` (Import again
-would otherwise take the session for another one). `IMPORT_GEN` is 5, and `needsReimport` offers Import again to a
-session with a home folder spelled out in a step. A finding's text changes with its path, and `carryVerdicts` moves
+would otherwise take the session for another one). `IMPORT_GEN` was 5 for this, and `needsReimport` offers Import again
+to a session with a home folder spelled out in a step. A finding's text changes with its path, and `carryVerdicts` moves
 its verdict.
 
 ---
@@ -1503,7 +1503,11 @@ What the import keeps for them:
   changes were skipped, and an edit lost the line after its hunk). It is true for any older import that 0.1.122 reads
   differently: a step stored as a test run that only lists the tests, a Codex patch with `move_path` in the kept text,
   or a weakened assertion whose message cut a line at 40 characters. Below generation 2 it is also true for a session
-  that wrote or edited a test file or a runner config and has no `prev_content` and no `delete` event. The session's tab then shows
+  that wrote or edited a test file or a runner config and has no `prev_content` and no `delete` event. Since 0.1.125
+  (`IMPORT_GEN` 6) it is true below generation 6 for a Cursor session that wrote a test and called an MCP server: by
+  the kept text, a `CallDynamicTool` outside the namespace `cursor` or an `mcpToolCall` with its server; without the
+  text, a stored `CallDynamicTool` step. The new import names such a call `mcp__<server>__<tool>`, so
+  `browser_check_not_in_test` sees a browser. The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's
   own conversation of a file with several; "Back to regex parsing" uses it too since 0.1.115): id, name, spec and verdicts stay, `events`

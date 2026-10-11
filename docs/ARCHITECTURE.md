@@ -382,7 +382,8 @@ Key points:
   older schema once.
 - **What a session keeps besides the events.** `source_text` is the transcript when it is under 400 000 characters.
   `importGen` is the `IMPORT_GEN` of that import (4 at 0.1.122, 5 at 0.1.124: a step's `file` and `cmd` have the home folder
-  as `~`, `Lens.homeless`, so no path shows the user name). `source_outputs` (0.1.121) is the ends of the command
+  as `~`, `Lens.homeless`, so no path shows the user name; 6 at 0.1.125: a Cursor session's MCP calls are named
+  `mcp__<server>__<tool>`). `source_outputs` (0.1.121) is the ends of the command
   outputs Cursor's database returned, 20 000 characters each, so Back to regex parsing and Import again can parse the
   tests again. `source_project` (0.1.122) is the name of the transcript's folder in `~/.cursor/projects`, so a later
   import can make the absolute paths relative again.
@@ -428,7 +429,10 @@ flowchart TD
   `file_path`/`content`, `Glob`'s `target_directory` → `path`, `Delete` → a `delete` event), lets `fromClaudeJsonl`
   rebuild the files, then puts Cursor's tool names back. `turn_ended` lines are bookkeeping and are skipped. A
   `tool_use` has `name` and `input` only, no `id`. A `StrReplace` with no `path` stays kind `tool` (the file is not
-  guessed). Names outside that map (`Task`, `CallDynamicTool` and the rest) stay `tool`. The user's `<user_query>`
+  guessed). Names outside that map (`Task` and the rest) stay `tool`. `CallDynamicTool` (an MCP call, or one of
+  Cursor's own tools) is named as Claude Code names an MCP tool, `mcp__<namespace>__<toolName>`, and keeps the tool's
+  own name in the namespace `cursor` (`TodoWrite`, `AwaitShell`, `ReadLints`, `WebFetch`; since 0.1.125, so
+  `browser_check_not_in_test` sees a browser). The user's `<user_query>`
   is the text and its `<timestamp>` the `ts`. A command's output is not in the file, so a test run gets
   `output_missing`, and
   `pass_claim_without_run` treats its result as unknown (not red, not absent). The same check's window of 6 steps
@@ -464,7 +468,9 @@ flowchart TD
   Code's own stream-json has `tool_use` blocks and an init with `tools`), and `fromCursorStreamJson` rewrites the calls
   in the Claude Code shape for `fromClaudeJsonl`: an edit's `beforeFullFileContent`/`afterFullFileContent` become
   `toolUseResult` (a new file is a write), a shell call's output and exit code the `tool_result`, a read's content its
-  text. The output is in the file, so no database is read. A run with no result keeps `output_missing`.
+  text. The output is in the file, so no database is read. A run with no result keeps `output_missing`. An
+  `mcpToolCall` is `mcp__<server>__<toolName>`, the server from `serverIdentifier`, `providerIdentifier` or the start
+  of `name` (since 0.1.125; with none of them, the tool's name as before).
 - A JSONL file with tool calls that gave no event at all (`Lens.unreadToolCalls`) is imported only after the reviewer
   agrees, since the session would hold text only.
 - **claude.ai export and plain chat** carry code only inside messages; `diffMessageVersions` treats successive
@@ -783,8 +789,9 @@ session is analyzed again after the update (§6.3).
 - **Stored sessions** keep the events they were imported with: findings that need `prev_content` or a Codex
   `delete` event, a Codex 0.155+ session's file changes (0.1.121), and the 0.1.122 import's changes (a list-only
   command is not a run, a Codex move, a weakened assertion's message) and the 0.1.124 one (a path in the home folder
-  from `~`) appear only after the transcript is imported again (**Import again** in the session's tab, since 0.1.114;
-  `Lens.needsReimport` offers it where a new import differs, `IMPORT_GEN` 5). A session whose transcript was too long
+  from `~`) and the 0.1.125 one (a Cursor session's MCP calls by server) appear only after the transcript is imported
+  again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
+  differs, `IMPORT_GEN` 6). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a

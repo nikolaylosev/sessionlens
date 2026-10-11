@@ -771,11 +771,13 @@
   // a test file: by its name, or in one of the profile's test folders (anywhere in the path)
   /* A browser tool of an MCP server (0.1.125, browser_check_not_in_test): mcp__<server>__<tool> in Claude Code, and the
      same without "mcp__", where the server's name says it drives a browser (claude-in-chrome, playwright,
-     chrome-devtools, puppeteer, browsermcp…). Tabs, picking a browser and the window's size are housekeeping, not a
-     look at the page. */
+     chrome-devtools, puppeteer, browsermcp…). A Cursor session gets the same names from its import (mcpName): Playwright
+     MCP is "plugin-playwright-playwright" or a server of the person's own ("user-playwright" for executeautomation's,
+     whose tools are playwright_navigate, playwright_click…). Tabs, picking a browser, the window's size and closing the
+     browser are housekeeping, not a look at the page. */
   const BROWSER_SERVER = /browser|chrome|playwright|puppeteer|devtools/i;
   const BROWSER_HOUSEKEEPING =
-    /^(?:tabs_\w+|list_connected_browsers|select_browser|switch_browser|resize_window|shortcuts_\w+|gif_creator|upload_image|file_upload|browser_(?:close|install|resize|tabs)|(?:new|close|list|select)_pages?)$/i;
+    /^(?:tabs_\w+|list_connected_browsers|select_browser|switch_browser|resize_window|shortcuts_\w+|gif_creator|upload_image|file_upload|(?:browser|playwright)_(?:close|install|resize|tabs)|(?:new|close|list|select)_pages?)$/i;
   function browserLook(tool) {
     // the server is what comes before the first "__" (a server's name has none), the tool what comes after it
     const name = String(tool || "").replace(/^mcp__/, ""),
@@ -1111,6 +1113,18 @@
   }
   // Cursor's tools under the names and input keys the Claude Code import reads; other tools stay as they are (kind "tool")
   const CURSOR_TOOLS = { Shell: "Bash", StrReplace: "Edit", Write: "Write", Read: "Read", Grep: "Grep", Glob: "Glob", Delete: "Delete" };
+  /* An MCP tool under the name Claude Code gives it, mcp__<server>__<tool>: what browser_check_not_in_test reads the
+     server from (0.1.125). Cursor writes an MCP call as CallDynamicTool {namespace, toolName} in a transcript and as
+     mcpToolCall {serverIdentifier, toolName} in an Agent CLI log; until 0.1.125 every such step of a transcript was
+     "CallDynamicTool", and of a log the bare tool name, so a browser was never seen. Names are kept to the characters
+     a server's or a tool's name has. "" without both. */
+  const toolPart = (x) => (typeof x === "string" ? x.replace(/[^\w.-]/g, "").slice(0, 80) : "");
+  const mcpName = (server, tool) => (toolPart(server) && toolPart(tool) ? `mcp__${toolPart(server)}__${toolPart(tool)}` : "");
+  // CallDynamicTool's own tools (namespace "cursor": TodoWrite, AwaitShell, ReadLints, WebFetch) keep their name
+  function cursorDynamicName(input) {
+    if (!input || typeof input !== "object") return "";
+    return input.namespace === "cursor" ? toolPart(input.toolName) : mcpName(input.namespace, input.toolName);
+  }
   function cursorInput(name, input) {
     const o = Object.assign({}, input);
     if (o.path != null && o.file_path == null) o.file_path = o.path;
@@ -1194,7 +1208,8 @@
           if (u.text) content.push({ type: "text", text: u.text });
         } else if (b.type === "text") content.push({ type: "text", text: b.text || "" });
         else if (b.type === "tool_use" && rec.role === "assistant") {
-          const name = String(b.name || ""),
+          const raw = String(b.name || ""),
+            name = (raw === "CallDynamicTool" && cursorDynamicName(b.input)) || raw,
             input = cursorInput(name, b.input || {});
           const as = name === "StrReplace" && !input.file_path ? name : CURSOR_TOOLS[name] || name;
           const id = "cursor-" + names.length;
@@ -1278,7 +1293,10 @@
     }
     if (kind === "mcpToolCall") {
       const name = String(args.toolName || args.name || "mcp");
-      return ["mcp:" + name, {}, text(ok && ok.content), null, false, name];
+      // the server: serverIdentifier, else providerIdentifier, else what `name` (<server>-<tool>) has before the tool
+      const own = typeof args.name === "string" && args.name.endsWith("-" + name) ? args.name.slice(0, -name.length - 1) : "";
+      const full = mcpName(args.serverIdentifier || args.providerIdentifier || own, name);
+      return [full || "mcp:" + name, {}, text(ok && ok.content), null, false, full || name];
     }
     const as = CURSOR_STREAM_TOOLS[kind];
     if (!as) return [kind.replace(/ToolCall$/, ""), {}, text(ok), null, false, kind.replace(/ToolCall$/, "")];
@@ -1632,8 +1650,24 @@
         (0.1.121).
      4: a command that only lists the tests is not a run, a file moved by a Codex patch is an edit of its new name, and
         a weakened assertion shows the change, not 40 characters of each line (0.1.122).
-     5: a path or a command in the home folder starts with ~, without the person's user name (fromHome, 0.1.124). */
-  const IMPORT_GEN = 5;
+     5: a path or a command in the home folder starts with ~, without the person's user name (fromHome, 0.1.124).
+     6: a Cursor session's MCP calls are named mcp__<server>__<tool>, so browser_check_not_in_test sees a browser
+        (0.1.125). */
+  const IMPORT_GEN = 6;
+  /* A Cursor session imported before 0.1.125 that wrote a test and called an MCP server: by its kept text, a
+     transcript's CallDynamicTool outside Cursor's own namespace or an Agent CLI log's mcpToolCall that names its
+     server; without the text, a CallDynamicTool step (it may be only Cursor's own TodoWrite: importing it again then
+     changes nothing). */
+  function cursorMcpBefore125(s) {
+    const cfg = profile(s.profile);
+    if (!s.events.some((e) => (e.kind === "write" || e.kind === "edit") && isTestFile(e.file, cfg))) return false;
+    const t = typeof s.source_text === "string" ? s.source_text : "";
+    if (!t) return s.events.some((e) => e.kind === "tool" && e.tool === "CallDynamicTool");
+    return (
+      (/"CallDynamicTool"/.test(t) && /"namespace"\s*:\s*"(?!cursor")[^"]/.test(t)) ||
+      (/"mcpToolCall"\s*:/.test(t) && /"(?:serverIdentifier|providerIdentifier)"\s*:\s*"[^"]/.test(t))
+    );
+  }
   // a step of a session imported before 0.1.124 with the home folder spelled out
   const homeSpelled = (s) => s.events.some((e) => [e.file, e.cmd].some((x) => typeof x === "string" && homeless(x) !== x));
   /* A Codex session imported before 0.1.121 with file changes in its transcript: from Codex 0.155 they were skipped,
@@ -1666,6 +1700,7 @@
     if ((s.importGen || 0) < 3 && codexChangesBefore121(s)) return true;
     if ((s.importGen || 0) < 4 && changedBy122(s)) return true; // a 0.1.122 import already reads these the new way
     if (homeSpelled(s)) return true;
+    if ((s.importGen || 0) < 6 && cursorMcpBefore125(s)) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;
