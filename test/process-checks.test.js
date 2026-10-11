@@ -79,6 +79,23 @@ test("peeked_at_src_before_plan, not reported: after the approval, test code, a 
   assert.deepEqual(found([TASK, ["read", "srcgen/cart.ts"], PLAN, APPROVED], "peeked_at_src_before_plan"), []);
 });
 
+test("peeked_at_src_before_plan, not reported: reading back a file the agent wrote or edited earlier (0.1.125)", () => {
+  const PO = "src/pages/SearchPage.ts";
+  const page = ["write", PO, "export class SearchPage {}\n"];
+  // the owner's Cursor session with the page objects in src/pages: written, then read back with Read, cat, ./ or an edit first
+  assert.deepEqual(found([TASK, page, ["read", PO]], "peeked_at_src_before_plan"), []);
+  assert.deepEqual(found([TASK, page, ["bash", "cat ./" + PO]], "peeked_at_src_before_plan"), []);
+  assert.deepEqual(found([TASK, page, ["edit", PO, "{}", "{ }"], ["read", "./" + PO]], "peeked_at_src_before_plan"), []);
+  // a file that was there before, edited and then read back (its read before the edit is a finding of its own)
+  assert.deepEqual(found([TASK, ["edit", "src/pages/HeaderPage.ts", "a", "b"], ["read", "src/pages/HeaderPage.ts"]], "peeked_at_src_before_plan"), []);
+  // still reported: a file of the product next to it, a file read before the agent wrote it, a search over the folder
+  const peeked = (file) => [`high: Read ${file} before the plan was approved — product code is off-limits during generation`];
+  assert.deepEqual(found([TASK, page, ["read", "src/cart.ts"]], "peeked_at_src_before_plan"), peeked("src/cart.ts"));
+  assert.deepEqual(found([TASK, ["read", PO], page], "peeked_at_src_before_plan"), peeked(PO));
+  assert.deepEqual(found([TASK, page, ["grep", "src"]], "peeked_at_src_before_plan"), peeked("src"));
+  assert.deepEqual(found([TASK, page, ["bash", "cat " + PO + " src/cart.ts"]], "peeked_at_src_before_plan"), peeked("src/cart.ts"), "the product file of two");
+});
+
 test("assumption_instead_of_question: the agent assumes instead of asking, in English or Russian", () => {
   assert.deepEqual(found([TASK, ["say", "I assume the total includes tax. Writing the test now."]], "assumption_instead_of_question"), [
     "medium: Assumption instead of a question: “I assume the total includes tax”",

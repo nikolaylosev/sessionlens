@@ -30,6 +30,10 @@
   updated along with each change counted too. Now the edits of a file are counted between two of your messages, and
   `.md`, `.txt` and `.rst` files are left out. On the owner's 38 sessions 10 of 13 such findings are gone. The text
   says "for one request" instead of "in one session". Saved sessions get this on their next analysis.
+- **Reading back its own file is no "peek at product code".** With page objects in `src/pages/`, an agent that read
+  back the page object it had just written got a high `peeked_at_src_before_plan`. A file the agent wrote or edited
+  earlier in the session no longer counts; a product file next to it, a file read before it was written and a search
+  over the whole folder still do. Saved sessions get this on their next analysis.
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an
