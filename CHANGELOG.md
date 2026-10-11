@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.126
+
+### Fixed
+- **The semantic review sees how a long session ended.** The shortened transcript sent to the model was cut at its
+  end, so in 15 of the owner's 20 long sessions with test runs the model never saw the last run and what the agent
+  said it had done. Now a long transcript keeps its start and its end, and one line says what was in between: the
+  edits, the test runs with the last one's result, the messages; your own messages from there are kept too. Steps of
+  one kind in a row are one line with the tools' names (`20–39 browser ×18: browser_navigate, browser_click, …`)
+  instead of 18 lines of "tool", and a long command is one line cut at 200 characters. On those 20 sessions the last
+  run is now in the transcript in 17 (the other 3 have no result to show), and 370 of 535 of your messages instead of
+  100. **Debug model** shows the new text.
+
 ## 0.1.125
 
 ### Added

@@ -845,12 +845,19 @@
   const BROWSER_SERVER = /browser|chrome|playwright|puppeteer|devtools/i;
   const BROWSER_HOUSEKEEPING =
     /^(?:tabs_\w+|list_connected_browsers|select_browser|switch_browser|resize_window|shortcuts_\w+|gif_creator|upload_image|file_upload|(?:browser|playwright)_(?:close|install|resize|tabs)|(?:new|close|list|select)_pages?)$/i;
-  function browserLook(tool) {
-    // the server is what comes before the first "__" (a server's name has none), the tool what comes after it
+  // [server, tool] of an MCP tool's name: the server is what comes before the first "__" (a server's name has none)
+  function mcpParts(tool) {
     const name = String(tool || "").replace(/^mcp__/, ""),
       at = name.indexOf("__");
-    if (at <= 0) return false;
-    return BROWSER_SERVER.test(name.slice(0, at)) && !BROWSER_HOUSEKEEPING.test(name.slice(at + 2));
+    return at > 0 ? [name.slice(0, at), name.slice(at + 2)] : null;
+  }
+  // any tool of a browser's MCP server, housekeeping too (the semantic review's transcript groups them, 0.1.126)
+  const browserTool = (tool) => {
+    const p = mcpParts(tool);
+    return !!p && BROWSER_SERVER.test(p[0]);
+  };
+  function browserLook(tool) {
+    return browserTool(tool) && !BROWSER_HOUSEKEEPING.test(mcpParts(tool)[1]);
   }
   /* A look through a script of the agent's own (0.1.125): a shell command that runs Node (or tsx, Bun, Deno) or Python
      on code that loads Playwright or Puppeteer in that language, launches a browser (chromium.launch(),
@@ -3148,7 +3155,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.125";
+  const ANALYSIS_VERSION = "0.1.126";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")
@@ -3389,6 +3396,8 @@
     PROFILES: VISIBLE,
     ALIAS,
     redactSecrets,
+    browserTool,
+    mcpParts,
     importAny,
     homeless,
     clip,

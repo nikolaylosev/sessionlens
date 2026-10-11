@@ -608,6 +608,13 @@ sequenceDiagram
   **verify** asks a second call to keep only findings it can support with evidence (on by default). Since 0.1.115
   each model finding records `model` and, once verified, `verifier` (`provider/model`, `LensAI.modelLabel()`); the
   report and `verdicts.json` export them, for precision per model later.
+- **The transcript in the review's prompt** (`compact()` in `ai.js`, since 0.1.126): one line per step; steps of one kind
+  in a row are one line with the tools' names (`20–39 browser ×18: browser_navigate, browser_click, …`, reads,
+  searches, other tools), and a command is one line of at most 200 characters. Over its room (12 000 characters, 4 000
+  for a local model) it keeps the start (30%) and the end; one line says what the steps in between had (edits, test
+  runs with the last one's result, messages) and the user's messages among them follow it, up to 20% of the room.
+  Until 0.1.126 the end was cut, and the model did not see the last test run in 15 of the owner's 20 long sessions
+  with runs.
 - **What is sent:** each model button says it on hover (README, "Your data"). Since 0.1.116 every prompt has its
   secrets masked (`LensAI.maskSecrets`, which is `Lens.redactSecrets`) where it is built, and `callModel()` masks
   again; the verifier checks quotes against the masked text that was sent.
