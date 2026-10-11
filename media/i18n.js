@@ -18,7 +18,7 @@
       weak_assert: "{file}: weak assertion “{line}” — checks “didn't crash”, not a value",
       fix_no_triage: "Edited {file} right after a failure (seq {seq}) with no triage: product bug / test bug / spec defect",
       scope: "Edited {file}, which is not in the plan",
-      churn: "{file}: {n} edits in one session — poking instead of understanding",
+      churn: "{file}: {n} edits for one request — poking instead of understanding",
       sleep: "{file}: fixed delay (sleep) in a test",
       skip: "{file}: skip / retry added",
       focused: "{file}: focused test “{line}” — only it runs, the rest of the suite is silently skipped",

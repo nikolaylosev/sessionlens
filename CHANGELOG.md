@@ -25,6 +25,11 @@
   «Нет» now counts only as a reply: at the start of a message or a sentence, before a comma, a stop or the end
   («Нет, не так»). A question about what the agent did now counts: «где вообще assertions?», «зачем ты…» at the start
   of a message or a sentence, and "why did you…". Saved sessions get this on their next analysis.
+- **"Edit churn" counts one request at a time, and not docs.** Five edits of a file over the whole session were
+  "poking instead of understanding", even when you had asked for a new change in between, and the readme the agent
+  updated along with each change counted too. Now the edits of a file are counted between two of your messages, and
+  `.md`, `.txt` and `.rst` files are left out. On the owner's 38 sessions 10 of 13 such findings are gone. The text
+  says "for one request" instead of "in one session". Saved sessions get this on their next analysis.
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an
