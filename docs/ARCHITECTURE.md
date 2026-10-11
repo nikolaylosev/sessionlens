@@ -383,7 +383,8 @@ Key points:
 - **What a session keeps besides the events.** `source_text` is the transcript when it is under 400 000 characters.
   `importGen` is the `IMPORT_GEN` of that import (4 at 0.1.122, 5 at 0.1.124: a step's `file` and `cmd` have the home folder
   as `~`, `Lens.homeless`, so no path shows the user name; 6 at 0.1.125: a Cursor session's MCP calls are named
-  `mcp__<server>__<tool>`). `source_outputs` (0.1.121) is the ends of the command
+  `mcp__<server>__<tool>`; 7 at 0.1.125: an edit is applied with its new text as it is, so `$&`, `` $` ``, `$'` and
+  `$$` in it no longer put other text into the file). `source_outputs` (0.1.121) is the ends of the command
   outputs Cursor's database returned, 20 000 characters each, so Back to regex parsing and Import again can parse the
   tests again. `source_project` (0.1.122) is the name of the transcript's folder in `~/.cursor/projects`, so a later
   import can make the absolute paths relative again.
@@ -794,7 +795,7 @@ session is analyzed again after the update (§6.3).
   command is not a run, a Codex move, a weakened assertion's message) and the 0.1.124 one (a path in the home folder
   from `~`) and the 0.1.125 one (a Cursor session's MCP calls by server) appear only after the transcript is imported
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
-  differs, `IMPORT_GEN` 6). A session whose transcript was too long
+  differs, `IMPORT_GEN` 7). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a
