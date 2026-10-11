@@ -1971,17 +1971,24 @@
   // steps that change no code and say nothing: pass_claim_without_run does not count them in its window
   const QUIET_STEPS = new Set(["read", "search", "tool", "git", "run_other"]);
   const checks = {
-    // since 0.1.119 also a src folder deeper in the path, but not test-side code or a dependency under it
+    /* since 0.1.119 also a src folder deeper in the path, but not test-side code or a dependency under it. Since 0.1.125
+       not a file the agent wrote or edited earlier in the session: reading back its own page object in src/pages is no
+       look at the product (the owner's Cursor session of 11 Oct 2026, with the page objects moved there: two high
+       findings). A search over a whole folder still counts. */
     peeked_at_src_before_plan(ev, cfg) {
       const p = planSeq(ev, cfg),
         a = approvalSeq(ev, p);
       const cut = a ?? p ?? 1e9;
-      const out = [];
+      const out = [],
+        own = new Set(); // the files the agent wrote or edited so far, as the import names them
+      const key = (f) => homeless(String(f)).replace(/^\.\//, "");
+      const product = (f) => productPath(f, cfg) && !own.has(key(f));
       for (const e of ev) {
         if (e.seq >= cut) continue;
+        if ((e.kind === "write" || e.kind === "edit") && e.file) own.add(key(e.file));
         // since 0.1.121 also a shell command that only reads (cat src/cart.ts, sed -n '1,80p' src/cart.ts)
-        const file = ["read", "search"].includes(e.kind) ? e.file : (shellReads(e, cfg) || []).find((f) => productPath(f, cfg));
-        if (file && productPath(file, cfg)) out.push(F("peeked_at_src_before_plan", "high", e.seq, T("peeked", { file })));
+        const file = ["read", "search"].includes(e.kind) ? e.file : (shellReads(e, cfg) || []).find(product);
+        if (file && product(file)) out.push(F("peeked_at_src_before_plan", "high", e.seq, T("peeked", { file })));
       }
       return out;
     },
