@@ -9,6 +9,12 @@
   asserts what it saw. Looking at the site before writing the tests, or while finding out why a test failed and then
   changing the test, does not count. Saved sessions get this on their next analysis.
 
+### Fixed
+- **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
+  spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
+  `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an
+  assertion. A test that only calls actions is still reported. Saved sessions get this on their next analysis.
+
 ## 0.1.124
 
 ### Added

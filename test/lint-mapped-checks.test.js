@@ -348,6 +348,26 @@ test("no_assertion_after_action: a test with actions and no assertion, in Playwr
   );
 });
 
+test("no_assertion_after_action in Playwright: an assertion through a Page Object method named expect… (0.1.125)", async () => {
+  const spec = (body) =>
+    PW + `import { SearchPage } from "./pages/SearchPage";\ntest("search", async ({ searchPage }: { searchPage: SearchPage }) => {\n${body}});\n`;
+  // a method, a plain function, the result of a call: the called name starts with expect and a capital
+  for (const call of ["await searchPage.expectSearchOpen();", "await expectPaid(page);", "await app.search().expectResultsFor('parrot');"])
+    assert.deepEqual(
+      await lintFound("qa-ts", "tests/search.spec.ts", spec(`  await searchPage.openSearch();\n  ${call}\n`), "no_assertion_after_action"),
+      [],
+      call,
+    );
+  // still reported: actions only, and names that only start like it
+  const none = ["no_assertion_after_action/lint high: tests/search.spec.ts:3 — Test has no assertions [playwright/expect-expect]"];
+  for (const call of ["await searchPage.closeSearch();", "await searchPage.expected();", "await searchPage.expectation();", "await searchPage.Expect();"])
+    assert.deepEqual(
+      await lintFound("qa-ts", "tests/search.spec.ts", spec(`  await searchPage.openSearch();\n  ${call}\n`), "no_assertion_after_action"),
+      none,
+      call,
+    );
+});
+
 test("cypress_async_test: an async test, and an async hook with a title", async () => {
   const CY = "cypress/e2e/cart.cy.ts";
   assert.deepEqual(
