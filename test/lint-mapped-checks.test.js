@@ -520,3 +520,12 @@ test("cypress_async_test from the regex: the hooks the engine misses, never one 
   assert.deepEqual(both(`before(async () => {\n  cy.visit("/");\n});\n` + IT), ["formal"]);
   assert.deepEqual(both(`before("load", async () => {\n  cy.visit("/");\n});\n` + IT), ["lint"]);
 });
+
+test("one rule on one line is one finding: no-conditional-in-test on an `if` with `&&` (0.1.125)", async () => {
+  const head = "import { test, expect } from '@playwright/test';\ntest('nav', async ({ page }) => {\n";
+  const src = `${head}  for (const item of items) {\n    if ('title' in item && item.title) await page.getByText(item.title).click();\n  }\n  const a = x ? 1 : 2;\n  const b = y ? 1 : 2;\n  const c = z ? 1 : 2;\n  await expect(page).toHaveTitle('Nav');\n});\n`;
+  const found = await lintFound("qa-ts", "e2e/nav.spec.ts", src, "conditional_logic");
+  const at = (n) => `conditional_logic/lint low: e2e/nav.spec.ts:${n} — Avoid having conditionals in tests [playwright/no-conditional-in-test]`;
+  // until 0.1.125 line 4 came twice (the `if` and the `&&`) and took a place of the three a file shows
+  assert.deepEqual(found, [at(4), at(6), at(7) + " (+1 more of the same in this file)"]);
+});
