@@ -7,7 +7,9 @@
   tool (Claude in Chrome, Playwright MCP, Chrome DevTools MCP or Puppeteer) can look at the page itself. When it does
   so after its last change of a test file and changes no test after that, its last check was by hand, and no test
   asserts what it saw. Looking at the site before writing the tests, or while finding out why a test failed and then
-  changing the test, does not count. Saved sessions get this on their next analysis.
+  changing the test, does not count. Saved sessions get this on their next analysis. A Cursor session counts too: its
+  MCP calls now show as `mcp__<server>__<tool>`, such as `mcp__user-playwright__playwright_click`, instead of
+  `CallDynamicTool`. A Cursor session imported before shows **Import again** for this.
 - **An assertion that never retries** (`weak_assert`, medium, Playwright). `expect(await x.isVisible()).toBeTruthy()`
   reads the page once, at that moment, and fails if the page is a little slow; `await expect(x).toBeVisible()` waits
   for it. The same for `textContent()`, `inputValue()`, `getAttribute()` and the other reads ESLint's
