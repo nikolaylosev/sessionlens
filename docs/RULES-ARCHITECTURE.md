@@ -557,8 +557,11 @@ const merge = (regexFindings, lintFindings, language) => {
   both must be either in `SUPERSEDES` or in the test's `KEEP_BOTH` with the reason.
 - **`weak_assert` keeps both** (`KEEP_BOTH`): the regex finds `toBeDefined()`,
   `toBeTruthy()` and `expect(true).toBe(true)`; the engines map other rules to
-  the same name (a useless `.not`, a malformed `expect`, a standalone `expect`).
-  Superseding it would drop the regex findings the engines do not make.
+  the same name (a useless `.not`, a malformed `expect`, a standalone `expect`, and since 0.1.125 an assertion that
+  reads the page once and never retries, `playwright/prefer-web-first-assertions`, medium).
+  Superseding it would drop the regex findings the engines do not make. The regex `expect\s*\([^)]*\)` stops at the
+  first `)`, so it never matches `expect(await x.isVisible()).toBeTruthy()`: in qa-ts only the engine reports that
+  line, once.
 - **`cypress_async_test` keeps both** (0.1.121, qa-cypress): ESLint's `cypress/no-async-tests` finds an async `it()`
   and the vendored `cypress/no-async-before` only a titled `before` / `beforeEach`; the regex finds what they miss, an
   untitled `before` / `beforeEach` and any `after` / `afterEach`. They never report the same hook.
