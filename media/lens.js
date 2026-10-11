@@ -109,6 +109,9 @@
     return STATUS_RX.test(seg) && !CONTENT_HINT.test(seg);
   };
   // Order here = order in the Profile dropdown (qa-go is kept as a hidden legacy profile so old sessions still analyse correctly)
+  // a qa-ts assertion of a value or a state (weaken_pairs)
+  const WEB_STRONG =
+    /\.(?:toBe|toEqual|toStrictEqual|toHaveLength|toMatch|toContain|toHaveAttribute|toHaveText|toHaveURL|toHaveTitle|toHaveCount|toBeLessThan\w*|toBeGreaterThan\w*|toContainText|toHaveValues?|toHaveClass|toHaveCSS|toHaveId|toHaveAccessibleName|toHaveAccessibleDescription|toHaveRole|toHaveJSProperty|toHaveScreenshot|toBeChecked|toBeEnabled|toBeDisabled|toBeEditable|toBeFocused|toBeEmpty)\s*\(/;
   const PROFILES = {
     "qa-ts": {
       language: "typescript",
@@ -130,11 +133,12 @@
       ],
       assert_line_patterns: [/\bexpect(?:\.(?:soft|poll))?\s*\(/],
       test_fn_pattern: /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+      /* Playwright's web-first assertions of a value or a state count as strong, so toHaveValue(q) → toBeVisible() is
+         weakened, and toBeAttached() is as weak as toBeVisible(). Those two only for the same element: a locator with
+         the value in it (locator('body').toContainText(q) → getByText(q).toBeVisible()) is a rewrite (0.1.125) */
       weaken_pairs: [
-        [
-          /\.(?:toBe|toEqual|toStrictEqual|toHaveLength|toMatch|toContain|toHaveAttribute|toHaveText|toHaveURL|toHaveTitle|toHaveCount|toBeLessThan\w*|toBeGreaterThan\w*)\s*\(/,
-          /toBeDefined|toBeTruthy|not\.toBeNull|not\.toBeUndefined|toBeVisible\(\)\s*;?\s*$/,
-        ],
+        [WEB_STRONG, /toBeDefined|toBeTruthy|not\.toBeNull|not\.toBeUndefined/],
+        [WEB_STRONG, /(?:toBeVisible|toBeAttached)\(\)\s*;?\s*$/, { sameSubject: true }],
         [/toEqual\s*\(/, /toMatchObject/],
       ],
     },
@@ -687,6 +691,8 @@
      read as two equal halves. */
   const PAIR_MAX = 60;
   const capLine = (s) => (s.length > PAIR_MAX ? s.slice(0, PAIR_MAX - 1) + "…" : s);
+  // what an assertion checks: the line up to its matcher (`await expect(page.getByRole("alert"))` of `….toBeVisible();`)
+  const subjectOf = (l) => l.replace(/(?:\.not)?\.to\w+\s*\([^]*$/, "").trim();
   function changePair(a, b) {
     if (a.length <= PAIR_MAX && b.length <= PAIR_MAX) return `${a} → ${b}`;
     let same = 0;
@@ -784,8 +790,8 @@
         na = asserts(nb);
       if (na.length < oa.length) res.removed.push({ test: name, before: oa.length, after: na.length });
       for (let i = 0; i < Math.min(oa.length, na.length); i++) {
-        for (const [strong, weak] of cfg.weaken_pairs || []) {
-          if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i])) {
+        for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
+          if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i]) && (!(opt && opt.sameSubject) || subjectOf(oa[i]) === subjectOf(na[i]))) {
             res.weakened.push({ test: name, reason: changePair(oa[i], na[i]) });
             break;
           }
