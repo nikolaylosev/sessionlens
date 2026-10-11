@@ -1525,3 +1525,6 @@ What the import keeps for them:
 Retries in a runner config are `config_weakened`, not `sleep_or_skip_added` (`sleep_or_skip_added` skips runner
 configs); retries on one test (`describe.configure({ retries })`, `@flaky`, `[Retry]`) stay `sleep_or_skip_added`.
 `hardcoded_base_url` skips runner configs too: `baseURL` in `playwright.config.ts` is what its rule asks for.
+It reads a host in a regular expression with its escaped dots (``new RegExp(`^https://shop\\.io`)`` is `shop.io`, one
+finding with `https://shop.io` in the same file; until 0.1.125 it was also `shop`), and a bare `www` (`https://www` in a
+test title) is not a host.
