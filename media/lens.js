@@ -785,6 +785,29 @@
     if (at <= 0) return false;
     return BROWSER_SERVER.test(name.slice(0, at)) && !BROWSER_HOUSEKEEPING.test(name.slice(at + 2));
   }
+  /* A look through a script of the agent's own (0.1.125): a shell command that runs Node (or tsx, Bun, Deno) or Python
+     on code that loads Playwright or Puppeteer in that language, launches a browser (chromium.launch(),
+     puppeteer.launch(), connectOverCDP()) and opens a page that is not a local file (goto()). The owner's Cursor session
+     of 11 Oct 2026 looked at the site 12 times this way, against 11 through its MCP server. No look: a test run
+     (run_tests), a search for the words (rg "chromium.launch" runs no script), a launch that opens no page (checking
+     that the browser is installed), a screenshot of a local file (goto("file://…")), and a script that only writes
+     such code into a file (python3 - <<EOF with the Node script inside a string: Python does not load it). The program
+     has to start a command: at the start, after &&, ||, ;, | or a line break, after variables, timeout, env or npx. */
+  const runnerAt = (names) =>
+    new RegExp(
+      String.raw`(?:^|&&|\|\||[;|(\n])\s*(?:\w+=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:(?:timeout|time|env|npx)\s+(?:-\S+\s+|\d\S*\s+)*)*(?:${names})(?=\s|$)`,
+    );
+  const JS_RUNNER = runnerAt("node|tsx|ts-node|bun|deno"),
+    PY_RUNNER = runnerAt("python3?|py");
+  const JS_BROWSER = /\b(?:require\s*\(|from\s+|import\s*\()\s*["'`][^"'`]*\b(?:playwright|puppeteer)/;
+  const PY_BROWSER = /^\s*(?:from|import)\s+(?:playwright|pyppeteer)\b/m;
+  const BROWSER_LAUNCH = /\b(?:chromium|firefox|webkit|puppeteer)\.(?:launch|connect)\w*\s*\(/;
+  const SITE_OPEN = /\.goto\s*\(\s*(?!["'`](?:file|data|about):)/;
+  function scriptLook(e) {
+    const c = e.kind === "run_other" && typeof e.cmd === "string" ? e.cmd : "";
+    if (!c || !BROWSER_LAUNCH.test(c) || !SITE_OPEN.test(c)) return false;
+    return (JS_RUNNER.test(c) && JS_BROWSER.test(c)) || (PY_RUNNER.test(c) && PY_BROWSER.test(c));
+  }
   const isTestFile = (f, cfg) => isCode(f, cfg) && (TEST_FILE_RX.test(f) || (cfg.test_dirs || []).some((d) => ("/" + f).includes("/" + d + "/")));
   /* what a runner config or a test file was before this write or edit: config_weakened and test_deleted compare with
      it. Often the only earlier version there is: a first Edit of a file that existed before the session. */
@@ -1970,7 +1993,8 @@
        tools (a browser, MCP), git and other commands. A Cursor session with an MCP browser makes dozens of them between
        a run and the message about it. */
     /* 0.1.125: the agent looked at the page through a browser tool (an MCP server such as Claude in Chrome, Playwright
-       MCP, Chrome DevTools MCP or Puppeteer) after its last change of a test file, and changed no test after that: the
+       MCP, Chrome DevTools MCP or Puppeteer), or through a script of its own (scriptLook), after its last change of a
+       test file, and changed no test after that: the
        last check was by hand, and no test asserts what it saw. Looking at the site before writing the tests, or while
        finding out why a test failed and then changing the test, is how the work goes and does not count. A session
        that wrote no test file is left to tests_never_run and the other checks. Opening and closing tabs is no look. */
@@ -1978,7 +2002,7 @@
       let lastTest = -1;
       for (const e of ev) if ((e.kind === "write" || e.kind === "edit") && e.file && isTestFile(e.file, cfg)) lastTest = e.seq;
       if (lastTest < 0) return [];
-      const looks = ev.filter((e) => e.seq > lastTest && e.kind === "tool" && browserLook(e.tool));
+      const looks = ev.filter((e) => e.seq > lastTest && ((e.kind === "tool" && browserLook(e.tool)) || scriptLook(e)));
       if (!looks.length) return [];
       const vars = { n: looks.length, first: looks[0].seq, last: looks[looks.length - 1].seq };
       return [F("browser_check_not_in_test", "medium", looks[0].seq, T(looks.length === 1 ? "browser_unasserted_one" : "browser_unasserted", vars))];

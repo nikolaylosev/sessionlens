@@ -15,12 +15,14 @@ const SPEC = "e2e/search.spec.ts";
 const PW =
   "import { test, expect } from '@playwright/test';\ntest('closes', async ({ page }) => {\n  await expect(page.getByRole('dialog')).toBeHidden();\n});\n";
 
-// steps: "look:<tool>" (a browser MCP call), "tool:<name>" (any other tool, as named), "write:<file>", "edit:<file>", "run:<passed>/<failed>", "say:<text>"
+// steps: "look:<tool>" (a browser MCP call), "tool:<name>" (any other tool, as named), "sh:<command>" (a shell command
+// that runs no tests), "write:<file>", "edit:<file>", "run:<passed>/<failed>", "say:<text>"
 function events(...steps) {
   return steps.map((s, seq) => {
     const [kind, arg] = s.split(/:(.*)/s);
     if (kind === "look") return { seq, kind: "tool", tool: arg.includes("__") ? arg : CHROME(arg) };
     if (kind === "tool") return { seq, kind: "tool", tool: arg };
+    if (kind === "sh") return { seq, kind: "run_other", cmd: arg };
     if (kind === "write" || kind === "edit") return { seq, kind, file: arg, new_content: PW };
     if (kind === "run") {
       const [passed, failed] = arg.split("/").map(Number);
@@ -166,4 +168,92 @@ test("Import again for a Cursor session imported before 0.1.125 that wrote a tes
   // without the kept text: a CallDynamicTool step of the old import
   const old = s.events.map((e) => (e.kind === "tool" ? Object.assign({}, e, { tool: "CallDynamicTool" }) : e));
   assert.equal(Lens.needsReimport({ profile: "qa-ts", importGen: 5, source_text: "", events: old }), true);
+});
+
+/* A script of the agent's own (0.1.125): the owner's Cursor session of 11 Oct 2026 looked at the site through
+   `node << 'EOF' … chromium.launch() … page.goto(…)` 12 times, all before it wrote the tests. */
+const NODE_LOOK = `PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" node << 'EOF'
+const { chromium } = require('@playwright/test');
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.goto('https://shop.example/', { waitUntil: 'domcontentloaded' });
+  console.log(await page.getByRole('dialog').isVisible());
+  await browser.close();
+})();
+EOF`;
+const PY_LOOK = `python3 - <<'EOF'
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    page = p.chromium.launch().new_page()
+    page.goto("https://shop.example/")
+    print(page.title())
+EOF`;
+
+test("a look through a script: Node or Python that launches a browser and opens a page", () => {
+  assert.deepEqual(
+    found(events("write:" + SPEC, "run:1/0", "sh:" + NODE_LOOK)).map((f) => f.message),
+    ["Checked the page in the browser after the last test change (seq 2); no test asserts what it saw"],
+  );
+  assert.equal(found(events("write:" + SPEC, "sh:" + PY_LOOK)).length, 1, "Python");
+  // a site that blocks bots, probed after the last test change (the owner's session of 4 Oct 2026): after cd and timeout
+  const probe = `cd ~/shop-e2e && timeout 20 node -e "
+const { chromium } = require('playwright-core');
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  const r = await page.goto('https://shop.example/', { waitUntil: 'domcontentloaded' });
+  console.log('status', r.status());
+  await browser.close();
+})();
+" 2>&1`;
+  assert.equal(found(events("write:" + SPEC, "sh:" + probe)).length, 1, "after cd, timeout");
+  assert.equal(
+    found(
+      events(
+        "write:" + SPEC,
+        "sh:node -e \"const puppeteer=require('puppeteer');puppeteer.launch().then(async b=>{const g=await b.newPage();await g.goto('https://shop.example/')})\"",
+      ),
+    ).length,
+    1,
+    "Puppeteer",
+  );
+  // a script and an MCP call: one finding that counts both
+  assert.deepEqual(
+    found(events("write:" + SPEC, "sh:" + NODE_LOOK, "look:computer")).map((f) => f.message),
+    ["Checked the page in the browser 2 times after the last test change (seq 1–2); no test asserts what it saw"],
+  );
+});
+
+test("not a look through a script: before the tests, a search for the words, a launch with no page, no runner", () => {
+  // the owner's session: the scripts came before the tests
+  assert.deepEqual(found(events("sh:" + NODE_LOOK, "sh:" + NODE_LOOK, "write:" + SPEC, "run:6/0")), []);
+  assert.deepEqual(found(events("write:" + SPEC, 'sh:rg -n "chromium.launch\\(|page.goto\\(" tests')), [], "a search");
+  assert.deepEqual(found(events("write:" + SPEC, "sh:node -e \"require('playwright').chromium.launch().then((b) => b.close())\"")), [], "no page opened");
+  assert.deepEqual(found(events("write:" + SPEC, "sh:cat probe.js # chromium.launch() then page.goto(url)")), [], "no runner");
+  // a screenshot of a local file, and a script that only writes the Node code into a file (how this test got here)
+  const local = `node -e "const { chromium } = require('playwright'); chromium.launch().then(async (b) => (await b.newPage()).goto('file:///tmp/mock.html'))"`;
+  assert.deepEqual(found(events("write:" + SPEC, "sh:" + local)), [], "a local file");
+  const writer = "python3 - <<'PY'\nopen('test/probe.test.js', 'w').write(r'''const NODE_LOOK = `" + NODE_LOOK + "`;''')\nPY";
+  assert.deepEqual(found(events("write:" + SPEC, "sh:" + writer)), [], "code written, not run");
+  // a script that changes the test after looking settles it, as an MCP look does
+  assert.deepEqual(found(events("write:" + SPEC, "sh:" + NODE_LOOK, "edit:" + SPEC)), []);
+});
+
+test("a look through a script, from a Cursor transcript and a Claude Code transcript", () => {
+  const line = (role, content) => JSON.stringify({ role, message: { content } });
+  const cursor = [
+    line("user", [{ type: "text", text: "<user_query>Rewrite the search tests</user_query>" }]),
+    line("assistant", [{ type: "tool_use", name: "Write", input: { path: "/w/shop/" + SPEC, contents: PW } }]),
+    line("assistant", [{ type: "tool_use", name: "Shell", input: { command: NODE_LOOK, description: "Probe the dialog" } }]),
+  ].join("\n");
+  assert.equal(found(Lens.importAny(cursor, cfg)).length, 1, "Cursor");
+  const rec = (o) => JSON.stringify(o);
+  const use = (id, name, input) => rec({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } });
+  const claude = [
+    rec({ type: "user", cwd: "/w", message: { role: "user", content: "Write the search tests" } }),
+    use("w", "Write", { file_path: "/w/" + SPEC, content: PW }),
+    use("b", "Bash", { command: PY_LOOK }),
+  ].join("\n");
+  assert.equal(found(Lens.importAny(claude, cfg)).length, 1, "Claude Code");
 });
