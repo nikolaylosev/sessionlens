@@ -75,6 +75,10 @@
 - **"Hard-coded host" once per host.** A host in a regular expression, ``new RegExp(`^https://shop\\.io…`)``, was cut
   at the first `\`, so the file got a second finding for `shop` next to `shop.io`. The escaped dots are now part of the
   host. `https://www` in a test's title is no longer a host either. Saved sessions get this on their next analysis.
+- **An ESLint rule reports a line once.** `if ('title' in item && item.title)` in a Playwright test was two identical
+  "Avoid having conditionals in tests" findings: the rule reports the `if` and the `&&`. The repeat also took one of
+  the three places a file shows for a check, so another conditional could hide under "+1 more". Saved sessions get
+  this on their next analysis.
 
 ## 0.1.124
 

@@ -345,6 +345,8 @@
           .slice(Math.max(0, n - 3), n + 2)
           .map((l, i) => `${Math.max(1, n - 2) + i}${Math.max(1, n - 2) + i === n ? " ▸" : "  "} ${l}`.slice(0, 160))
           .join("\n");
+      // a rule can report one line twice (no-conditional-in-test: the `if` and the `&&` in it): once is enough (0.1.125)
+      const same = new Set();
       for (const m of r.messages) {
         if (m.fatal) {
           fatal = true;
@@ -352,6 +354,9 @@
           why.push(`${b.name}:${m.line} ${m.message}`.slice(0, 160));
           continue;
         }
+        const key = `${m.ruleId}|${m.line}|${m.message}`;
+        if (same.has(key)) continue;
+        same.add(key);
         const [check, severity] = engine.map[m.ruleId] || ["lint_" + String(m.ruleId).split("/").pop(), "medium"];
         findings.push({
           check,

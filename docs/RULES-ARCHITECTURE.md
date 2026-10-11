@@ -508,6 +508,10 @@ function run(session, cfg, settings) {
   30 identical findings of one check in one analysis, the first 3 are shown
   plus "+27 more" in the text of the last one. This is not a persistent limit, just
   protection against one spammed report.
+- **One rule, one line, one finding** (since 0.1.125). A rule can report the same line twice with the same text:
+  `playwright/no-conditional-in-test` reports both the `if` and the `&&` of `if (a && b)`. `run()` keeps the first
+  message of each rule + line + text in a block, before the cap, so a repeat neither shows twice nor takes one of the
+  three places.
 
 ### 6.3 `merge(regexFindings, lintFindings, language)`, `SUPERSEDES` and `SAME_AS_REGEX`
 
