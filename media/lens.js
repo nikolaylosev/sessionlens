@@ -2746,14 +2746,24 @@
       }
       return out;
     },
+    /* Since 0.1.125 "нет" counts only as a reply: at the start of the message or of a sentence, before a comma, a stop
+       or the end ("Нет, не так", "Нет!"). Anywhere else it says that something is missing: "Нет ограничения на длину
+       строки" in a task (the owner's Cursor session of 11 Oct 2026), "в спеке ничего нет." And a question about what
+       the agent did: "где вообще assertions?" (the same session, not seen until then), "зачем ты…" (both as the start of
+       the message or a sentence), "why did you…". */
     user_frustration(ev) {
       const RX =
-        /(?:^|[\s,.!])(?:нет|не то|не так|не это|опять|снова|ещё раз|еще раз|я же (?:сказал|просил|писал|говорил)|ты не (?:понял|прочитал)|верни|откати|not what i|again|i (?:said|asked|told)|wrong|revert|undo)(?=[\s,.!?]|$)/i;
+        /(?:^|[\s,.!])(?:не то|не так|не это|опять|снова|ещё раз|еще раз|я же (?:сказал|просил|писал|говорил)|ты не (?:понял|прочитал)|верни|откати|not what i|again|i (?:said|asked|told)|why did you|wrong|revert|undo)(?=[\s,.!?]|$)/i;
+      const NO = /(?:^|[.!?]\s+)нет\s*(?:[,.!?…]|$)/i;
+      // a question to the agent opens the message or a sentence: "Проверь, где вообще показывается корзина" is a task
+      const ASK = /(?:^|[.!?]\s+)(?:(?:а|ну|и|так)\s+)?(?:где вообще|зачем ты)(?=[\s,.!?]|$)/i;
       const out = [],
         users = ev.filter((e) => e.kind === "user");
       users.forEach((u, i) => {
-        const t = u.text.toLowerCase();
-        if (RX.test(t) && t.length < 400) out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
+        const t = u.text.toLowerCase(),
+          said = t.trim(); // the phrases from its first word; the repeat compares the text as it was, as before
+        if ((RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
+          out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
         else if (i > 0 && t.length > 15 && users[i - 1].text.toLowerCase().slice(0, 40) === t.slice(0, 40))
           out.push(F("user_frustration", "medium", u.seq, T("repeat", { text: clip(u.text.trim(), 80) })));
       });

@@ -20,6 +20,11 @@
   next analysis.
 
 ### Fixed
+- **"User frustration" no longer fires on the word «нет» in a task.** «…Нет ограничения на длину строки» or «нет ли у
+  нас мелких доработок?» was a medium `user_frustration`; on the owner's 38 sessions 19 of the 40 findings were such.
+  «Нет» now counts only as a reply: at the start of a message or a sentence, before a comma, a stop or the end
+  («Нет, не так»). A question about what the agent did now counts: «где вообще assertions?», «зачем ты…» at the start
+  of a message or a sentence, and "why did you…". Saved sessions get this on their next analysis.
 - **Tests that assert through a Page Object are no longer "Test has no assertions".** With Page Objects a Playwright
   spec calls `await searchPage.expectSearchOpen()` and the `expect()` is inside that method; every such test was a high
   `no_assertion_after_action`. A call to a method whose name is `expect` followed by a capital letter now counts as an
