@@ -213,3 +213,53 @@ test("Codex: a test file deleted in a patch", () => {
     ["e2e/discount.spec.ts: test file deleted"],
   );
 });
+
+test("a temporary test the session wrote, run green and removed, is a check cleaned up (0.1.127)", () => {
+  const F = "tests/zz-scratch.spec.ts";
+  const RED = "  1 passed\n  1 failed";
+  const GREEN = "  1 passed";
+  // the owner's test-pw: written, run (red), rewritten, run alone (green) and removed in the same command
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", F, PW(TOTAL)],
+      ["bash", "npx playwright test", RED],
+      ["write", F, PW(["total", "Total: 3"])], // the same test, its check corrected
+      ["bash", `npx playwright test ${F} --reporter=line; rm -f ${F}`, GREEN],
+    ]),
+    [],
+  );
+  // the whole suite green, then removed in another step
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", F, PW(TOTAL)],
+      ["bash", "npx playwright test", GREEN],
+      ["bash", `rm ${F}`, ""],
+    ]),
+    [],
+  );
+  // removed right after its own run failed, in the same command: a failing test hidden
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", F, PW(TOTAL)],
+      ["bash", `npx playwright test ${F}; rm -f ${F}`, RED],
+    ]),
+    [`high: ${F}: test file deleted — right after a failing run (seq 2)`],
+  );
+  // green, but the run did not run this file
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", F, PW(TOTAL)],
+      ["bash", "npx playwright test tests/other.spec.ts", GREEN],
+      ["bash", `rm ${F}`, ""],
+    ]),
+    [`medium: ${F}: test file deleted`],
+  );
+  // a file that was there before the session: still a deletion
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["edit", F, "Total", "Total:"],
+      ["bash", `npx playwright test ${F}; rm -f ${F}`, GREEN],
+    ]).length,
+    1,
+  );
+});

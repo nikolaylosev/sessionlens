@@ -2647,8 +2647,9 @@
       // kept: the same test elsewhere at any time (moved) or in the same file after the deletion (restored)
       const kept = (file, seq, name) => seen.some((t) => t.name === name && (t.file !== file || t.seq > seq));
       const out = [];
-      const push = (key, file, seq, names) => {
-        const r = redRunBefore(ev, seq);
+      // red: the run the deletion came after, when the step itself ran the tests first (0.1.127); else redRunBefore
+      const push = (key, file, seq, names, red) => {
+        const r = red !== undefined ? red : redRunBefore(ev, seq);
         const vars = { file, n: names.length, names: names.join(", "), after: r ? T("after_red_run", { seq: r.seq }) : "" };
         out.push(F("test_deleted", r ? "high" : "medium", seq, T(key, vars)));
       };
@@ -2675,6 +2676,31 @@
         return a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
       };
       const testFile = (f) => isCode(f, cfg) && (TEST_FILE_RX.test(f) || inDirs(f, cfg.test_dirs));
+      /* 0.1.127: a command that runs the tests and then deletes a file (`npx playwright test x.spec.ts; rm x.spec.ts`):
+         its own run is the one the deletion came after, not the run of an earlier step. And a test file the session
+         itself created, deleted after a green run that ran it, is a temporary check cleaned up (the owner's test-pw:
+         a check of a page object's new methods, written, run, removed). Deleted after a red run it is still a test
+         hidden; a test taken out of a file, and a file that was there before, are still reported. */
+      const parts = (cmd) => String(cmd || "").split(/&&|\|\||;|\n/);
+      const RM = /^\s*(?:sudo\s+)?(?:git\s+rm|rm|unlink|del|Remove-Item)\s/;
+      const ranFirst = (e) => {
+        if (e.kind !== "run_tests" || !e.tests) return false;
+        const p = parts(e.cmd);
+        const run = p.findIndex((x) => isTestRun(x, cfg)),
+          rm = p.findIndex((x) => RM.test(x));
+        return run >= 0 && rm > run;
+      };
+      const runBefore = (e) => (ranFirst(e) ? e : [...ev].reverse().find((x) => x.seq < e.seq && x.kind === "run_tests" && x.tests) || null);
+      const ranFile = (run, f) => {
+        const p = parts(run.cmd).filter((x) => isTestRun(x, cfg));
+        const name = f.split("/").pop();
+        // the file named in it, or no test file named at all: the whole suite
+        return p.some((x) => x.includes(name) || !/\S+(?:\.(?:spec|test|cy)\.[cm]?[jt]sx?|_test\.(?:py|go)|\.py)\b|::/.test(x));
+      };
+      const createdHere = (f) => {
+        const first = versions.find((v) => v.file === f);
+        return !!first && first.kind === "write" && first.prev_content == null;
+      };
       for (const e of ev) {
         let targets = [];
         if (e.kind === "delete" && e.file) targets = [e.file];
@@ -2709,7 +2735,10 @@
             if (!names.length && !testFile(f)) continue;
             const gone = names.filter((k) => !kept(f, e.seq, k));
             if (names.length && !gone.length) continue; // every test of it lives on elsewhere: moved
-            push("test_file_deleted_msg", f, e.seq, gone);
+            const run = runBefore(e);
+            const green = !!run && !run.tests.failed && !run.tests.errors && run.tests.passed > 0;
+            if (green && createdHere(f) && ranFile(run, f)) continue; // a temporary check, run green and cleaned up
+            push("test_file_deleted_msg", f, e.seq, gone, ranFirst(e) ? (green ? null : e) : undefined);
           }
           if (!known.length && !glob && testFile(t)) push("test_file_deleted_msg", t, e.seq, []);
         }
