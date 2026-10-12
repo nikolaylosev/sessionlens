@@ -717,7 +717,7 @@
   }
   /* An assertion line of the profile that is not a comment line (//, #, /* or * inside a block). A commented-out
      assertion never runs: until 0.1.120 it still counted, so commenting one out was not "fewer assertions". */
-  // a test failure reported in a message, not denied: "падает", "fails", "2 failed" — not "ничего не падает", "0 failed"
+  // a test failure reported in a message, not denied: "fails", "2 failed" (and the Russian words) — not "nothing fails", "0 failed"
   const FAILURE_WORD = /(?<![\p{L}\p{N}_])(?:пада(?:ет|ют)|упал[аио]?|не проход(?:ит|ят)|fails|failed|failing|failures?)(?![\p{L}\p{N}_])/gu;
   const DENIED = /(?:(?<![\p{L}])(?:не|ни|no|not|none|nothing|without|zero)|(?<![\p{N}])0)\s+$/u;
   const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
@@ -2467,9 +2467,9 @@
       return [F("browser_check_not_in_test", "medium", looks[0].seq, T(looks.length === 1 ? "browser_unasserted_one" : "browser_unasserted", vars))];
     },
     /* Since 0.1.127, after a red run, a message that says a test fails reports that run, though it has "passes" in it:
-       the owner's test-pw session, «"Add a single todo" падает… "Empty input" проходит ложно… seed проходит». A failure
-       word with a "no" before it (ничего не падает, 0 failed, no failures) is still a claim that all is well, and with
-       no run before it a claim stays one ("Тест проходит. Проверяю, что без исправления он падает"). */
+       the owner's test-pw session, in Russian: '"Add a single todo" fails… "Empty input" passes falsely… the seed passes'.
+       A failure word with a "no" before it ("nothing fails", 0 failed, no failures) is still a claim that all is well,
+       and with no run before it a claim stays one ("The test passes. Checking that it fails without the fix"). */
     pass_claim_without_run(ev, cfg) {
       const out = [],
         pats = cfg.pass_claim_patterns.map(
@@ -2539,7 +2539,8 @@
     /* Since 0.1.127 an edit of a document (the readme, the TODO, notes) is no fix: a failure that names no test made
        any edit after it one, and the owner's TODO.md, edited after a red run, was a high finding. */
     /* Since 0.1.127 a cause named in words before the edit ("due to duplicate headings", "Key root cause: the site has
-       no <nav>", «из-за…») without whose error it is gets a medium finding that says so: half of the triage. */
+       no <nav>", or the same in Russian) without whose error it is gets a medium finding that says so: half of the
+       triage. */
     fix_after_fail_without_triage(ev, cfg) {
       const out = [],
         mk = cfg.triage_markers.map((m) => m.toLowerCase());

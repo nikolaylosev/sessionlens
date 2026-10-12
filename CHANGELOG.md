@@ -55,16 +55,17 @@
 - **The same assertion before and after an action is no "duplicate assert".** A test that checks the counter, clicks,
   and checks the counter again proves the click left it alone; it was a low `duplicate_assert`, six times in one
   Playwright session. Now a repeat counts only with nothing but assertions between the two.
-- **A report of a red run is no "claims the tests pass".** After a run with a failure, a message like «"Add a single
-  todo" падает… seed проходит» was a high finding: it has "проходит" in it, though it says which test fails. Now, when
-  the last run was red and the message says a test fails, it is a report of that run. "Nothing fails", "0 failed" and
-  "no failures" are still a claim that all is well, and with no run before it a claim stays one.
+- **A report of a red run is no "claims the tests pass".** After a run with a failure, a message like '"Add a single
+  todo" fails… the seed passes' was a high finding: it has "passes" in it, though it says which test fails. Now, when
+  the last run was red and the message says a test fails (in English or Russian), it is a report of that run.
+  "Nothing fails", "0 failed" and "no failures" are still a claim that all is well, and with no run before it a claim
+  stays one.
 - **A triage in plain words counts.** "Fix after a failure with no triage" knew only the words hypothesis, product
   bug, test bug and spec defect (and their Russian forms). Playwright's healer says "Test problem." or "Typo in the
-  test.", and each of its fixes was a high finding. Now such plain words count too: test problem, typo in the test,
-  application defect, проблема в тесте, опечатка в тесте, дефект приложения and the like. When the agent names the
-  cause ("failed due to duplicate headings", "root cause: the site has no `<nav>`", «из-за…») but not whose error it is,
-  the finding is medium and says so.
+  test.", and each of its fixes was a high finding. Now such plain words count too, in English and Russian: test
+  problem, typo in the test, application defect and the like. When the agent names the cause ("failed due to duplicate
+  headings", "root cause: the site has no `<nav>`", or the same in Russian) but not whose error it is, the finding is
+  medium and says so.
 - **An edited document is no "fix after a failure".** When a failed run named no test, any edit after it counted as
   the fix, the readme or a TODO file too. A document (`.md`, `.txt`, `.rst` and the like) no longer counts.
 - **A test file a Cursor agent wrote over in one go is compared with what was there.** A Cursor transcript has none
