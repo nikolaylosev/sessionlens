@@ -285,6 +285,8 @@
   }
 
   // one block per file — its last version; linting every intermediate edit would repeat the same findings
+  // rules that a fragment of code in a message breaks by being a fragment (0.1.127)
+  const FRAGMENT_SKIP = new Set(["playwright/no-standalone-expect"]);
   function codeBlocks(session, cfg) {
     // a session writes config, docs and lockfiles too — only source files go to the linter
     const isSource = (name) => {
@@ -296,7 +298,7 @@
       if (!e.new_content) continue;
       const name = e.file || `${T("in_msg")} (seq ${e.seq})`;
       if (e.file && !isSource(name)) continue; // code shown in a message has no name: keep it
-      byName.set(name, { seq: e.seq, name, code: e.new_content });
+      byName.set(name, { seq: e.seq, name, code: e.new_content, fromMessage: !e.file });
     }
     return [...byName.values()];
   }
@@ -354,6 +356,8 @@
           why.push(`${b.name}:${m.line} ${m.message}`.slice(0, 160));
           continue;
         }
+        // a fragment shown in a message is no whole test file: its expect() is inside a test the message leaves out
+        if (b.fromMessage && FRAGMENT_SKIP.has(m.ruleId)) continue;
         const key = `${m.ruleId}|${m.line}|${m.message}`;
         if (same.has(key)) continue;
         same.add(key);

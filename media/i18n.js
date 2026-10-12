@@ -179,7 +179,7 @@
       seg_use_spec: "Use the found specification",
       seg_reset: "Back to regex parsing",
       reimport_msg:
-        "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, or text Claude Code put into your messages. Import the transcript again to check; the session keeps its name, specification and verdicts.",
+        "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, text Claude Code put into your messages, or a diff in the agent's message. Import the transcript again to check; the session keeps its name, specification and verdicts.",
       reimport_go: "Import again",
       reimport_pick: "Pick the transcript of this session. Where is it?",
       reimport_other: "This file does not look like this session: {p}% of its steps are in it. Replace the session's steps with it anyway?",
