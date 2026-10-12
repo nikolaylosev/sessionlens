@@ -1054,7 +1054,7 @@ The payload no longer carries `lang` (unused by the host since v0.1.103).
 | Address of the other providers | `defaultBaseUrl` in `ai.js` | does not change |
 | `minGapMs`, `maxCode`, `verify`, `lint`, `rulesTarget` (since v0.1.103) | the settings `sessionlens.*`, `scope: "application"` (a workspace cannot set them) | Settings or the panel; from the panel through `storage:set`, numbers are clamped to the range (§16.1) |
 | API keys | SecretStorage (phase 2) | `secret:set` / `secret:delete` |
-| A Cursor chat's command output (since v0.1.121) | Cursor's own databases, found by the id of the transcript file picked in the VS Code dialog, opened read-only (`cursor-db.js`) | nothing in the webview can name another file or database |
+| A Cursor chat's command output (since v0.1.121) and its edited files before and after (IDE, since v0.1.127) | Cursor's own databases, found by the id of the transcript file picked in the VS Code dialog, opened read-only (`cursor-db.js`) | nothing in the webview can name another file or database |
 | The folder for a skill and a file | a VS Code dialog | from the webview only the file name (`safeBasename`) and the skill paths by whitelist (`checkSkillFiles`), then `isInside` |
 
 `storage:set` removes the fields `cliPath`, `cliPaths`, `baseUrls.local`, `baseUrls.qwen` from `settings`; `storage:get`
@@ -1532,7 +1532,9 @@ What the import keeps for them:
   (`generator_write_test`, `planner_save_plan`, `test_run`, `test_debug` of a server whose name says playwright), and
   for a session with a shell command that writes a file from a here-document (`heredocWrites`), stored as the command
   alone, for a session with a user message that has Claude Code's or the editor's text in it (`personText`), and for
-  one with a diff in an agent's message whose code was taken with its removed lines (`diffAfter`). The
+  one with a diff in an agent's message whose code was taken with its removed lines (`diffAfter`), and for a Cursor
+  transcript with edits and no files before and after them from Cursor's database (`cursorEditsMissing`; `reimport()`
+  then asks for the file, like a session whose subagents are missing). The
   new import adds a step for each such file and drops such messages, so the steps after them get new numbers.
   The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when

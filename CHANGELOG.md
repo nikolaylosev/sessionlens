@@ -19,6 +19,13 @@
 - **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
   even when a later run had passed in between: with the generator's tests now read, writing new tests after a
   temporary check had failed once was a high finding. A run with no failures now ends that failure.
+- **A test file a Cursor agent wrote over in one go is compared with what was there.** A Cursor transcript has none
+  of the files the agent read, so a test file rewritten whole had no earlier version: tests it lost were not "test
+  deleted", and a weakened assertion was not seen. Cursor's editor keeps every edited file before and after in its own
+  database; SessionLens now reads them, read-only, with the command output it already took from there. A test whose
+  assertions moved into a Page Object method it now calls (`await searchPage.expectSearchOpen()`) is not "fewer
+  assertions": the page object's own assertions are compared in its file. Cursor's command line keeps no such
+  versions. A Cursor session imported before shows **Import again**, which asks for the file.
 - **Verdicts stay with their findings after Import again.** A verdict is stored with the step its finding is at, and
   this version's import numbers the steps anew in most older sessions: it reads a subagent's steps and the files a
   command wrote, and leaves out text Claude Code put into your turn. Your verdicts would have come loose from their

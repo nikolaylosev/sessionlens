@@ -574,8 +574,9 @@ Everything stays on your machine, in VS Code's storage for this extension (ID `n
   ordinary VS Code settings in your `settings.json`.
 - **API keys** are in VS Code's secret storage (the operating system's credential store), never in files or settings.
 - **Cursor's databases.** When you pick a Cursor Agent transcript, SessionLens opens Cursor's own chat databases on
-  your machine read-only, takes the output of that chat's commands, and keeps its end in the session. It never writes
-  to them and sends nothing from them anywhere.
+  your machine read-only, takes the output of that chat's commands, and keeps its end in the session. From Cursor's
+  editor database it also takes each file the agent edited, as it was before and after the edit, and keeps them in the
+  session while they are not too long. It never writes to them and sends nothing from them anywhere.
 - **Model requests** go from the extension straight to the provider you choose, on your account. With Claude Code,
   Codex or Cursor as the provider they go through the `claude`, `codex` or `agent` command on your machine. Cursor
   keeps a copy of each request in `~/.cursor`, which SessionLens deletes after the answer (see

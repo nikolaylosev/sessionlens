@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const { root } = require("./helpers");
 const { cursorOutputs, transcriptId, ideDatabase } = require(path.join(root, "cursor-db.js"));
-const { S, home, transcript, cliDb, shell, result, ideDb, terminal } = require("./cursor-fixtures");
+const { S, home, transcript, cliDb, shell, result, ideDb, terminal, ideEdit, contentId } = require("./cursor-fixtures");
 
 const skip = !S && "node:sqlite is not available";
 
@@ -65,6 +65,43 @@ test("the IDE's state.vscdb: terminal calls in the composer's order; no exitCode
         ["npx playwright test", 0, "13 passed"],
       ],
     );
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
+});
+
+test("the IDE's state.vscdb: each edit's file before and after, by the ids its result names (0.1.127)", { skip }, () => {
+  const h = home();
+  try {
+    const v1 = "test('a', async () => {});\ntest('b', async () => {});\n",
+      v2 = "test('a', async () => {});\n";
+    ideDb(
+      h,
+      [
+        { type: 1, text: "Write tests" },
+        ideEdit("/w/e2e/x.spec.ts", "", v1),
+        terminal("npx playwright test", "  2 passed"),
+        ideEdit("/w/e2e/x.spec.ts", v1, v2),
+        ideEdit("/w/e2e/gone.spec.ts", v2, "not kept"), // its content is not in the database: left out
+      ],
+      { [contentId(v1)]: v1, [contentId(v2)]: v2 },
+    );
+    const r = cursorOutputs(transcript(h), { home: h, platform: "darwin", env: {} });
+    assert.equal(r.source, "ide");
+    assert.equal(r.outputs.length, 1);
+    assert.deepEqual(r.edits, [
+      { path: "/w/e2e/x.spec.ts", before: "", after: v1 },
+      { path: "/w/e2e/x.spec.ts", before: v1, after: v2 },
+    ]);
+    // edits only, no command: still a result
+    const h2 = home();
+    try {
+      ideDb(h2, [ideEdit("/w/a.ts", "", v1)], { [contentId(v1)]: v1 });
+      const r2 = cursorOutputs(transcript(h2), { home: h2, platform: "darwin", env: {} });
+      assert.deepEqual([r2.outputs, r2.edits.length], [null, 1]);
+    } finally {
+      fs.rmSync(h2, { recursive: true, force: true });
+    }
   } finally {
     fs.rmSync(h, { recursive: true, force: true });
   }

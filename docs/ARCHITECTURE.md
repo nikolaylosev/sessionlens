@@ -489,7 +489,13 @@ flowchart TD
   import runs without output. `fromCursorJsonl` gives a `Shell` call the next output with the same command as its
   `tool_result`, so its tests are parsed as for Claude Code; a run with none keeps `output_missing`. The session
   keeps the output's ends (`source_outputs`, 20 000 characters each) with `source_text`, for Back to regex parsing
-  and Import again. The host also returns the name of the transcript's folder in `~/.cursor/projects`
+  and Import again. From the IDE's database the host also returns each edit's file before and after (since 0.1.127,
+  `cursorEdits`: `edit_file_v2`'s `beforeContentId` / `afterContentId` are keys of the same table, a file named by its
+  SHA-256). `fromCursorJsonl` gives the `Write` or `StrReplace` of the same file whose text after matches a
+  `toolUseResult` (`originalFile`, `content`), so a file written over in one go has its earlier version and
+  `test_deleted` / `assert_weakened` see the rewrite; the session keeps them as `source_edits` while all of them are
+  under 400 000 characters. The CLI's `store.db` has no file before an edit. The host also returns the name of the
+  transcript's folder in `~/.cursor/projects`
   (`cursorProject`, since 0.1.122; kept as `source_project`): the transcript's paths are absolute, and
   `fromCursorJsonl` makes them relative to the folder above them whose name, made by the same rule
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps
@@ -758,8 +764,9 @@ flowchart LR
   payloads are refused; a session id never becomes a path; saved files stay inside the folder the user picked.
 - Program paths and provider addresses never come from a message. Keys never leave the host; errors are redacted.
 - The CLIs run without tools, so a transcript that says "run rm -rf" has nothing to run it with.
-- When the user picks a Cursor Agent transcript, the host reads that chat's command output from Cursor's own
-  databases (`cursor-db.js`): the CLI's `store.db` or the IDE's `state.vscdb`. Both are opened read-only and closed
+- When the user picks a Cursor Agent transcript, the host reads that chat's command output, and from the IDE's
+  database each edited file before and after (0.1.127), from Cursor's own databases (`cursor-db.js`): the CLI's
+  `store.db` or the IDE's `state.vscdb`. Both are opened read-only and closed
   at once. The lookup uses the transcript file's id. An encryption key in the CLI database's `meta` is not read
   further, logged or copied. Without `node:sqlite` (VS Code on Node before 22.13), or with no database, the import
   continues and the test runs keep `output_missing`.
