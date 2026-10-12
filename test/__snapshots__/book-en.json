@@ -225,6 +225,15 @@
   "edited": false
  },
  {
+  "check": "icon_glyph_locator",
+  "group": "code",
+  "rule": "Do not locate by an icon font's character (a code such as \\uE9CC, from Unicode's Private Use Area). It says nothing about the element and changes with the icon font. Use the element's accessible name, an aria-label, a title or a test id.",
+  "severity": "low",
+  "enabled": true,
+  "good": "page.getByRole('link', { name: 'Search' }) — or the link's aria-label, title or a test id",
+  "edited": false
+ },
+ {
   "check": "no_assertion_after_action",
   "group": "code",
   "rule": "Every test must check what happened. A test that clicks, taps, types or sends a request with no assertion anywhere in it verifies nothing — it only proves nothing crashed.",

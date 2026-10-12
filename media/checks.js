@@ -200,6 +200,14 @@
       good: "page.getByRole('navigation').getByRole('link', { name: 'About us' })",
       sources: ["lint"],
     },
+    // 0.1.127: a locator by an icon font's character, getByRole('link', { name: '\uE9CC' })
+    icon_glyph_locator: {
+      group: "code",
+      severity: "low",
+      ruleKey: "r_icon_glyph",
+      good: "page.getByRole('link', { name: 'Search' }) — or the link's aria-label, title or a test id",
+      sources: ["regex"],
+    },
     no_assertion_after_action: {
       group: "code",
       severity: "high",
