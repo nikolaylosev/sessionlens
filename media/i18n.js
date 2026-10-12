@@ -246,6 +246,9 @@
       asserts_hdr: ["seq", "compared", "before", "after", "weakened"],
       identical: "versions identical",
       no_weak: "no weakening",
+      po_asserts: "Assertions through page objects",
+      po_asserts_hdr: ["test", "own", "page object methods (assertions in each)"],
+      po_unknown: "not in this session",
       no_compare:
         "Nothing to compare: the diff needs two versions of one file — Write→Edit in Claude Code JSONL, or two code versions with the same tests in chat messages. {tail}",
       code_once: "Code appears once in this session.",

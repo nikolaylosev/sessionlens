@@ -469,6 +469,19 @@ export function renderReview() {
         })
         .join("")}</table>`
     : `<p class="muted">${T("no_compare", { tail: s.events.filter((e) => e.new_content).length ? T("code_once") : T("no_code") })}</p>`;
+  // the tests that assert through a page object's expect…() methods, and how many assertions each method has (0.1.127)
+  const po = Lens.poAssertions(s.events, Lens.profile(s.profile));
+  if (po.length)
+    $("#asserts").innerHTML += `<h4>${T("po_asserts")}</h4><table><tr>${T("po_asserts_hdr")
+      .map((h) => `<th>${esc(h)}</th>`)
+      .join("")}</tr>${po
+      .map(
+        (x) =>
+          `<tr><td>${esc(x.file)}: ${esc(x.test)}</td><td>${esc(x.own)}</td><td>${x.calls
+            .map((c) => (c.asserts == null ? `${esc(c.method)}: <span class="muted">${T("po_unknown")}</span>` : `${esc(c.method)}: ${esc(c.asserts)}`))
+            .join(", ")}</td></tr>`,
+      )
+      .join("")}</table>`;
   const msgs = s.events.filter((e) => ["message", "user"].includes(e.kind));
   $("#transcript").innerHTML = msgs.length
     ? msgs

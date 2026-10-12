@@ -2094,6 +2094,11 @@ ${en.raw}`).join("\n\n\n");
       const w = d.weakened.map((x) => `${x.test}: ${x.reason}`).concat(d.removed.map((r) => `${r.test}: ${r.before}→${r.after}`)).join("; ");
       return `<tr><td>${esc(e.seq)}</td><td>${esc(e.file)}</td><td>${esc(d.old)}</td><td>${esc(d.new)}</td><td>${d.identical ? `<span class="muted">${T("identical")}</span>` : esc(w) || `<span class="muted">${T("no_weak")}</span>`}</td></tr>`;
     }).join("")}</table>` : `<p class="muted">${T("no_compare", { tail: s.events.filter((e) => e.new_content).length ? T("code_once") : T("no_code") })}</p>`;
+    const po = Lens.poAssertions(s.events, Lens.profile(s.profile));
+    if (po.length)
+      $("#asserts").innerHTML += `<h4>${T("po_asserts")}</h4><table><tr>${T("po_asserts_hdr").map((h) => `<th>${esc(h)}</th>`).join("")}</tr>${po.map(
+        (x) => `<tr><td>${esc(x.file)}: ${esc(x.test)}</td><td>${esc(x.own)}</td><td>${x.calls.map((c) => c.asserts == null ? `${esc(c.method)}: <span class="muted">${T("po_unknown")}</span>` : `${esc(c.method)}: ${esc(c.asserts)}`).join(", ")}</td></tr>`
+      ).join("")}</table>`;
     const msgs = s.events.filter((e) => ["message", "user"].includes(e.kind));
     $("#transcript").innerHTML = msgs.length ? msgs.map((x) => `<p class="${x.kind === "user" ? "u" : ""}"><b>${x.kind === "user" ? T("user") : T("agent")}</b> (seq ${esc(x.seq)})<br>${esc(x.text)}</p>`).join("") : `<p class="muted">${T("no_msgs")}</p>`;
   }

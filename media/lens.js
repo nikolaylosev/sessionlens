@@ -764,6 +764,45 @@
     });
     return out;
   }
+  /* Where a test's assertions are when it asserts through a page object (0.1.127): each test of the last version of a
+     test file that calls a page object's expect…() method, with its own assertions and, for each method, the
+     assertions in the last version of the file that defines it (a file with no test: helperBlocks). null for a method
+     no file of the session defines. The answer to "where are the assertions at all?". */
+  function poAssertions(events, cfg) {
+    if (!cfg.test_fn_pattern || !cfg.assert_line_patterns) return [];
+    const last = new Map();
+    for (const e of events || []) if (e.file && e.new_content && !e.fragment_only && isCode(e.file, cfg)) last.set(e.file, e.new_content);
+    const count = (body) => body.split("\n").filter((l) => isAssertLine(l.trim(), cfg)).length;
+    const tests = [],
+      methods = new Map(); // name → [{ file, asserts }]
+    for (const [file, src] of last) {
+      const code = commentLinesBlanked(src, file);
+      const blocks = blocksByTest(code, cfg.test_fn_pattern);
+      if (Object.keys(blocks).length) {
+        for (const [test, body] of Object.entries(blocks)) tests.push({ file, test, body });
+        continue;
+      }
+      for (const [name, body] of Object.entries(helperBlocks(code, file))) {
+        const m = name.replace(/#\d+$/, "");
+        methods.set(m, [...(methods.get(m) || []), { file, asserts: count(body) }]);
+      }
+    }
+    const out = [];
+    for (const { file, test, body } of tests) {
+      const calls = [...new Set([...body.matchAll(/\.(expect[A-Z]\w*)\s*\(/g)].map((m) => m[1]))];
+      if (!calls.length) continue;
+      out.push({
+        file,
+        test,
+        own: count(body),
+        calls: calls.map((method) => {
+          const d = methods.get(method) || [];
+          return { method, asserts: d.length ? d.reduce((n, x) => n + x.asserts, 0) : null };
+        }),
+      });
+    }
+    return out;
+  }
   // file: whose comments to read (the extension says which); none for code in a message
   function compareAsserts(oldSrc, newSrc, cfg, file) {
     if (!cfg.assert_line_patterns) return null;
@@ -3711,6 +3750,7 @@
     calibLevel,
     parseTests,
     compareAsserts,
+    poAssertions,
     blocksByTest,
     fkey,
     carryVerdicts,
