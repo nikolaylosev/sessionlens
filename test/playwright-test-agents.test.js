@@ -169,3 +169,23 @@ test("a session imported before with such a step stored as a plain tool asks to 
   assert.equal(Lens.needsReimport(s(PW("browser_click"))), false);
   assert.equal(Lens.needsReimport(Object.assign(s(PW("test_run")), { importGen: Lens.IMPORT_GEN })), false);
 });
+
+test("an edit of a document after a failure is no fix of it (0.1.127)", () => {
+  const after = (file) =>
+    Lens.runChecks(
+      events([
+        user(1, "Write the test"),
+        use(2, "w", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE }),
+        result(3, "w", "ok"),
+        use(4, "r", "Bash", { command: "npx playwright test" }),
+        result(5, "r", "\nRunning 1 test using 1 worker\n\n  1 failed\n"), // no test named: any edit after it counted
+        use(6, "e", "Write", { file_path: file, content: "notes\n" }),
+        result(7, "e", "ok"),
+      ]),
+      cfg,
+    )
+      .filter((f) => f.check === "fix_after_fail_without_triage")
+      .map((f) => f.message.split(" right after")[0]);
+  for (const f of ["/p/README.md", "/p/local/TODO.md", "/p/docs/notes.txt", "/p/docs/guide.rst"]) assert.deepEqual(after(f), [], f);
+  assert.deepEqual(after("/p/tests/add.spec.ts"), ["Edited tests/add.spec.ts"]);
+});

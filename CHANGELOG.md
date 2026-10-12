@@ -40,6 +40,8 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **An edited document is no "fix after a failure".** When a failed run named no test, any edit after it counted as
+  the fix, the readme or a TODO file too. A document (`.md`, `.txt`, `.rst` and the like) no longer counts.
 - **A test file a Cursor agent wrote over in one go is compared with what was there.** A Cursor transcript has none
   of the files the agent read, so a test file rewritten whole had no earlier version: tests it lost were not "test
   deleted", and a weakened assertion was not seen. Cursor's editor keeps every edited file before and after in its own
