@@ -1658,8 +1658,25 @@
     /^\s*(?:import\s|from\s+\S+\s+import|export\s|const\s|let\s|await\s|test\s*\(|test\.describe|test\.skip|it\s*\(|expect\s*\(|def\s+test|@Test|assert\w*\s*\(|assert\s|func\s+Test|\}\);?\s*$)/;
   const isCodeLine = (l) => CODE_LINE.test(l) || /^\s{2,}\S/.test(l) || /^\s*[\]\}\)]/.test(l) || /^\s*(?:\/\/|\/\*|\*|#)/.test(l) || l.trim() === "";
   const hasTests = (c) => /def test|@Test|\b(?:it|test)\s*\(|test\.skip|func Test|expect\s*\(|assert/.test(c);
+  /* A diff in a message ("```diff", or a block whose lines all start with +, - or a space and that has both kinds of
+     change, or a hunk header) shows the code after the change: its unchanged and added lines, without the sign
+     (0.1.127). Taken as it was, the removed lines were read as code too, and JavaScript reads "- await expect(…)" as
+     an expression. */
+  const DIFF_LINE = /^(?:[+\- ]|@@|\\ No newline|$)/;
+  function diffAfter(lang, code) {
+    const ls = code.split("\n");
+    const isDiff =
+      /^(?:diff|patch)$/i.test(lang || "") ||
+      (ls.every((l) => DIFF_LINE.test(l)) &&
+        (ls.some((l) => l.startsWith("@@")) || (ls.some((l) => /^\+(?!\+\+ )/.test(l)) && ls.some((l) => /^-(?!-- )/.test(l)))));
+    if (!isDiff) return code;
+    return ls
+      .filter((l) => !/^(?:-|@@|\+\+\+ |\\ No newline|diff |index )/.test(l))
+      .map((l) => (/^[+ ]/.test(l) ? l.slice(1) : l))
+      .join("\n");
+  }
   function attachCodeFromText(r) {
-    let versions = [...r.text.matchAll(/```(?:\w+)?\n([\s\S]*?)```/g)].map((m) => m[1]);
+    let versions = [...r.text.matchAll(/```(\w+)?\n([\s\S]*?)```/g)].map((m) => diffAfter(m[1], m[2]));
     if (!versions.length) {
       // unfenced: contiguous runs of code-looking lines; a run of ≥2 non-code non-empty lines (prose) ends a version
       const ls = r.text.split("\n");
@@ -2007,6 +2024,15 @@
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
+    // a message with a diff, whose removed lines were read as code (0.1.127)
+    if (
+      (s.importGen || 0) < 9 &&
+      s.events.some(
+        (e) =>
+          e.kind === "message" && e.new_content && [...String(e.text || "").matchAll(/```(\w+)?\n([\s\S]*?)```/g)].some((m) => diffAfter(m[1], m[2]) !== m[2]),
+      )
+    )
+      return true;
     // a user message with text that Claude Code or the editor put there (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "user" && personText(e.text) !== String(e.text || "").trim())) return true;
     if ((s.importGen || 0) >= 2) return false;

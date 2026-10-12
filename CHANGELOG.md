@@ -25,6 +25,11 @@
   owner's sessions a quarter of them were such, six "You repeated the same request" findings were two images'
   captions, and the requests that "Edit churn" and "Fix after a failure" count from were cut in the wrong places. Now
   that text is left out; what you paste stays. A session imported before shows **Import again**.
+- **A diff in the agent's message is read as the new code.** When the agent proposed a change as a diff, SessionLens
+  took the whole block for code, removed lines and signs included, and ESLint reported each `expect()` in it as
+  "Expect must be inside of a test block", a medium `weak_assert`. Now a diff is the code after the change, and a
+  piece of code in a message is no longer reported for not being inside a test. A session imported before shows
+  **Import again**.
 - **A file written by a shell command is read.** An agent often writes a file with a here-document,
   `cat > tests/pages/todo-page.ts <<'EOF' … EOF`, and SessionLens saw only a command: the file's code was not checked,
   and a weakened assertion in it was not seen. Now `cat > f`, `cat <<EOF > f`, `cat >> f` and `tee f` with a

@@ -439,6 +439,10 @@ flowchart TD
   (`[Image: source: …]`, `[Image: original …]`) on a line of its own and `[Request interrupted by user…]`; so is a record
   with `isMeta: true` (a skill's text, "Continue from where you left off."). `<pasted_content>` is the person's paste
   and stays.
+  **Code in a message:** a diff (```` ```diff ````/```` ```patch ````, or a block whose lines all start with `+`, `-`
+  or a space with both kinds of change or a hunk header) is the code after the change, its unchanged and added lines
+  without the sign (`diffAfter()`, since 0.1.127). ESLint does not apply `playwright/no-standalone-expect` to code from a
+  message (`FRAGMENT_SKIP` in `lint.js`): a fragment's test is left out of the message.
   **A file a shell command writes from a here-document** (since 0.1.127; `heredocWrites()` in `lens.js`): `cat > f
   <<'EOF' … EOF`, `cat <<EOF > f`, `cat >> f` and `tee [-a] f` become a `write` (an `edit` for `>>`, only of a file the
   session saw) before the command's own step, the path resolved from a `cd` before it in the command or from `cwd`.
