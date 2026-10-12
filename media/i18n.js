@@ -100,6 +100,8 @@
       r_frustration: "If the user corrected you — restate the task in your own words and wait for confirmation before continuing.",
       r_raw_locator: "Locate by role, label or exact text. A CSS selector is a guess about markup and breaks on the next redesign.",
       r_positional_locator: "Do not select by position (.first(), .nth()). Narrow the locator until it matches one element.",
+      r_icon_glyph:
+        "Do not locate by an icon font's character (a code such as \\uE9CC, from Unicode's Private Use Area). It says nothing about the element and changes with the icon font. Use the element's accessible name, an aria-label, a title or a test id.",
       r_no_spec: "Don't start without a specification. Ask for requirements or draft them and get them approved.",
       r_uncovered: "Every spec requirement — at least one test with its ID in the docstring.",
       r_unlinked: "Every test references a requirement ID. No requirement — either a spec defect or a redundant test.",
@@ -586,6 +588,8 @@
         "Do not tap or swipe at literal screen coordinates. They break on a different screen size or resolution — act on the element itself, or its bounds, instead.",
       r_no_driver_teardown:
         "Close the driver session in a teardown (quit(), tearDown, [TearDown], afterEach) — an unclosed session leaks on the device/emulator and can starve later runs.",
+      icon_glyph_msg:
+        "{file}: {n} {n|locator|locators} by an icon font's character ({code}) — it changes with the font; use an accessible name, a title or a test id",
       mobile_raw_locator_msg: "{file}: {n} {n|locator|locators} by XPath/class name — an id or accessibility id survives layout changes",
       hardcoded_coordinates_msg: "{file}: tap/swipe at a literal screen coordinate — {line}",
       no_driver_teardown_msg: "{file}: creates a driver session with no matching quit()/teardown found",

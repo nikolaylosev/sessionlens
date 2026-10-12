@@ -121,7 +121,7 @@
       test_runner_patterns: ["jest", "vitest", "npm test", "npm run test", "playwright test", "pnpm test", "pnpm run test", "yarn test", "yarn run test"],
       src_dirs: ["src", "app", "lib"],
       test_dirs: ["tests", "test", "__tests__", "e2e"],
-      checks: [...METHOD, ...PROCESS, ...CODE, "focused_test", "debug_leftover", ...SECRETS, "config_weakened"],
+      checks: [...METHOD, ...PROCESS, ...CODE, "focused_test", "debug_leftover", ...SECRETS, "config_weakened", "icon_glyph_locator"],
       sleep_patterns: [delayCall(String.raw`\bwaitForTimeout`), SET_TIMEOUT],
       focus_patterns: FOCUS_JS,
       debug_patterns: { pause: /\bpage\.pause\s*\(/, debugger: DEBUGGER_JS },
@@ -361,7 +361,7 @@
       test_runner_patterns: ["cypress run", "cypress open", "npx cypress", "yarn cypress", "cypress:run", "npm test", "npm run test"],
       src_dirs: ["src", "app"],
       test_dirs: ["cypress", "cypress/e2e", "cypress/integration"],
-      checks: [...METHOD, ...PROCESS, ...CODE, "focused_test", "debug_leftover", ...SECRETS, "config_weakened", "cypress_async_test"],
+      checks: [...METHOD, ...PROCESS, ...CODE, "focused_test", "debug_leftover", ...SECRETS, "config_weakened", "cypress_async_test", "icon_glyph_locator"],
       sleep_patterns: [delayCall(String.raw`\bcy\.wait`, String.raw`\d{3,}`)],
       focus_patterns: FOCUS_JS,
       debug_patterns: { pause: /\bcy\.pause\s*\(/, debug: /\bcy\.debug\s*\(|\)\s*\.debug\s*\(\s*\)/, debugger: DEBUGGER_JS },
@@ -3018,6 +3018,27 @@
       return out;
     },
     // ---- Appium/mobile (qa-mobile): protocol-level, not tied to one client language ----
+    /* Since 0.1.127: a locator whose text is an icon font's character, from Unicode's Private Use Area (U+E000–U+F8FF),
+       written as the character, \uE9CC or \u{E9CC}: getByRole('link', { name: '\uE9CC' }) in the owner's Page Object
+       session. It follows "locate by role and name" and still breaks when the icon font changes. */
+    icon_glyph_locator(ev) {
+      const PUA = String.raw`(?:[\uE000-\uF8FF]|\\u\{?(?:[Ee][0-9A-Fa-f]{3}|[Ff][0-8][0-9A-Fa-f]{2})\}?)`;
+      const ONLY = new RegExp(String.raw`(['"\`])\s*((?:${PUA}\s*)+)\1`);
+      const LOCATOR = /\b(?:getBy\w+|locator|contains|get|filter|hasText|name)\b/;
+      const out = [];
+      for (const e of ev) {
+        if (!e.new_content) continue;
+        const hits = codeOf(e)
+          .split("\n")
+          .map((l) => (LOCATOR.test(l) ? ONLY.exec(l) : null))
+          .filter(Boolean);
+        if (!hits.length) continue;
+        const first = hits[0][2].trim();
+        const cp = /^\\u/.test(first) ? first.replace(/^\\u\{?([0-9A-Fa-f]{4}).*$/, "$1") : first.codePointAt(0).toString(16);
+        out.push(F("icon_glyph_locator", "low", e.seq, T("icon_glyph_msg", { file: e.file || inMsg(), n: hits.length, code: "U+" + cp.toUpperCase() })));
+      }
+      return out;
+    },
     mobile_raw_locator(ev) {
       const RX =
         /\b(?:By|MobileBy|AppiumBy)\s*\.\s*(?:xpath|XPath|className|ClassName)\s*\(|\bfindElementBy(?:XPath|ClassName)\b|\$\(\s*['"`](?:\/\/|\.[A-Za-z]|#[A-Za-z])/;

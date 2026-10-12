@@ -330,7 +330,7 @@ const RULES = new Proxy({}, { get: (_, k) => {
 
 ### 5.2 The `checks` object, `runChecks()` and `calibrate()`
 
-`lens.js` contains the `checks` object with **37 functions** (v0.1.125) of the form
+`lens.js` contains the `checks` object with **38 functions** (v0.1.127) of the form
 `checkName(ev, cfg) -> Finding[]` (the full list — see the table in §9).
 These are the only checks that **do not depend on an external engine** —
 plain JS/regex over the event text.
@@ -770,7 +770,7 @@ Rules and ⚙ Settings reach it when the Sessions tab is shown again and on a `k
 the one-line summary, also the `title` of the profile name in `#hdr`. The list options: `name — profile_desc_<name>`. All output goes through
 `esc()`; a check's rule text is the `title` attribute.
 
-## 9. The full table of checks at v0.1.125 (62 of them)
+## 9. The full table of checks at v0.1.127 (63 of them)
 
 The reference is `media/checks.js`; this table is a readable copy of it, generated from the registry and
 `LensLint.RULE_MAPS` (the "Source" column), not written by hand.
@@ -802,6 +802,7 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | duplicate_assert | code | low | regex (lens.js) |
 | raw_locator | code | low | engines only (ESLint Playwright, ESLint Cypress) |
 | positional_locator | code | low | engines only (ESLint Playwright, ESLint Detox) |
+| icon_glyph_locator | code | low | regex (lens.js), qa-ts and qa-cypress (0.1.127) |
 | no_assertion_after_action | code | high | engines only (ESLint Playwright, ESLint Detox, Java, C#, Python, Robot) |
 | no_app_reset | code | medium | engines only (ESLint Detox) |
 | unannotated_test_method | code | high | engines only (Java, C#) |

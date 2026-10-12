@@ -3,6 +3,10 @@
 ## 0.1.127
 
 ### Added
+- **A locator by an icon font's character** (`icon_glyph_locator`, low, Playwright and Cypress).
+  `getByRole('link', { name: '\uE9CC' })` follows "locate by role and name", but the name is a character of the site's
+  icon font, from Unicode's Private Use Area: it says nothing about the element and changes when the font does. Use the
+  link's accessible name, an aria-label, a title or a test id. Found in a real Page Object session.
 - **Assertions through page objects are shown.** With Page Objects a test has no `expect()` of its own: it calls
   `await searchPage.expectSearchOpen()`, and the assertions are in that method. The **Assertions** panel now lists each
   such test with how many assertions it has itself and how many each page object method it calls has
