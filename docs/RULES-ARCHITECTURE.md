@@ -1519,7 +1519,9 @@ What the import keeps for them:
   assertion lines: a page object or a helper, now counted by its methods, or soft assertions only (0.1.125).
   Below generation 9 it is true for a Claude Code session that started subagents (an `Agent` or `Task` step) and has
   none of their steps (`Lens.subagentsMissing`, 0.1.127). The kept text has no subagents, so `reimport()` asks for the
-  file again, and replaces the kept text with the new one, or drops it when the new one is too long to keep.
+  file again, and replaces the kept text with the new one, or drops it when the new one is too long to keep. It is
+  also true below generation 9 for a session with a step of Playwright's test agents stored as a plain tool step
+  (`generator_write_test`, `planner_save_plan`, `test_run`, `test_debug` of a server whose name says playwright).
   The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's

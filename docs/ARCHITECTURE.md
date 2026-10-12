@@ -426,6 +426,12 @@ flowchart TD
   `agent: <agentType>` ("subagent" without a meta file), and skips the main agent's prompt to a subagent (a sidechain
   `user` text), which is not the person's message; a subagent's file imported alone keeps it as the task. A file dropped
   onto the panel or pasted has no subagents.
+  **Playwright's test agents** (`npx playwright init-agents`, since 0.1.127) work through Playwright's MCP server
+  (`playwright-test`): `generator_write_test {fileName, code}` is read as a `write` of that test, `planner_save_plan` as
+  a `write` of the plan's file, `test_run {locations}` and `test_debug` as `run_tests` (`npx playwright test …`, the
+  list reporter's output parsed as usual); a path from the project folder is made absolute with the session's `cwd`
+  (`toolInput()` / `playwrightTestTool()` in `lens.js`). The server's `browser_*` tools are a look at the page
+  (`browserLook`); its setup, log, list and test tools are housekeeping.
 - **Codex `rollout-*.jsonl`** gives file changes as unified diffs, applied to the last known content; a deleted file
   becomes a `delete` event, and a moved file (an update with `move_path`, since 0.1.122) an `edit` of its new name
   from the old text. Up to Codex 0.154 a change is an `event_msg` `patch_apply_end`; from 0.155 (Sept 2026) it

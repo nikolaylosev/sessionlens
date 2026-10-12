@@ -813,8 +813,30 @@
   function isTestRun(cmd, cfg) {
     return cmd.split(/&&|\|\|?|;|\n/).some((part) => cfg.test_runner_patterns.some((p) => part.includes(p)) && !LIST_ONLY.test(part));
   }
+  /* Playwright's test agents (npx playwright init-agents: planner, generator, healer) work through Playwright's MCP
+     server, "playwright-test" (0.1.127). The generator writes a test with generator_write_test {fileName, code}, the
+     planner a plan with planner_save_plan {fileName, …}; test_run {locations} and test_debug {test}
+     run tests and answer with the list reporter's output. toolInput() gives them the shape of a Write and of a test
+     command; the server's other tools drive the browser (browserLook) or are housekeeping. */
+  const PW_TEST = { generator_write_test: "write", planner_save_plan: "write", test_run: "run", test_debug: "run" };
+  function playwrightTestTool(tool) {
+    const p = mcpParts(tool);
+    return (p && /playwright/i.test(p[0]) && PW_TEST[p[1]]) || null;
+  }
+  function toolInput(tool, inp) {
+    const pw = playwrightTestTool(tool);
+    if (!pw) return inp;
+    const name = mcpParts(tool)[1];
+    if (name === "generator_write_test") return { file_path: inp.fileName || "", content: String(inp.code || "") };
+    if (name === "planner_save_plan") return { file_path: inp.fileName || "", content: "" }; // a plan is no code
+    if (name === "test_run") return { command: ["npx playwright test", ...(Array.isArray(inp.locations) ? inp.locations : [])].join(" ") };
+    return { command: `npx playwright test --debug ${JSON.stringify((inp.test && inp.test.title) || "")}` };
+  }
   function classify(tool, input, cfg) {
     const f = input.file_path || input.path || "";
+    const pw = playwrightTestTool(tool);
+    if (pw === "write") return ["write", f, ""];
+    if (pw === "run") return ["run_tests", "", input.command || ""];
     if (["Read", "View"].includes(tool)) return ["read", f, ""];
     if (["Grep", "Glob", "LS", "Search"].includes(tool)) return ["search", input.path || input.pattern || "", ""];
     if (["Edit", "MultiEdit"].includes(tool)) return ["edit", f, ""];
@@ -844,7 +866,7 @@
      browser are housekeeping, not a look at the page. */
   const BROWSER_SERVER = /browser|chrome|playwright|puppeteer|devtools/i;
   const BROWSER_HOUSEKEEPING =
-    /^(?:tabs_\w+|list_connected_browsers|select_browser|switch_browser|resize_window|shortcuts_\w+|gif_creator|upload_image|file_upload|(?:browser|playwright)_(?:close|install|resize|tabs)|(?:new|close|list|select)_pages?)$/i;
+    /^(?:tabs_\w+|test_\w+|(?:generator|planner)_\w+|list_connected_browsers|select_browser|switch_browser|resize_window|shortcuts_\w+|gif_creator|upload_image|file_upload|(?:browser|playwright)_(?:close|install|resize|tabs)|(?:new|close|list|select)_pages?)$/i;
   // [server, tool] of an MCP tool's name: the server is what comes before the first "__" (a server's name has none)
   function mcpParts(tool) {
     const name = String(tool || "").replace(/^mcp__/, ""),
@@ -965,8 +987,10 @@
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
         } else if (b.type === "tool_use" && role === "assistant") {
-          const inp = b.input || {};
-          const [kind, f, cmd] = classify(b.name || "", inp, cfg);
+          const inp = toolInput(b.name || "", b.input || {});
+          const [kind, f0, cmd] = classify(b.name || "", inp, cfg);
+          // Playwright's MCP server takes a path from the project's folder; Write's is absolute (0.1.127)
+          const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
           const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
           if (kind === "write") {
             const o = base(f);
@@ -1881,6 +1905,8 @@
     if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
     if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
+    // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
+    if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;
@@ -2255,6 +2281,8 @@
           if (x.seq <= e.seq) continue;
           if (x.kind === "message" && mk.some((m) => x.text.toLowerCase().includes(m))) break;
           if (x.kind === "user") break;
+          // a green run after it: that failure is over, and a later edit is no fix of it (0.1.127)
+          if (x.kind === "run_tests" && x.tests && x.tests.passed && !x.tests.failed && !x.tests.errors) break;
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
             out.push(F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })));
