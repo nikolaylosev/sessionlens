@@ -40,6 +40,11 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **Cursor as the model answers from the session alone.** With Cursor (subscription) as the model, a segmentation
+  request said it was "checking the transcript-analysis skill" and put that sentence before its answer, and once its
+  ranges overlapped: Cursor's agent knows your skills and rules even with every tool denied. Every request to it now
+  starts by asking it to answer from the given text only and use no tool, skill or rule. On the owner's session: 2 of
+  2 answers were plain JSON, against 0 of 2 before.
 - **The same assertion before and after an action is no "duplicate assert".** A test that checks the counter, clicks,
   and checks the counter again proves the click left it alone; it was a low `duplicate_assert`, six times in one
   Playwright session. Now a repeat counts only with nothing but assertions between the two.

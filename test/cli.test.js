@@ -170,7 +170,9 @@ test(
       assert.deepEqual([r.text, r.costUsd, r.traces], ["ok", null, "removed"]);
       const seen = JSON.parse(fs.readFileSync(f.log, "utf8"));
       assert.deepEqual(seen.args, ["-p", "--output-format", "json", "--mode", "ask", "--trust", "--model", "gpt-5.2"], "no prompt argument");
-      assert.equal(seen.input, "SYSTEM\n\nuser text");
+      // every request starts with "use no tool, no skill" (0.1.127)
+      assert.equal(seen.input, cli.CURSOR_NO_TOOLS + "\n\nSYSTEM\n\nuser text");
+      assert.match(cli.CURSOR_NO_TOOLS, /Do not use any tool/);
       assert.deepEqual(seen.perm, cli.CURSOR_PERMISSIONS);
       assert.deepEqual(seen.perm.permissions.deny, ["Shell(*)", "Write(**)", "Read(**)", "WebFetch(*)", "Mcp(*:*)"]);
       assert.ok(path.basename(seen.cwd).startsWith("sessionlens-cursor-"));
