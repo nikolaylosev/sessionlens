@@ -432,6 +432,13 @@ flowchart TD
   list reporter's output parsed as usual); a path from the project folder is made absolute with the session's `cwd`
   (`toolInput()` / `playwrightTestTool()` in `lens.js`). The server's `browser_*` tools are a look at the page
   (`browserLook`); its setup, log, list and test tools are housekeeping.
+  **The person's messages** (since 0.1.127, `personText()` in `lens.js`): what Claude Code or the editor puts into the
+  person's turn is taken out of a user's text, and a text with nothing else is no `user` event: `<command-name>` and
+  the other slash-command tags, `<local-command-caveat>`, `<local-command-stdout>`, `<browser_instruction>`,
+  `<ide_opened_file>`, `<ide_selection>`, `<system-reminder>`, `<task-notification>`, an image's caption
+  (`[Image: source: …]`, `[Image: original …]`) on a line of its own and `[Request interrupted by user…]`; so is a record
+  with `isMeta: true` (a skill's text, "Continue from where you left off."). `<pasted_content>` is the person's paste
+  and stays.
   **A file a shell command writes from a here-document** (since 0.1.127; `heredocWrites()` in `lens.js`): `cat > f
   <<'EOF' … EOF`, `cat <<EOF > f`, `cat >> f` and `tee [-a] f` become a `write` (an `edit` for `>>`, only of a file the
   session saw) before the command's own step, the path resolved from a `cd` before it in the command or from `cwd`.

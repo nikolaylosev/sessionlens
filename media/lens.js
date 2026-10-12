@@ -911,6 +911,26 @@
     if (before != null && (isRunnerConfig(f) || isTestFile(f, cfg))) r.prev_content = before.slice(0, 200000);
   };
 
+  /* What Claude Code or the editor puts into the person's turn without the person writing it (0.1.127): a slash
+     command's record and its local output, the browser extension's instructions, the file open in the editor, a
+     reminder, a background task's notice, an image's caption, an interruption. It is taken out of a user's text, and a
+     text with nothing else in it is no message of the person; neither is a record marked isMeta (a skill's text, "Continue
+     from where you left off."). The person's own paste (<pasted_content>) stays. On the owner's sessions 173 of 679 user
+     messages were such, and 6 "repeated the same request" findings were an image's caption. */
+  const HARNESS_TAGS =
+    "command-name|command-message|command-args|local-command-caveat|local-command-stdout|local-command-stderr|browser_instruction|ide_opened_file|ide_selection|system-reminder|task-notification";
+  const HARNESS_TEXT = new RegExp(
+    String.raw`<(${HARNESS_TAGS})\b[^>]*>[\s\S]*?</\1>|^[ \t]*\[(?:Image: (?:source|original)\b[^\n]*|Request interrupted by user[^\]\n]*)\][ \t]*$`,
+    "gm",
+  );
+  const HARNESS_OPEN = new RegExp(String.raw`^\s*<(?:${HARNESS_TAGS})\b`); // one whose closing tag was cut off
+  function personText(text) {
+    const t = String(text || "")
+      .replace(HARNESS_TEXT, "")
+      .trim();
+    return HARNESS_OPEN.test(t) ? "" : t;
+  }
+
   /* The files a shell command writes from a here-document (0.1.127): `cat > f <<'EOF' … EOF`, `cat <<EOF > f`,
      `cat >> f <<EOF` (adds to the end), `tee [-a] f <<EOF`. [{ file, text, append }] with the path resolved from a `cd`
      before it in the command (an absolute path, or one from the home folder of `cwd`), else from `cwd`. Not a
@@ -1042,7 +1062,10 @@
         if (!b || typeof b !== "object") continue;
         if (b.type === "text" && (b.text || "").trim()) {
           if (agent && role === "user") continue;
-          const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: b.text });
+          // the person's words only: not what the harness or the editor put into their turn
+          const text = role === "user" ? (rec.isMeta === true ? "" : personText(b.text)) : b.text;
+          if (!text) continue;
+          const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text });
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
         } else if (b.type === "tool_use" && role === "assistant") {
@@ -1984,6 +2007,8 @@
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
+    // a user message with text that Claude Code or the editor put there (0.1.127)
+    if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "user" && personText(e.text) !== String(e.text || "").trim())) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;
@@ -3557,6 +3582,7 @@
     redactSecrets,
     joinSubagents,
     heredocWrites,
+    personText,
     browserTool,
     mcpParts,
     importAny,
