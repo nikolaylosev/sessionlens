@@ -201,7 +201,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | Check | Default | Raised when |
 |---|---|---|
 | `pass_claim_without_run` | High | The agent says tests pass with no test run before it, or while the last run was red |
-| `fix_after_fail_without_triage` | High | The agent edits right after a failure without saying whether it is a product bug, a test bug or a spec defect |
+| `fix_after_fail_without_triage` | High | The agent edits right after a failure without saying whether it is a product bug, a test bug or a spec defect. In plain words counts too ("Test problem", "typo in the test", "дефект приложения"); a cause named without whose error it is ("due to…", «из-за…») is medium |
 | `tests_never_run` | High | Tests were written but never executed |
 | `scope_creep` | Medium | A file was edited that is not in the plan |
 | `browser_check_not_in_test` | Medium | The agent looked at the page through a browser tool (Claude in Chrome, Playwright MCP, Chrome DevTools MCP, Puppeteer), or through a Node or Python script of its own that opens the site with Playwright or Puppeteer, after its last test change and changed no test after it: its last check was by hand, and no test asserts what it saw. Looking before writing the tests, or while finding out why a test failed and then changing it, does not count. Claude Code and Cursor sessions alike |

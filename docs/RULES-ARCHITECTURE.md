@@ -780,7 +780,7 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | peeked_at_src_before_plan | method | high | regex (lens.js) |
 | stop_markers_missing | method | medium | regex (lens.js) |
 | pass_claim_without_run | process | high | regex (lens.js) |
-| fix_after_fail_without_triage | process | high | regex (lens.js) |
+| fix_after_fail_without_triage | process | high (medium when the cause is named in words but not whose error it is, 0.1.127) | regex (lens.js) |
 | tests_never_run | process | high | regex (lens.js) — sorted first (sortPriority) |
 | scope_creep | process | medium | regex (lens.js) |
 | browser_check_not_in_test | process | medium | regex (lens.js) |

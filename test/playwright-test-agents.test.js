@@ -189,3 +189,38 @@ test("an edit of a document after a failure is no fix of it (0.1.127)", () => {
   for (const f of ["/p/README.md", "/p/local/TODO.md", "/p/docs/notes.txt", "/p/docs/guide.rst"]) assert.deepEqual(after(f), [], f);
   assert.deepEqual(after("/p/tests/add.spec.ts"), ["Edited tests/add.spec.ts"]);
 });
+
+test("triage in words (0.1.127): whose error it is ends the search; a cause alone makes the finding medium", () => {
+  const fix = (said) =>
+    Lens.runChecks(
+      events([
+        user(1, "Fix the failing test"),
+        use(2, "w", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE }),
+        result(3, "w", "ok"),
+        use(4, "r", "Bash", { command: "npx playwright test" }),
+        result(5, "r", RUN_FAIL),
+        ...(said ? [said(6)] : []),
+        use(8, "e", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE + "\n" }),
+        result(9, "e", "ok"),
+      ]),
+      cfg,
+    )
+      .filter((f) => f.check === "fix_after_fail_without_triage")
+      .map((f) => `${f.severity}: ${f.message.replace(/^.*right after a failure \(seq \d+\)/, "")}`);
+  const say = (text) => (t) => said(t, text);
+  // Playwright's healer
+  assert.deepEqual(fix(say("The real test id is `todo-item` (typo `todo-itm` in the page object). Test problem.")), []);
+  assert.deepEqual(fix(say("Real id is `todo-count`; the counter has no role. Typo in the test.")), []);
+  assert.deepEqual(fix(say("Это дефект приложения: кнопка не отвечает.")), []);
+  // the cause, not whose error
+  for (const text of [
+    "One assertion failed due to duplicate headings — fixing that now.",
+    "Key root cause: the site has no <nav> tag.",
+    "Упало из-за двух заголовков.",
+  ])
+    assert.deepEqual(fix(say(text)), ["medium: : the cause is named, but not whose error it is — product bug / test bug / spec defect"], text);
+  // nothing said, or no cause
+  const high = ["high:  with no triage: product bug / test bug / spec defect"];
+  assert.deepEqual(fix(null), high);
+  assert.deepEqual(fix(say("Now I understand the markup. Let me fix the selectors.")), high);
+});

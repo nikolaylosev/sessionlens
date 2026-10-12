@@ -40,6 +40,12 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **A triage in plain words counts.** "Fix after a failure with no triage" knew only the words hypothesis, product
+  bug, test bug and spec defect (and their Russian forms). Playwright's healer says "Test problem." or "Typo in the
+  test.", and each of its fixes was a high finding. Now such plain words count too: test problem, typo in the test,
+  application defect, проблема в тесте, опечатка в тесте, дефект приложения and the like. When the agent names the
+  cause ("failed due to duplicate headings", "root cause: the site has no `<nav>`", «из-за…») but not whose error it is,
+  the finding is medium and says so.
 - **An edited document is no "fix after a failure".** When a failed run named no test, any edit after it counted as
   the fix, the readme or a TODO file too. A document (`.md`, `.txt`, `.rst` and the like) no longer counts.
 - **A test file a Cursor agent wrote over in one go is compared with what was there.** A Cursor transcript has none
