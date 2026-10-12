@@ -2,6 +2,12 @@
 
 ## 0.1.127
 
+### Added
+- **Assertions through page objects are shown.** With Page Objects a test has no `expect()` of its own: it calls
+  `await searchPage.expectSearchOpen()`, and the assertions are in that method. The **Assertions** panel now lists each
+  such test with how many assertions it has itself and how many each page object method it calls has
+  ("expectSearchOpen: 3"), or that the method is not in the session. An answer to "where are the assertions at all?".
+
 ### Fixed
 - **A Claude Code session's subagents are read.** When the agent hands work to a subagent (the Agent tool: Playwright's
   planner, generator and healer, Explore and the like), Claude Code keeps the subagent's steps in a separate file next

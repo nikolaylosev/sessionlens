@@ -369,6 +369,10 @@ Key points:
   is per check and source. `kind` is set on regex findings of the checks an engine may replace (RA §6.3). A model
   finding has `evidence`, and `model` / `verifier` (`provider/model`, since 0.1.115); an engine finding has `rule`,
   `line` and `code` (the lines around it).
+- **Assertions panel** (`#asserts` in `review.js`): the `assert_delta` of each edit, and since 0.1.127 the tests that
+  assert through a page object (`Lens.poAssertions`): each test of the last version of a test file that calls an
+  `expect…()` method, its own assertions, and each method's in the last version of the file that defines it (a file
+  with no test, read by `helperBlocks`); a method no file of the session defines is "not in this session".
 - **Verdict key** is `check@seq@first 40 characters of the message`. Renaming a check detaches old verdicts: the
   CHANGELOG says so whenever it happens. A message a new version words differently keeps its verdict since 0.1.116:
   after each analysis `Lens.carryVerdicts` moves a verdict whose key matches no finding to the one finding of the
