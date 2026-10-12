@@ -911,6 +911,65 @@
     if (before != null && (isRunnerConfig(f) || isTestFile(f, cfg))) r.prev_content = before.slice(0, 200000);
   };
 
+  /* The files a shell command writes from a here-document (0.1.127): `cat > f <<'EOF' … EOF`, `cat <<EOF > f`,
+     `cat >> f <<EOF` (adds to the end), `tee [-a] f <<EOF`. [{ file, text, append }] with the path resolved from a `cd`
+     before it in the command (an absolute path, or one from the home folder of `cwd`), else from `cwd`. Not a
+     here-document inside $(…) (a commit message, a PR's body), nor one fed to another program (python3 - <<EOF: what
+     it writes is not known), nor `cat <<EOF` with no file (it only prints). A scratch file is left out too: in a
+     temporary folder, named *.tmp.*, or a path from a shell variable ($S/probe.js): the agent's own scripts, not the
+     project's code (the owner's sessions: 20 findings on such scripts and none on the project). */
+  const SCRATCH_FILE = /^(?:\/tmp\/|\/private\/tmp\/|\/var\/folders\/)|\$|(?:^|\/)[^/]*\.tmp(?:\.[^/]*)?$/;
+  const HEREDOC_AT = /<<(-?)[ \t]*(['"]?)([A-Za-z_]\w*)\2/g;
+  function heredocWrites(cmd, cwd) {
+    const out = [],
+      text = String(cmd || "");
+    const home = (/^(\/Users\/[^/]+|\/home\/[^/]+)/.exec(cwd || "") || [])[1] || "";
+    const resolve = (p, dir) => {
+      p = p.replace(/^(['"])(.*)\1$/, "$2");
+      if (p.startsWith("~/") && home) return home + p.slice(1);
+      if (p.startsWith("/")) return p;
+      return dir ? dir.replace(/\/+$/, "") + "/" + p.replace(/^\.\//, "") : p;
+    };
+    let m;
+    HEREDOC_AT.lastIndex = 0;
+    while ((m = HEREDOC_AT.exec(text))) {
+      const lineStart = text.lastIndexOf("\n", m.index) + 1,
+        lineEnd = text.indexOf("\n", m.index);
+      if (lineEnd < 0) break;
+      // the command the here-document goes to: from the last separator before it
+      const before = text.slice(lineStart, m.index);
+      const cut = Math.max(0, ...[";", "&&", "||", "|", "("].map((sep) => (before.lastIndexOf(sep) < 0 ? 0 : before.lastIndexOf(sep) + sep.length)));
+      const head = before.slice(cut).trim(),
+        rest = text.slice(HEREDOC_AT.lastIndex, lineEnd).split(/;|&&|\|\||\|/)[0];
+      const prog = (head.match(/^(?:\w+=\S*\s+)*(\S+)/) || [])[1];
+      // the body: the lines up to the delimiter alone on its line (with <<- its leading tabs do not count)
+      const lines = text.slice(lineEnd + 1).split("\n");
+      const endAt = lines.findIndex((l) => (m[1] ? l.replace(/^\t+/, "") : l) === m[3]);
+      if (endAt < 0) break;
+      const body = lines.slice(0, endAt).map((l) => (m[1] ? l.replace(/^\t+/, "") : l));
+      HEREDOC_AT.lastIndex = lineEnd + 1 + lines.slice(0, endAt + 1).join("\n").length;
+      if ((prog !== "cat" && prog !== "tee") || before.slice(0, cut).endsWith("$(")) continue;
+      const args = (head.slice(prog.length) + " " + rest).trim();
+      let file = null,
+        append = false;
+      if (prog === "tee") {
+        // tee writes to its argument; a redirect is where its copy of the text goes
+        append = /(?:^|\s)-a\b/.test(args);
+        file = args.split(/\s+/).find((a) => a && !a.startsWith("-") && !a.startsWith(">")) || null;
+      } else {
+        const redirect = /(?:^|\s)(>>?)\s*("[^"]+"|'[^']+'|[^\s;&|<>]+)/.exec(args);
+        if (redirect) [file, append] = [redirect[2], redirect[1] === ">>"];
+      }
+      if (!file || file === "/dev/null" || SCRATCH_FILE.test(file)) continue;
+      // the folder: the last `cd` in the command before this one
+      const cds = [...text.slice(0, m.index).matchAll(/(?:^|[;&|\n]|&&)\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)/g)];
+      const dir = cds.length ? resolve(cds[cds.length - 1][1], cwd) : cwd;
+      const full = resolve(file, dir);
+      if (!SCRATCH_FILE.test(full)) out.push({ file: full, text: body.join("\n") + "\n", append });
+    }
+    return out;
+  }
+
   /* Claude Code keeps a subagent's steps (the Agent tool: Playwright's planner, generator and healer, Explore…) in
      <session>/subagents/agent-<id>.jsonl, next to agent-<id>.meta.json with its agentType; the session's own file has
      only the Agent call and its answer. The host appends those files to the session's text (0.1.127): a line
@@ -991,6 +1050,22 @@
           const [kind, f0, cmd] = classify(b.name || "", inp, cfg);
           // Playwright's MCP server takes a path from the project's folder; Write's is absolute (0.1.127)
           const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
+          // a file the command writes from a here-document: a write (or an edit, for >>) of its own before the command
+          if (b.name === "Bash")
+            for (const w of heredocWrites(inp.command, cwd)) {
+              const o = base(w.file);
+              if (w.append && o == null) continue; // added to a file this session never saw: its text is not known
+              const now = w.append ? o + w.text : w.text;
+              const x = by({ seq: seq++, ts, kind: w.append ? "edit" : "write", tool: "Bash", file: short(w.file), cmd: "" });
+              keepBefore(x, w.file, o, cfg);
+              files[w.file] = now;
+              if (o != null && isCode(w.file, cfg)) {
+                const d = compareAsserts(o, now, cfg, w.file);
+                if (d) x.assert_delta = d;
+              }
+              x.new_content = now.slice(0, 200000);
+              out.push(x);
+            }
           const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
           if (kind === "write") {
             const o = base(f);
@@ -1907,6 +1982,8 @@
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
+    // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
+    if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;
@@ -3479,6 +3556,7 @@
     ALIAS,
     redactSecrets,
     joinSubagents,
+    heredocWrites,
     browserTool,
     mcpParts,
     importAny,
