@@ -1953,6 +1953,22 @@
      A claude.ai export whose conversations give no steps is still claude-ai here; importAny then reads it as text. */
   const AGENTS = ["claude-code", "codex", "cursor", "claude-ai", "text"];
   const cleanProject = (p) => (typeof p === "string" && !/[\u0000-\u001f]/.test(p) ? p.replace(/(.)[\\/]+$/, "$1").slice(0, 500) : "");
+  /* Where the session's work was (0.1.127, "Project" in the Sessions tree): base, the folder the agent started in,
+     unless most of the files it wrote or edited lie outside it, as for a session started in ~/.claude/skills/my-skill
+     that wrote tests in ~/shop-tests. Then the folder those files have in common, cut before a test or source folder
+     in it (tests, src, e2e…). A file inside the starting folder is a relative path (fromClaudeJsonl's short()). */
+  const WORK_DIR = /^(?:tests?|__tests__|e2e|specs?|src|cypress|pages|playwright)$/i;
+  function projectOf(s, base) {
+    const files = ((s && s.events) || []).filter((e) => (e.kind === "write" || e.kind === "edit") && e.file).map((e) => e.file);
+    const out = files.filter((f) => /^(?:\/|~\/|[A-Za-z]:[\\/])/.test(f));
+    if (!out.length || out.length * 2 <= files.length) return base || "";
+    const parts = out.map((f) => f.replace(/\\/g, "/").split("/").slice(0, -1));
+    const common = [];
+    for (let i = 0; parts.every((p) => i < p.length && p[i] === parts[0][i]); i++) common.push(parts[0][i]);
+    const cut = common.findIndex((seg, i) => i > 0 && WORK_DIR.test(seg));
+    const dir = (cut > 0 ? common.slice(0, cut) : common).join("/");
+    return dir && dir !== "~" && dir !== "" ? cleanProject(dir) : base || "";
+  }
   function firstCwd(text, pick) {
     for (const line of text.split("\n")) {
       if (!line.includes('"cwd"')) continue;
@@ -3608,6 +3624,7 @@
     const origin = AGENTS.includes(s.agent)
       ? { agent: s.agent, project: cleanProject(s.project) }
       : transcriptOrigin(s.source_text, { cursorProject: s.source_project });
+    origin.project = projectOf(s, origin.project); // where the files it wrote are, if not where it started (0.1.127)
     return {
       id: s.id,
       name: s.name || "",
@@ -3746,6 +3763,7 @@
     transcriptOrigin,
     AGENTS,
     cleanGroup,
+    projectOf,
     GROUP_MAX,
     isCursorJsonl,
     cursorProjectSlug,

@@ -220,7 +220,8 @@ test("Import again with the text kept at import: the same session gets test_dele
 
 test("Import again without the text: the file is picked again; a transcript of another session is asked about", async () => {
   const { dir, p } = await tab();
-  assert.deepEqual([(await disk(dir)).meta.agent, (await disk(dir)).meta.project], ["", ""], "no text kept: unknown before");
+  // no text kept: the agent is unknown; the project is where the files it wrote are (Lens.projectOf, 0.1.127)
+  assert.deepEqual([(await disk(dir)).meta.agent, (await disk(dir)).meta.project], ["", "/w"]);
   const asked = [];
   let sources = null;
   p.window.chooseDialog = async (msg, opts) => (asked.push(msg), (sources = opts.map((o) => String(o.value)).join()), "claude");

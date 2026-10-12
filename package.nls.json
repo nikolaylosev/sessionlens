@@ -38,5 +38,6 @@
   "config.sessionsGroupBy.profile": "By profile (qa-ts, qa-python, …).",
   "config.sessionsGroupBy.verdict": "By verdict: Red, Yellow, Green.",
   "config.sessionsGroupBy.agent": "By the agent the transcript comes from: Claude Code, Codex, Cursor, claude.ai, or a text transcript.",
+  "config.sessionsGroupBy.project": "By the folder the agent worked in: where the files it wrote are, else where it started. A project's Claude Code and Cursor sessions are one group.",
   "config.sessionsGroupBy.custom": "By your own groups: right-click a session → Move to group…, or drag it onto a group. Sessions in none are under No group."
 }

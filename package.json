@@ -218,6 +218,7 @@
             "profile",
             "verdict",
             "agent",
+            "project",
             "custom"
           ],
           "enumDescriptions": [
@@ -225,6 +226,7 @@
             "%config.sessionsGroupBy.profile%",
             "%config.sessionsGroupBy.verdict%",
             "%config.sessionsGroupBy.agent%",
+            "%config.sessionsGroupBy.project%",
             "%config.sessionsGroupBy.custom%"
           ],
           "scope": "application",

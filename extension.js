@@ -3,7 +3,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, PATH_RX } = require("./cli.js");
+const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, cursorProjectSlug, PATH_RX } = require("./cli.js");
 const { cursorOutputs } = require("./cursor-db.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
@@ -1055,6 +1055,7 @@ const GROUP_BY = {
   profile: { label: "Profile", detail: "qa-ts, qa-python, …" },
   verdict: { label: "Verdict", detail: "Red, Yellow, Green" },
   agent: { label: "Agent", detail: "Claude Code, Codex, Cursor, …" },
+  project: { label: "Project", detail: "the folder the agent worked in" },
   custom: { label: "My groups", detail: "the groups you make: right-click a session → Move to group…" },
 };
 const DATE_GROUPS = { today: "Today", yesterday: "Yesterday", week: "This week", earlier: "Earlier" };
@@ -1099,6 +1100,22 @@ function dateGroup(m, now) {
   monday.setDate(day.getDate() - ((day.getDay() + 6) % 7));
   return t >= monday.getTime() ? "week" : "earlier";
 }
+/* 0.1.127: "Project". A session's project (the summary's, Lens.projectOf) is a path, from the home folder (~/…) or
+   absolute, or for a Cursor transcript the name of its folder in ~/.cursor/projects: the path with every character but
+   letters and digits made "-". Both are keyed the way Cursor names that folder, so a project's Claude Code and Cursor
+   sessions are one group; the label is the path when a session of the group has one. */
+function projectKey(p) {
+  if (!p) return "";
+  const abs = p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p;
+  return /[\\/]/.test(abs) ? cursorProjectSlug(abs) : p;
+}
+function projectLabel(items) {
+  const withPath = items.map((m) => m.project).find((p) => /[\\/]/.test(p || ""));
+  if (withPath) return Lens.homeless(withPath);
+  const slug = (items[0] && items[0].project) || "",
+    home = cursorProjectSlug(os.homedir()) + "-";
+  return slug.startsWith(home) ? "~/" + slug.slice(home.length) : slug;
+}
 /* → [{ key, label, items }] in the order shown; list is store.list() (newest import first). By date, a group lists its
    sessions by sessionTime, newest first, so a transcript imported today that ran last week sits with that week's. */
 function groupSessions(list, by, now) {
@@ -1114,6 +1131,12 @@ function groupSessions(list, by, now) {
   } else if (by === "agent") {
     keyOf = (m) => (Object.prototype.hasOwnProperty.call(AGENT_GROUPS, m.agent) ? m.agent : "");
     [order, labels] = [Object.keys(AGENT_GROUPS), AGENT_GROUPS];
+  } else if (by === "project") {
+    // by the project's name, then the sessions with none (a text transcript, a claude.ai export)
+    keyOf = (m) => projectKey(m.project);
+    const keys = [...new Set(list.map(keyOf))];
+    labels = Object.fromEntries(keys.map((k) => [k, k ? projectLabel(list.filter((m) => keyOf(m) === k)) : t("No project")]));
+    order = [...keys.filter(Boolean).sort((a, b) => labels[a].localeCompare(labels[b])), ...keys.filter((k) => !k)];
   } else if (by === "custom") {
     // the person's own groups by name, then the sessions in none
     keyOf = (m) => m.group || "";
@@ -1257,6 +1280,7 @@ class SessionsTreeProvider {
       item.tooltip = t("Make a group with + New group in the title, or right-click a session → Move to group…, then drag sessions onto it.");
       if (host.storeOpen && !groupNames(host.store.list()).length) item.description = t("{0} · make a group: + New group above", g.items.length);
     }
+    if (by === "project" && g.key === "") item.tooltip = t("A text transcript or a claude.ai export names no folder.");
     if (by === "agent" && g.key === "")
       item.tooltip = t("Imported before SessionLens 0.1.124 from a transcript too long to keep. Import again in the session's tab tells the agent.");
     item.sessions = g.items;
