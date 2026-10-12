@@ -2509,8 +2509,13 @@
           if (x.seq <= e.seq) continue;
           if (x.kind === "message" && mk.some((m) => x.text.toLowerCase().includes(m))) break;
           if (x.kind === "user") break;
-          // a green run after it: that failure is over, and a later edit is no fix of it (0.1.127)
-          if (x.kind === "run_tests" && x.tests && x.tests.passed && !x.tests.failed && !x.tests.errors) break;
+          /* a green run of the failed tests after it: that failure is over, and a later edit is no fix of it (0.1.127).
+             The failed files in its command, or as many tests as the failed run had; a run of another test does not
+             (a healer runs one test it trusts first: 1 passed, after 17 of 19 failed) */
+          if (x.kind === "run_tests" && x.tests && x.tests.passed && !x.tests.failed && !x.tests.errors) {
+            const all = e.tests.passed + e.tests.failed + (e.tests.errors || 0);
+            if (x.tests.passed >= all || (ff.size && [...ff].every((p) => (x.cmd || "").includes(p)))) break;
+          }
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
             out.push(F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })));

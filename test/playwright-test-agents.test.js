@@ -131,6 +131,30 @@ test("a fix after a failure: a green run in between ends that failure (0.1.127)"
   assert.ok(fixAfter([use(6, "g", "Bash", { command: "npx playwright test" }), result(7, "g", RUN_FAIL)]) > 0, "still failing");
 });
 
+test("a green run ends a failure only when it ran the failed tests, or as many tests as the failed run (0.1.127)", () => {
+  // two tests ran, one failed
+  const FAIL2 = "\nRunning 2 tests using 1 worker\n\n  1) [chromium] › tests/add.spec.ts:1:1 › add\n\n  1 failed\n  1 passed (6.0s)\n";
+  const PASS = (n) => `\nRunning ${n} tests using 1 worker\n  ${n} passed (2.0s)\n`;
+  const fixAfter = (cmd, out) =>
+    Lens.runChecks(
+      events([
+        user(1, "Write the test"),
+        use(2, "w", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE }),
+        result(3, "w", "ok"),
+        use(4, "r", "Bash", { command: "npx playwright test" }),
+        result(5, "r", FAIL2),
+        use(6, "g", "Bash", { command: cmd }),
+        result(7, "g", out),
+        use(8, "e", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE + "\n" }),
+        result(9, "e", "ok"),
+      ]),
+      cfg,
+    ).filter((f) => f.check === "fix_after_fail_without_triage").length;
+  assert.equal(fixAfter("npx playwright test tests/other.spec.ts", PASS(1)), 1, "another test passed: the failure is not over");
+  assert.equal(fixAfter("npx playwright test tests/add.spec.ts", PASS(1)), 0, "the failed file passed");
+  assert.equal(fixAfter("npx playwright test", PASS(2)), 0, "as many tests as the failed run");
+});
+
 test("a session imported before with such a step stored as a plain tool asks to be imported again (IMPORT_GEN 9)", () => {
   const s = (tool) => ({
     profile: "qa-ts",

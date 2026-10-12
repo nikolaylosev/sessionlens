@@ -35,9 +35,11 @@
   plain tool calls, so the generated tests were never checked, their runs did not count, and a test run could be taken
   for a look at the page in the browser. Now they are a write of the test, a test run with its result, and a write of
   the plan. A session imported before with such steps shows **Import again**.
-- **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
-  even when a later run had passed in between: with the generator's tests now read, writing new tests after a
-  temporary check had failed once was a high finding. A run with no failures now ends that failure.
+- **"Fix after a failure with no triage" ends at a green run of the failed tests.** An edit long after a failing run
+  counted as its fix even when a later run had passed in between: with the generator's tests now read, writing new
+  tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
+  it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
+  test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
 - **A test file a Cursor agent wrote over in one go is compared with what was there.** A Cursor transcript has none
   of the files the agent read, so a test file rewritten whole had no earlier version: tests it lost were not "test
   deleted", and a weakened assertion was not seen. Cursor's editor keeps every edited file before and after in its own
