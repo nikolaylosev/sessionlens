@@ -40,6 +40,10 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **A report of a red run is no "claims the tests pass".** After a run with a failure, a message like «"Add a single
+  todo" падает… seed проходит» was a high finding: it has "проходит" in it, though it says which test fails. Now, when
+  the last run was red and the message says a test fails, it is a report of that run. "Nothing fails", "0 failed" and
+  "no failures" are still a claim that all is well, and with no run before it a claim stays one.
 - **A triage in plain words counts.** "Fix after a failure with no triage" knew only the words hypothesis, product
   bug, test bug and spec defect (and their Russian forms). Playwright's healer says "Test problem." or "Typo in the
   test.", and each of its fixes was a high finding. Now such plain words count too: test problem, typo in the test,

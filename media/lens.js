@@ -717,6 +717,10 @@
   }
   /* An assertion line of the profile that is not a comment line (//, #, /* or * inside a block). A commented-out
      assertion never runs: until 0.1.120 it still counted, so commenting one out was not "fewer assertions". */
+  // a test failure reported in a message, not denied: "падает", "fails", "2 failed" — not "ничего не падает", "0 failed"
+  const FAILURE_WORD = /(?<![\p{L}\p{N}_])(?:пада(?:ет|ют)|упал[аио]?|не проход(?:ит|ят)|fails|failed|failing|failures?)(?![\p{L}\p{N}_])/gu;
+  const DENIED = /(?:(?<![\p{L}])(?:не|ни|no|not|none|nothing|without|zero)|(?<![\p{N}])0)\s+$/u;
+  const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
   // a document, not code: a readme, a TODO, notes (edit_churn and fix_after_fail_without_triage leave it out)
   const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
   // a call of a page object's assertion method, await searchPage.expectSearchOpen() (as ESLint's expect-expect, #154)
@@ -2462,6 +2466,10 @@
       const vars = { n: looks.length, first: looks[0].seq, last: looks[looks.length - 1].seq };
       return [F("browser_check_not_in_test", "medium", looks[0].seq, T(looks.length === 1 ? "browser_unasserted_one" : "browser_unasserted", vars))];
     },
+    /* Since 0.1.127, after a red run, a message that says a test fails reports that run, though it has "passes" in it:
+       the owner's test-pw session, «"Add a single todo" падает… "Empty input" проходит ложно… seed проходит». A failure
+       word with a "no" before it (ничего не падает, 0 failed, no failures) is still a claim that all is well, and with
+       no run before it a claim stays one ("Тест проходит. Проверяю, что без исправления он падает"). */
     pass_claim_without_run(ev, cfg) {
       const out = [],
         pats = cfg.pass_claim_patterns.map(
@@ -2488,7 +2496,9 @@
         if (!runs.length) out.push(F("pass_claim_without_run", "high", e.seq, T("pass_no_run")));
         else {
           const l = runs[runs.length - 1].tests;
-          if (l.failed || l.errors) out.push(F("pass_claim_without_run", "high", e.seq, T("pass_red", { passed: l.passed, failed: l.failed })));
+          // the last run was red and the message says a test fails: a report of that run, not a claim it is green
+          if ((l.failed || l.errors) && !saysFailure(t))
+            out.push(F("pass_claim_without_run", "high", e.seq, T("pass_red", { passed: l.passed, failed: l.failed })));
         }
       }
       return out;
