@@ -207,7 +207,8 @@ export async function reimport() {
   const sid = state.current,
     s = curS();
   if (!s) return;
-  let text = s.source_text,
+  // the text kept at import has no subagents in it: they are files next to the transcript (0.1.127)
+  let text = Lens.subagentsMissing(s) ? null : s.source_text,
     cursorOutputs = s.source_outputs,
     cursorProject = s.source_project;
   if (!text) {
@@ -248,7 +249,9 @@ export async function reimport() {
     x.seg = null;
     x.seg_error = null;
     x.seg_raw = null;
-    if (!x.source_text && text.length < 400000) {
+    // a kept text without the subagents is replaced, or dropped when the new one is too long to keep (0.1.127)
+    if (Lens.subagentsMissing(s) && text.length >= 400000) delete x.source_text;
+    else if ((!x.source_text || Lens.subagentsMissing(s)) && text.length < 400000) {
       x.source_text = text;
       x.source_outputs = keptOutputs(cursorOutputs);
       x.source_project = cursorProject;

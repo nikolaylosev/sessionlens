@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.127
+
+### Fixed
+- **A Claude Code session's subagents are read.** When the agent hands work to a subagent (the Agent tool: Playwright's
+  planner, generator and healer, Explore and the like), Claude Code keeps the subagent's steps in a separate file next
+  to the session's, and SessionLens read only the session's own file: the tests a subagent wrote, its runs and its
+  edits were not seen. Now **Choose file** reads the subagents' files too and puts their steps in the session's
+  timeline, in order of time, each marked with the agent that made it. What the main agent tells a subagent is not
+  taken for your message. A session imported before that started subagents shows **Import again**, which asks for the
+  file. A transcript dropped onto the panel or pasted has no subagents.
+
 ## 0.1.126
 
 ### Fixed

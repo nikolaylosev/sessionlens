@@ -889,14 +889,26 @@
     if (before != null && (isRunnerConfig(f) || isTestFile(f, cfg))) r.prev_content = before.slice(0, 200000);
   };
 
-  function fromClaudeJsonl(text, cfg) {
-    const files = {},
-      out = [],
-      pending = {};
-    let seq = 0,
-      cwd = "";
-    const base = (f) => files[f] ?? null;
-    const short = (f) => (cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f);
+  /* Claude Code keeps a subagent's steps (the Agent tool: Playwright's planner, generator and healer, Explore…) in
+     <session>/subagents/agent-<id>.jsonl, next to agent-<id>.meta.json with its agentType; the session's own file has
+     only the Agent call and its answer. The host appends those files to the session's text (0.1.127): a line
+     {"type":"sessionlens-subagent",agentId,agentType} before each, whose records carry isSidechain and agentId. */
+  const SUBAGENT_LINE = "sessionlens-subagent";
+  function joinSubagents(text, subs) {
+    const parts = [String(text || "").replace(/\n+$/, "")];
+    for (const sub of subs || []) {
+      if (!sub || !String(sub.text || "").trim()) continue;
+      parts.push(JSON.stringify({ type: SUBAGENT_LINE, agentId: sub.agentId || "", agentType: sub.agentType || "" }));
+      parts.push(String(sub.text).replace(/\n+$/, ""));
+    }
+    return parts.join("\n") + "\n";
+  }
+  // the records of a Claude Code transcript; with a subagent's records in it, in the order of their time (0.1.127)
+  function claudeRecords(text) {
+    const recs = [],
+      types = {};
+    let side = false,
+      main = false;
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
       let rec;
@@ -905,6 +917,34 @@
       } catch {
         continue;
       }
+      if (rec && rec.type === SUBAGENT_LINE) {
+        if (rec.agentId) types[rec.agentId] = rec.agentType || "";
+        continue;
+      }
+      if (rec && rec.isSidechain === true) side = true;
+      else if (rec && ["user", "assistant"].includes(rec.type)) main = true;
+      recs.push(rec);
+    }
+    if (side) {
+      // a record without a time keeps the time of the one before it in its file; a stable sort keeps a file's order
+      let last = "";
+      const at = recs.map((r) => (last = (r && typeof r.timestamp === "string" && r.timestamp) || last));
+      const idx = recs.map((_, i) => i).sort((a, b) => (at[a] < at[b] ? -1 : at[a] > at[b] ? 1 : a - b));
+      return { recs: idx.map((i) => recs[i]), types, main };
+    }
+    return { recs, types, main };
+  }
+  function fromClaudeJsonl(text, cfg) {
+    const files = {},
+      out = [],
+      pending = {};
+    let seq = 0,
+      cwd = "";
+    const base = (f) => files[f] ?? null;
+    const short = (f) => (cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f);
+    const { recs, types, main } = claudeRecords(text);
+    for (const rec of recs) {
+      if (!rec || typeof rec !== "object") continue;
       if (!cwd && typeof rec.cwd === "string") cwd = rec.cwd.replace(/\/+$/, "");
       // newer Claude Code writes bookkeeping records (attachment, mode, cost-state…) that carry no conversation
       if (rec.type && !["user", "assistant"].includes(rec.type) && !rec.message) continue;
@@ -913,16 +953,21 @@
       if (!["user", "assistant"].includes(role)) continue;
       const ts = rec.timestamp || "";
       const blocks = Array.isArray(msg.content) ? msg.content : [{ type: "text", text: msg.content || "" }];
+      /* a subagent's step: who made it. Next to the session's own steps, the text a subagent is "told" is the main
+         agent's prompt, not the person's; a subagent's file imported alone keeps it as the task */
+      const agent = rec.isSidechain === true && main ? types[rec.agentId] || "subagent" : null;
+      const by = (r) => (agent ? Object.assign(r, { agent }) : r);
       for (const b of blocks) {
         if (!b || typeof b !== "object") continue;
         if (b.type === "text" && (b.text || "").trim()) {
-          const r = { seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: b.text };
+          if (agent && role === "user") continue;
+          const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: b.text });
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
         } else if (b.type === "tool_use" && role === "assistant") {
           const inp = b.input || {};
           const [kind, f, cmd] = classify(b.name || "", inp, cfg);
-          const r = { seq: seq++, ts, kind, tool: b.name, file: short(f), cmd };
+          const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
           if (kind === "write") {
             const o = base(f);
             keepBefore(r, f, o, cfg);
@@ -1756,7 +1801,15 @@
         old text and the start of the file into the file, which no longer parsed.
      8: the assertions of a file with no test in it (a page object, a helper) are counted by its functions and methods,
         and expect.soft() / expect.poll() count (0.1.125). assert_delta is made at import. */
-  const IMPORT_GEN = 8;
+  const IMPORT_GEN = 9;
+  /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
+     before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
+     files lie next to it and the text kept at import does not have them. */
+  const SUBAGENT_TOOLS = ["Agent", "Task"];
+  function subagentsMissing(s) {
+    const ev = (s && s.events) || [];
+    return ev.some((e) => e.kind === "tool" && SUBAGENT_TOOLS.includes(e.tool)) && !ev.some((e) => e.agent);
+  }
   /* A session imported before with an edit counted as 0 assertions before and after although the file has assertion
      lines: a page object or a helper, or a test with soft assertions only. */
   function assertsUncountedBefore125(s) {
@@ -1827,6 +1880,7 @@
     if ((s.importGen || 0) < 6 && cursorMcpBefore125(s)) return true;
     if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
     if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
+    if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) >= 2) return false;
     const cfg = profile(s.profile);
     if (!cfg.checks.includes("test_deleted") && !cfg.checks.includes("config_weakened")) return false;
@@ -3155,7 +3209,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.126";
+  const ANALYSIS_VERSION = "0.1.127";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")
@@ -3396,6 +3450,7 @@
     PROFILES: VISIBLE,
     ALIAS,
     redactSecrets,
+    joinSubagents,
     browserTool,
     mcpParts,
     importAny,
@@ -3411,6 +3466,7 @@
     unreadToolCalls,
     IMPORT_GEN,
     needsReimport,
+    subagentsMissing,
     transcriptMatch,
     pickConversation,
     runChecks,
