@@ -682,6 +682,8 @@
   }
   /* An assertion line of the profile that is not a comment line (//, #, /* or * inside a block). A commented-out
      assertion never runs: until 0.1.120 it still counted, so commenting one out was not "fewer assertions". */
+  // a document, not code: a readme, a TODO, notes (edit_churn and fix_after_fail_without_triage leave it out)
+  const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
   // a call of a page object's assertion method, await searchPage.expectSearchOpen() (as ESLint's expect-expect, #154)
   const PO_ASSERT_CALLS = /\.expect[A-Z]\w*\s*\(/g;
   function isAssertLine(ln, cfg) {
@@ -2489,6 +2491,8 @@
       }
       return out;
     },
+    /* Since 0.1.127 an edit of a document (the readme, the TODO, notes) is no fix: a failure that names no test made
+       any edit after it one, and the owner's TODO.md, edited after a red run, was a high finding. */
     fix_after_fail_without_triage(ev, cfg) {
       const out = [],
         mk = cfg.triage_markers.map((m) => m.toLowerCase());
@@ -2516,6 +2520,7 @@
             const all = e.tests.passed + e.tests.failed + (e.tests.errors || 0);
             if (x.tests.passed >= all || (ff.size && [...ff].every((p) => (x.cmd || "").includes(p)))) break;
           }
+          if (["edit", "write"].includes(x.kind) && DOC_FILE.test(x.file || "")) continue;
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
             out.push(F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })));
@@ -2537,12 +2542,11 @@
        rewriting the navigation, one finding for the whole session). Docs (.md, .txt, .rst…) are not counted: an agent
        updates the readme along with each change, which is no poking. */
     edit_churn(ev, cfg) {
-      const DOCS = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
       const c = new Map(); // "request|file" → the steps
       let request = 0;
       for (const e of ev) {
         if (e.kind === "user") request++;
-        else if (["edit", "write"].includes(e.kind) && e.file && !DOCS.test(e.file)) {
+        else if (["edit", "write"].includes(e.kind) && e.file && !DOC_FILE.test(e.file)) {
           const k = request + "|" + e.file;
           c.set(k, [...(c.get(k) || []), { file: e.file, seq: e.seq }]);
         }
