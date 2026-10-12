@@ -13,7 +13,42 @@
   // ---------- profiles ----------
   const KW = {
     plan_markers: ["| Требование", "| Requirement", "ПЛАН", "PLAN"],
-    triage_markers: ["гипотез", "баг продукта", "ошибка теста", "дефект спец", "hypothesis", "product bug", "test bug", "spec defect"],
+    /* Since 0.1.127 also the plain words for whose error it is, as Playwright's healer writes them ("Test problem.",
+       "Typo in the test.") */
+    triage_markers: [
+      "гипотез",
+      "баг продукта",
+      "ошибка теста",
+      "дефект спец",
+      "hypothesis",
+      "product bug",
+      "test bug",
+      "spec defect",
+      "test problem",
+      "test issue",
+      "problem in the test",
+      "typo in the test",
+      "bug in the test",
+      "error in the test",
+      "the test is wrong",
+      "application defect",
+      "application bug",
+      "app defect",
+      "app bug",
+      "product defect",
+      "defect in the app",
+      "spec problem",
+      "проблема в тесте",
+      "проблема теста",
+      "опечатка в тесте",
+      "ошибка в тесте",
+      "тест неверн",
+      "дефект приложения",
+      "баг приложения",
+      "ошибка приложения",
+      "дефект продукта",
+      "проблема в спецификации",
+    ],
     pass_claim_patterns: ["тесты проходят", "все проходят", "проходит", "должны пройти", "tests pass", "all pass", "passing", "should pass", "all green"],
     assumption_patterns: [
       /предполож/i,
@@ -2493,9 +2528,12 @@
     },
     /* Since 0.1.127 an edit of a document (the readme, the TODO, notes) is no fix: a failure that names no test made
        any edit after it one, and the owner's TODO.md, edited after a red run, was a high finding. */
+    /* Since 0.1.127 a cause named in words before the edit ("due to duplicate headings", "Key root cause: the site has
+       no <nav>", «из-за…») without whose error it is gets a medium finding that says so: half of the triage. */
     fix_after_fail_without_triage(ev, cfg) {
       const out = [],
         mk = cfg.triage_markers.map((m) => m.toLowerCase());
+      const CAUSE = /\b(?:because|due to|root cause|caused by|the cause|the reason)\b|из-за|потому что|причин[аеуы]|так как/i;
       for (const e of ev) {
         if (e.kind !== "run_tests" || !e.tests || !(e.tests.failed || e.tests.errors)) continue;
         // pytest: path::test ; playwright: path:line:col › title — keep the path either way
@@ -2509,9 +2547,11 @@
             )
             .filter(Boolean),
         );
+        let cause = false;
         for (const x of ev) {
           if (x.seq <= e.seq) continue;
           if (x.kind === "message" && mk.some((m) => x.text.toLowerCase().includes(m))) break;
+          if (x.kind === "message" && CAUSE.test(x.text)) cause = true;
           if (x.kind === "user") break;
           /* a green run of the failed tests after it: that failure is over, and a later edit is no fix of it (0.1.127).
              The failed files in its command, or as many tests as the failed run had; a run of another test does not
@@ -2523,7 +2563,11 @@
           if (["edit", "write"].includes(x.kind) && DOC_FILE.test(x.file || "")) continue;
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
-            out.push(F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })));
+            out.push(
+              cause
+                ? F("fix_after_fail_without_triage", "medium", x.seq, T("fix_cause_only", { file: x.file, seq: e.seq }))
+                : F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })),
+            );
             break;
           }
         }
