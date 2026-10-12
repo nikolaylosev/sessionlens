@@ -40,6 +40,13 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **A temporary test the agent wrote, ran green and removed is no "test deleted".** An agent checked new page object
+  methods with a test file of its own: `cat > zz-check.spec.ts …; npx playwright test zz-check.spec.ts; rm zz-check.spec.ts`.
+  The deletion was a high "right after a failing run", because the run of that same command, which passed, was not
+  taken into account, only an earlier red one. Now a command that runs the tests and then deletes a file has its own
+  run as the one before the deletion, and a test file the session itself created, deleted after a green run that ran
+  it, is a check cleaned up. Deleted after a red run it is still high; a test taken out of a file, or a file that was
+  there before the session, is still reported.
 - **Cursor as the model answers from the session alone.** With Cursor (subscription) as the model, a segmentation
   request said it was "checking the transcript-analysis skill" and put that sentence before its answer, and once its
   ranges overlapped: Cursor's agent knows your skills and rules even with every tool denied. Every request to it now
