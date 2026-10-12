@@ -708,6 +708,14 @@ summary stores the `analyzedGen` its findings were computed with.
   check, step, the first 40 characters of the message) no longer matches a finding moves to the finding of the same
   check and step, if exactly one such finding has no verdict of its own (shown or in `calibHidden`). So a finding a new
   version words differently keeps its verdict and its weight in calibration; a finding that is gone keeps nothing.
+  Since 0.1.127 a second pass follows a finding to another step: the import of 0.1.127 reads more steps (a subagent's,
+  a file a command wrote) and fewer (Claude Code's own text in the person's turn), so the steps are numbered anew. A
+  verdict that is still loose goes to a finding of the same check and the same wording with its digits set aside, when
+  the group has as many free findings as loose verdicts; they are paired in the order of steps. On the owner's 39
+  sessions, a verdict on every finding before Import again: 90 of 378 kept without this pass, 348 with it; of the 30
+  left, 6 are findings that are gone (false ones fixed) and the rest groups whose number of findings changed.
+  `reimport()` analyzes the trial on a copy of the verdicts and counts a verdict as lost when no new finding has it,
+  under its old key or a new one: until 0.1.127 the trial moved the session's own verdicts before the person chose.
 
 **A known difference from 0.1.100.** Before, the loop recomputed all sessions in a row, and each next one saw calibration
 (`calibStats()`, now `calibStatsBySource()`) with the already recomputed findings of the previous ones. Now calibration is taken from the summaries at the moment

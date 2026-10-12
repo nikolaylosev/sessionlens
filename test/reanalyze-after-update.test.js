@@ -68,6 +68,39 @@ test("carryVerdicts: a verdict follows its finding to the new wording, the same 
   assert.equal(taken.verdicts[Lens.fkey(taken.findings[0])].v, "ok");
 });
 
+test("carryVerdicts: a verdict follows its finding to another step, by its check and wording (0.1.127)", () => {
+  const f = (check, seq, message) => ({ check, seq, message, severity: "high", source: "formal" });
+  const v = (note) => ({ v: "fp", note, at });
+  // the steps were numbered anew; the numbers in the text moved too
+  const moved = {
+    findings: [f("fix_after_fail_without_triage", 101, "Edited a.ts right after a failure (seq 94)"), f("weak_assert", 7, "a.spec.ts: weak")],
+    verdicts: { [Lens.fkey(f("fix_after_fail_without_triage", 88, "Edited a.ts right after a failure (seq 81)"))]: v("triaged in words") },
+  };
+  assert.equal(Lens.carryVerdicts(moved), 1);
+  assert.deepEqual(moved.verdicts[Lens.fkey(moved.findings[0])], v("triaged in words"));
+  // several of the same wording, as many as before: in the order of steps
+  const W = "a.spec.ts: weak assertion expect(x).toBeTruthy()";
+  const three = {
+    findings: [f("weak_assert", 12, W), f("weak_assert", 20, W), f("weak_assert", 31, W)],
+    verdicts: {
+      [Lens.fkey(f("weak_assert", 5, W))]: v("first"),
+      [Lens.fkey(f("weak_assert", 9, W))]: v("second"),
+      [Lens.fkey(f("weak_assert", 15, W))]: v("third"),
+    },
+  };
+  assert.equal(Lens.carryVerdicts(three), 3);
+  assert.deepEqual(
+    three.findings.map((x) => three.verdicts[Lens.fkey(x)].note),
+    ["first", "second", "third"],
+  );
+  // a different number of them: which is which is unknown, nothing moves
+  const more = { findings: [f("weak_assert", 12, W), f("weak_assert", 20, W)], verdicts: { [Lens.fkey(f("weak_assert", 5, W))]: v("only") } };
+  assert.equal(Lens.carryVerdicts(more), 0);
+  // another check of the same wording is not it
+  const other = { findings: [f("magic_number", 12, W)], verdicts: { [Lens.fkey(f("weak_assert", 5, W))]: v("x") } };
+  assert.equal(Lens.carryVerdicts(other), 0);
+});
+
 test("a session analyzed by 0.1.115 is analyzed again: the new checks show up and an old verdict moves with its finding", async () => {
   const now = Lens.runChecks(EVENTS, cfg).find((f) => f.check === "sleep_or_skip_added");
   const old = Object.assign({}, now, { message: now.message.replace(/^(.{20})/, "$1 (older wording)") });

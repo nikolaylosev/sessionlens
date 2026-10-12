@@ -1921,10 +1921,11 @@ ${en.raw}`).join("\n\n\n");
     await needEngine(s.profile);
     const keys = (x) => new Set([...x.findings || [], ...x.calibHidden || []].map(fkey).filter((k) => s.verdicts[k]));
     const gen = state.gens[sid];
-    const trial = Object.assign({}, s, { events, seg: null, findings: s.findings.filter((f) => f.source === "ai") });
+    const trial = Object.assign({}, s, { events, seg: null, findings: s.findings.filter((f) => f.source === "ai"), verdicts: Object.assign({}, s.verdicts) });
     analyzeNow(trial);
     state.gens[sid] = gen;
-    const after = keys(trial), lost = [...keys(s)].filter((k) => !after.has(k)).length;
+    const kept = new Set([...trial.findings || [], ...trial.calibHidden || []].map((f) => trial.verdicts[fkey(f)]).filter(Boolean));
+    const lost = [...keys(s)].filter((k) => !kept.has(s.verdicts[k])).length;
     if (lost && !await confirmDialog(T("reimport_lost", { n: lost }))) return;
     await updateSession(sid, (x) => {
       x.events = events;
