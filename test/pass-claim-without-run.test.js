@@ -134,3 +134,16 @@ test("a run whose output the transcript does not have (output_missing, a Cursor 
     "a later run without output: the red one before it is not the last result",
   );
 });
+
+test("after a red run, a message that says a test fails reports it; a failure denied, or no run, is still a claim (0.1.127)", () => {
+  // the owner's test-pw session: a report of a red run, with "проходит" in it
+  assert.deepEqual(found([SPEC, RED, ["say", '"Add a single todo" падает. "Empty input" проходит ложно. seed проходит.']]), []);
+  assert.deepEqual(found([SPEC, RED, ["say", "One test still fails, the rest pass."]]), []);
+  assert.deepEqual(found([SPEC, RED, ["say", "Two tests are failing; the others are passing."]]), []);
+  assert.deepEqual(found([SPEC, RED, ["say", "Тест упал, остальные тесты проходят."]]), []);
+  // no run before it: a claim, whatever else the message says (it describes a check with the fix taken out)
+  assert.deepEqual(found([SPEC, ["say", "Тест проходит. Проверяю, что без исправления он падает."]]), [NO_RUN]);
+  // a denied failure: still a claim
+  for (const text of ["Все тесты проходят, ничего не падает.", "19 passed, 0 failed — all pass.", "All tests pass; no failures.", "Tests pass, nothing fails."])
+    assert.deepEqual(found([SPEC, RED, ["say", text]]), [RED_RUN], text);
+});
