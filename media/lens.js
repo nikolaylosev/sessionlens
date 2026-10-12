@@ -3216,19 +3216,28 @@
       }
       return out;
     },
+    /* Since 0.1.127 an assertion repeated after an action is no duplicate: the same counter checked before and after a
+       click proves the click left it alone (the owner's test-pw, 6 such findings). A repeat with only assertions, blank
+       lines or comments between is one. */
     duplicate_assert(ev, cfg) {
       const out = [];
       for (const e of ev) {
         if (!e.new_content || !cfg.assert_line_patterns) continue;
         for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
-          const seen = new Map();
+          const at = new Map(); // assertion → how many code lines that are no assertion came before it
+          let steps = 0,
+            dup = null;
           for (const l of body.split("\n")) {
             const t = l.trim();
-            if (!isAssertLine(t, cfg)) continue;
-            seen.set(t, (seen.get(t) || 0) + 1);
+            if (!t) continue; // a comment is blank here already (linesOf)
+            if (!isAssertLine(t, cfg)) {
+              steps++;
+              continue;
+            }
+            if (!dup && at.get(t) === steps) dup = t;
+            at.set(t, steps);
           }
-          const dup = [...seen].filter(([, n]) => n > 1);
-          if (dup.length) out.push(F("duplicate_assert", "low", e.seq, T("dup_assert", { file: e.file || inMsg(), test: name, line: clip(dup[0][0], 60) })));
+          if (dup) out.push(F("duplicate_assert", "low", e.seq, T("dup_assert", { file: e.file || inMsg(), test: name, line: clip(dup, 60) })));
         }
       }
       return out;
