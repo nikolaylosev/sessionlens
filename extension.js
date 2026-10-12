@@ -320,6 +320,36 @@ function isDir(p) {
   }
 }
 
+/* The subagents of a Claude Code session file <dir>/<id>.jsonl: <dir>/<id>/subagents/agent-<agentId>.jsonl, each with
+   agent-<agentId>.meta.json ({ agentType, description, … }). [] when there is no such folder; a file that cannot be read
+   is left out. Lens.joinSubagents puts them into the session's text. */
+function claudeSubagents(file) {
+  if (!/\.jsonl$/i.test(file)) return [];
+  const dir = path.join(file.replace(/\.jsonl$/i, ""), "subagents");
+  let names;
+  try {
+    names = fs.readdirSync(dir).filter((n) => /^agent-[\w-]+\.jsonl$/.test(n));
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const n of names.sort()) {
+    const agentId = n.replace(/^agent-|\.jsonl$/g, "");
+    let meta = {};
+    try {
+      meta = JSON.parse(fs.readFileSync(path.join(dir, `agent-${agentId}.meta.json`), "utf8")) || {};
+    } catch {
+      /* no meta: the agent's type stays unknown */
+    }
+    try {
+      out.push({ agentId, agentType: typeof meta.agentType === "string" ? meta.agentType : "", text: fs.readFileSync(path.join(dir, n), "utf8") });
+    } catch {
+      /* unreadable: left out */
+    }
+  }
+  return out;
+}
+
 // API keys (phase 2): SecretStorage + host-side provider calls. Set up in activate(); `ready` is the one-time
 // migration of keys out of globalState, which every storage/secret/AI message waits for, so no webview can
 // read settings before the keys are gone from them. Activation itself does not wait (a keychain can be slow).
@@ -769,7 +799,12 @@ function wireMessages(
           const parts = uri.fsPath.split(/[\\/]/),
             at = parts.lastIndexOf("agent-transcripts");
           reply({ name: path.basename(uri.fsPath), text, cursorOutputs: r.outputs || undefined, cursorProject: at > 0 ? parts[at - 1] : undefined });
-        } else reply({ name: path.basename(uri.fsPath), text });
+        } else {
+          // a Claude Code session's subagents are in <session>/subagents/ next to its file (0.1.127)
+          const subs = uri.scheme === "file" ? claudeSubagents(uri.fsPath) : [];
+          if (subs.length) host.log(`claude: ${subs.length} subagent transcript(s) added to ${path.basename(uri.fsPath)}`);
+          reply({ name: path.basename(uri.fsPath), text: subs.length ? Lens.joinSubagents(text, subs) : text });
+        }
       } else if (msg.type === "claude:run") {
         // the user's own Claude Code CLI, see cli.js; the path is the machine setting, never the payload's
         reply(await logCli("claude", "run", () => runClaude(Object.assign({}, msg.payload, { cliPath: cliPathFor("claude") }))));

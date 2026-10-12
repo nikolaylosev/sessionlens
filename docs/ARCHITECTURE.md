@@ -417,6 +417,15 @@ flowchart TD
   `run_tests` (it matches the profile's runner and does not only list the tests, `isTestRun`) or `run_other`, and
   the runner's output is parsed into
   passed/failed counts by `runners.*` (pytest, jest/Playwright, JUnit, dotnet, go, newman, karate).
+  **Subagents** (since 0.1.127): the steps of an agent the session started with the `Agent` tool (Playwright's planner,
+  generator and healer, Explore…) are in `<session>/subagents/agent-<id>.jsonl`, with `agent-<id>.meta.json` (its
+  `agentType`) next to it; the session's own file has only the `Agent` call and its answer. When **Choose file** picks
+  `<session>.jsonl`, the host adds them (`claudeSubagents()` in `extension.js`, `Lens.joinSubagents`): a line
+  `{"type":"sessionlens-subagent",agentId,agentType}` before each file. `fromClaudeJsonl` then puts every record in the
+  order of its `timestamp` (stable; only when a record has `isSidechain: true`), marks a subagent's step with
+  `agent: <agentType>` ("subagent" without a meta file), and skips the main agent's prompt to a subagent (a sidechain
+  `user` text), which is not the person's message; a subagent's file imported alone keeps it as the task. A file dropped
+  onto the panel or pasted has no subagents.
 - **Codex `rollout-*.jsonl`** gives file changes as unified diffs, applied to the last known content; a deleted file
   becomes a `delete` event, and a moved file (an update with `move_path`, since 0.1.122) an `edit` of its new name
   from the old text. Up to Codex 0.154 a change is an `event_msg` `patch_apply_end`; from 0.155 (Sept 2026) it
@@ -804,7 +813,7 @@ session is analyzed again after the update (§6.3).
   command is not a run, a Codex move, a weakened assertion's message) and the 0.1.124 one (a path in the home folder
   from `~`) and the 0.1.125 one (a Cursor session's MCP calls by server) appear only after the transcript is imported
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
-  differs, `IMPORT_GEN` 8). A session whose transcript was too long
+  differs, `IMPORT_GEN` 9). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a

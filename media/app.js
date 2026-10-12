@@ -1895,7 +1895,7 @@ ${en.raw}`).join("\n\n\n");
   async function reimport() {
     const sid = state.current, s = curS();
     if (!s) return;
-    let text = s.source_text, cursorOutputs = s.source_outputs, cursorProject = s.source_project;
+    let text = Lens.subagentsMissing(s) ? null : s.source_text, cursorOutputs = s.source_outputs, cursorProject = s.source_project;
     if (!text) {
       const source = await chooseDialog(T("reimport_pick"), [
         { label: T("pick_source_claude"), value: "claude", primary: true },
@@ -1931,7 +1931,8 @@ ${en.raw}`).join("\n\n\n");
       x.seg = null;
       x.seg_error = null;
       x.seg_raw = null;
-      if (!x.source_text && text.length < 4e5) {
+      if (Lens.subagentsMissing(s) && text.length >= 4e5) delete x.source_text;
+      else if ((!x.source_text || Lens.subagentsMissing(s)) && text.length < 4e5) {
         x.source_text = text;
         x.source_outputs = keptOutputs(cursorOutputs);
         x.source_project = cursorProject;
