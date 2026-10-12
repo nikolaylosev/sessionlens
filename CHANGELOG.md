@@ -19,6 +19,12 @@
 - **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
   even when a later run had passed in between: with the generator's tests now read, writing new tests after a
   temporary check had failed once was a high finding. A run with no failures now ends that failure.
+- **Only your own words are your messages.** Claude Code and the editor put text into your turn that you did not
+  write: a slash command's record, the browser extension's instructions, "The user opened the file … in the IDE", a
+  background task's notice, an image's caption, a skill's text. SessionLens took all of it for your messages: on the
+  owner's sessions a quarter of them were such, six "You repeated the same request" findings were two images'
+  captions, and the requests that "Edit churn" and "Fix after a failure" count from were cut in the wrong places. Now
+  that text is left out; what you paste stays. A session imported before shows **Import again**.
 - **A file written by a shell command is read.** An agent often writes a file with a here-document,
   `cat > tests/pages/todo-page.ts <<'EOF' … EOF`, and SessionLens saw only a command: the file's code was not checked,
   and a weakened assertion in it was not seen. Now `cat > f`, `cat <<EOF > f`, `cat >> f` and `tee f` with a

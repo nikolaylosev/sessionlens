@@ -1523,7 +1523,8 @@ What the import keeps for them:
   also true below generation 9 for a session with a step of Playwright's test agents stored as a plain tool step
   (`generator_write_test`, `planner_save_plan`, `test_run`, `test_debug` of a server whose name says playwright), and
   for a session with a shell command that writes a file from a here-document (`heredocWrites`), stored as the command
-  alone. The new import adds a step for each such file, so the steps after it get new numbers.
+  alone, and for a session with a user message that has Claude Code's or the editor's text in it (`personText`). The
+  new import adds a step for each such file and drops such messages, so the steps after them get new numbers.
   The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's
