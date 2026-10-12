@@ -882,7 +882,8 @@ async function refreshOnFocus(webview) {
   try {
     await host.ready;
     const changed = host.storeOpen ? await host.store.refreshIfChanged() : [];
-    if (changed.length && sessionsTreeProvider) sessionsTreeProvider.refresh();
+    // another window changed the sessions, or the list of groups (0.1.127)
+    if ((changed.length || groupsMtime() !== groupsSeen) && sessionsTreeProvider) sessionsTreeProvider.refresh();
   } catch (e) {
     host.log("could not re-read the session folder: " + String((e && e.message) || e));
   }
@@ -1150,7 +1151,10 @@ function groupSessions(list, by, now) {
       .sort((a, b) => (isNaN(b.t) ? -Infinity : b.t) - (isNaN(a.t) ? -Infinity : a.t) || a.i - b.i)
       .map((x) => x.m);
   }
-  return order.map((key) => ({ key, label: labels[key], items: list.filter((m) => keyOf(m) === key) })).filter((g) => g.items.length);
+  // a group of the person's own is shown with no session in it too (0.1.127): a place to drop sessions onto
+  return order
+    .map((key) => ({ key, label: labels[key], items: list.filter((m) => keyOf(m) === key) }))
+    .filter((g) => g.items.length || (by === "custom" && g.key));
 }
 
 /* 0.1.124: "My groups". A group is a name kept on the session (its group field; the summary has it, cleaned by
@@ -1161,11 +1165,52 @@ function existingGroup(list, name) {
   const g = Lens.cleanGroup(name);
   return groupNames(list).find((x) => x.localeCompare(g, undefined, { sensitivity: "base" }) === 0) || g;
 }
-const groupNames = (list) => [...new Set(list.map((m) => m.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+/* 0.1.127: a group stays until Delete group, also with no session in it. Its name is kept in <global storage>/groups.json
+   ({ groups: [names] }), which every window reads: a group made by + New group with no session ticked, or one whose
+   last session moved out, is still a group to drop sessions onto. A group a session has is a group too (0.1.124). */
+let groupsFile = ""; // set in activate()
+let groupsSeen = 0; // the file's mtime the tree was last drawn with, to redraw when another window changes it
+function keptGroups() {
+  try {
+    const o = JSON.parse(fs.readFileSync(groupsFile, "utf8"));
+    return Array.isArray(o && o.groups) ? o.groups.map((g) => Lens.cleanGroup(g)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+function keepGroups(add = [], remove = []) {
+  if (!groupsFile) return;
+  const out = new Map(keptGroups().map((g) => [g.toLowerCase(), g]));
+  for (const g of remove.map((x) => Lens.cleanGroup(x)).filter(Boolean)) out.delete(g.toLowerCase());
+  for (const g of add.map((x) => Lens.cleanGroup(x)).filter(Boolean)) out.set(g.toLowerCase(), g);
+  const tmp = `${groupsFile}.${process.pid}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(groupsFile), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify({ groups: [...out.values()] }));
+    fs.renameSync(tmp, groupsFile);
+  } catch (e) {
+    host.log("could not write the list of groups: " + String((e && e.message) || e));
+  }
+}
+const groupsMtime = () => {
+  try {
+    return fs.statSync(groupsFile).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+// the sessions' groups and the kept ones, one per name in any case, by name
+function groupNames(list) {
+  const out = new Map();
+  for (const g of [...list.map((m) => m.group).filter(Boolean), ...keptGroups()]) if (!out.has(g.toLowerCase())) out.set(g.toLowerCase(), g);
+  return [...out.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
 /* Writes the group of each session (one by one, with its rev, as Rename from the tree does): a tab that has the session
    open gets a conflict at its next save, reads it again and keeps the group. → how many sessions changed. */
 async function setSessionGroups(ids, group) {
   const g = Lens.cleanGroup(group);
+  // the group they go to and the ones they leave stay groups, empty or not (0.1.127)
+  keepGroups([g, ...ids.map((id) => (host.store.has(id) ? host.store.meta(id).group || "" : ""))]);
   let changed = 0;
   for (const id of ids) {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -1244,6 +1289,7 @@ class SessionsTreeProvider {
     const list = host.storeOpen ? host.store.list() : [];
     if (!list.length) return []; // package.json's viewsWelcome (text + Import button) shows instead
     const by = sessionsGroupBy();
+    groupsSeen = groupsMtime();
     if (!filterActive()) return groupSessions(list, by, nowMs()).map((g) => this.toGroup(by, g));
     const shown = list.filter((m) => matchesFilter(m, sessionFilter));
     const rows = [this.toFilterRow(shown.length, list.length)];
@@ -1271,6 +1317,10 @@ class SessionsTreeProvider {
     // a session id is never empty and has no "\n" (validate.js checkId), so it cannot be a group's id
     item.id = `group\n${by}\n${g.key}`;
     item.description = String(g.items.length);
+    if (!g.items.length) {
+      item.description = t("empty — drag sessions here");
+      item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+    }
     // a group of the person's own has Rename group… and Delete group in its menu
     item.contextValue = by === "custom" && g.key ? "sessionlensGroupCustom" : "sessionlensGroup";
     if (by === "custom") item.groupName = g.key;
@@ -1421,11 +1471,16 @@ async function newGroup() {
       matchOnDescription: true,
     })
   );
-  if (!Array.isArray(picks) || !picks.length) return;
-  await setSessionGroups(
-    picks.map((p) => p.id),
-    group,
-  );
+  if (!Array.isArray(picks)) return; // Escape
+  // no session ticked: an empty group, to drag sessions onto later (0.1.127)
+  if (!picks.length) {
+    keepGroups([group]);
+    if (sessionsTreeProvider) sessionsTreeProvider.refresh();
+  } else
+    await setSessionGroups(
+      picks.map((p) => p.id),
+      group,
+    );
   if (sessionsGroupBy() !== "custom") await showMyGroups();
 }
 
@@ -1497,6 +1552,8 @@ async function renameGroup(arg) {
       .map((m) => m.id),
     to,
   );
+  keepGroups([to], [from]); // the kept name moves too: removed first, so a change of case only is kept
+  if (sessionsTreeProvider) sessionsTreeProvider.refresh();
 }
 async function deleteGroup(arg) {
   const name = groupOf(arg);
@@ -1512,7 +1569,10 @@ async function deleteGroup(arg) {
     { modal: true, detail: t("Its sessions are kept and go to No group.") },
     yes,
   );
-  if (pick === yes) await setSessionGroups(ids, "");
+  if (pick !== yes) return;
+  await setSessionGroups(ids, "");
+  keepGroups([], [name]); // after: the sessions leaving it would keep it otherwise
+  if (sessionsTreeProvider) sessionsTreeProvider.refresh();
 }
 /* Dragging sessions onto a group in "My groups" moves them there: onto a group, or onto a session of that group;
    onto No group takes them out. In the other groupings a drop does nothing (a date or a verdict is not chosen). */
@@ -1697,6 +1757,7 @@ function activate(context) {
   }
   host.storeOpen = false;
   host.store = createStore({ dir: path.join(context.globalStorageUri.fsPath, "sessions"), log: (m) => host.log("store: " + m) });
+  groupsFile = path.join(context.globalStorageUri.fsPath, "groups.json");
   host.secrets = Secrets.createSecrets(context.secrets, LensAI.PROVIDERS);
   host.call = createProviderCall({
     LensAI,

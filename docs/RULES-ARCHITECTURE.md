@@ -1329,12 +1329,16 @@ Output channel has the error, and a warning asks to reload. Any change of the se
 "My groups" (`custom`, since v0.1.124) groups by the summary's `group`: the names in any case (`localeCompare`, base
 sensitivity), then "No group", whose tooltip says how to make a group (and its line too while there is none yet: "N · make a
 group: + New group above"). A group is a name kept on the session file, so it travels with it and every window
-sees the same; it exists while a session is in it. `setSessionGroups(ids, group)` writes each session through the store
+sees the same. Since v0.1.127 a group also stays with no session in it, until Delete group: its name is kept in
+`<global storage>/groups.json` (`keepGroups`; `setSessionGroups` keeps the group sessions go to and the ones they
+leave, Rename group… moves the name, Delete group drops it), `groupNames` is the sessions' groups and the kept ones,
+and in My groups an empty group shows as "empty — drag sessions here" to drop sessions onto. Another window reads the
+file when its tree is drawn; a window that shows its panel again redraws the tree when the file changed. `setSessionGroups(ids, group)` writes each session through the store
 with its `baseRev` (3 attempts, as Rename from the tree) and broadcasts `session`; `""` deletes the field. A tab that
 has the session open gets a conflict at its next save, reads the session again and applies its change to it, so the
 group stays (`test/vscode-integration.test.js`). **+ New group** (`newGroup`) asks for a name, then lists every session with ticks (a session's own group in its
-description; the sessions of a group with that name come ticked) and puts the ticked ones into the group. A group exists
-while a session is in it, so none ticked makes none, and there are no empty groups to store. A typed name that differs
+description; the sessions of a group with that name come ticked) and puts the ticked ones into the group; with none
+ticked it makes an empty group (since v0.1.127; until then a group existed only while a session was in it). A typed name that differs
 from a group there is only in case is that group (`existingGroup`), here, in Move to group…'s "New group…" and in
 Rename group…, where the group itself is left out, so a rename can change its case. **Move to group…** offers the groups there are (not the session's own),
 "New group…" (an input box: one line, at most 60 characters) and "Out of …"; after a move into a group the tree is
