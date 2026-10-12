@@ -3,6 +3,11 @@
 ## 0.1.127
 
 ### Added
+- **Sessions grouped by project.** The button in the Sessions list's title now groups by **Project** too
+  (`sessionlens.sessionsGroupBy`: `project`): the folder the agent worked in. That is where most of the files it wrote
+  are, else the folder it started in, so a session started in a skill's folder that wrote tests in your project is in
+  your project. A project's Claude Code and Cursor sessions are one group. Text transcripts and claude.ai exports are
+  under **No project**.
 - **A locator by an icon font's character** (`icon_glyph_locator`, low, Playwright and Cypress).
   `getByRole('link', { name: '\uE9CC' })` follows "locate by role and name", but the name is a character of the site's
   icon font, from Unicode's Private Use Area: it says nothing about the element and changes when the font does. Use the

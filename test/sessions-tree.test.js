@@ -126,6 +126,40 @@ test("by profile, verdict or agent; an agent the summary does not know is Unknow
   assert.deepEqual(await by("nonsense"), await by("date"), "a value the setting does not have: by date");
 });
 
+test("by project (0.1.127): where the files it wrote are, else where it started; a path and a Cursor folder name are one", async () => {
+  const os = require("os");
+  const home = os.homedir();
+  const write = (file) => ({ seq: 2, kind: "write", file, new_content: "x" });
+  const sessions = [
+    // started in a skill's folder, wrote its tests in ~/shop-tests: shop-tests
+    session("skill", {
+      project: home + "/.claude/skills/my-skill",
+      events: [write("~/shop-tests/tests/cart.spec.ts"), write("~/shop-tests/tests/pages/cart.page.ts")],
+    }),
+    session("claude", { project: home + "/shop-tests", events: [write("tests/login.spec.ts")] }),
+    // a Cursor transcript: the name of its folder in ~/.cursor/projects
+    session("cursor", { agent: "cursor", project: require("../cli.js").cursorProjectSlug(home + "/shop-tests") }),
+    session("other", { project: "/srv/api" }),
+    // a Cursor folder name loses the path's "/" and "_": the label is the path a Claude Code session of it has
+    session("cursor2", { agent: "cursor", created: at(7, 10), project: require("../cli.js").cursorProjectSlug(home + "/work/my_app") }),
+    session("claude2", { project: home + "/work/my_app" }),
+    session("text", { agent: "text", project: "" }),
+  ];
+  const h = await host(sessions, { config: { "sessionlens.sessionsGroupBy": "project" } });
+  const got = await groups(h.tree);
+  assert.deepEqual(
+    got.map(([label, n, ids]) => [label, n, ids.sort()]),
+    [
+      ["/srv/api", "1", ["other"]],
+      ["~/shop-tests", "3", ["claude", "cursor", "skill"]],
+      ["~/work/my_app", "2", ["claude2", "cursor2"]],
+      ["No project", "1", ["text"]],
+    ],
+  );
+  const none = (await h.tree.getChildren()).find((g) => g.label === "No project");
+  assert.match(none.tooltip, /names no folder/);
+});
+
 test("the title button: a QuickPick with the current choice ticked; a pick is written to the user's settings and regroups", async () => {
   let offered = null,
     answer = (items) => items.find((i) => i.value === "verdict");
@@ -142,6 +176,7 @@ test("the title button: a QuickPick with the current choice ticked; a pick is wr
       ["profile", "Profile"],
       ["verdict", "Verdict"],
       ["agent", "Agent"],
+      ["project", "Project"],
       ["custom", "My groups"],
     ],
   );

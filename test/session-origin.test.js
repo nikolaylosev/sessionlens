@@ -104,3 +104,15 @@ test("sessionSummary: openCount is the findings shown without a verdict; verdict
   assert.equal(Lens.sessionSummary(base({ findings: [a, b] })).openCount, 2, "not reviewed");
   assert.equal(Lens.sessionSummary(base()).openCount, 0, "no findings");
 });
+
+test("projectOf (0.1.127): where the files the session wrote are, if most of them are outside where it started", () => {
+  const s = (...files) => ({ events: files.map((file, i) => ({ seq: i, kind: i % 2 ? "edit" : "write", file })) });
+  const BASE = "/Users/me/.claude/skills/my-skill";
+  assert.equal(Lens.projectOf(s("~/shop-tests/tests/cart.spec.ts", "~/shop-tests/tests/pages/cart.page.ts", "SKILL.md"), BASE), "~/shop-tests");
+  assert.equal(Lens.projectOf(s("/Users/me/app/src/a.ts", "/Users/me/app/e2e/b.spec.ts"), BASE), "/Users/me/app", "cut before src and e2e");
+  assert.equal(Lens.projectOf(s("tests/a.spec.ts", "tests/b.spec.ts", "~/notes/x.md"), BASE), BASE, "most files inside: where it started");
+  assert.equal(Lens.projectOf(s("tests/a.spec.ts", "~/x/y.ts"), BASE), BASE, "half and half: where it started");
+  assert.equal(Lens.projectOf(s("~/a.ts", "~/b.ts"), BASE), BASE, "nothing in common but the home folder");
+  assert.equal(Lens.projectOf(s(), BASE), BASE);
+  assert.equal(Lens.projectOf({ events: [{ seq: 0, kind: "read", file: "~/elsewhere/x.ts" }] }, BASE), BASE, "a file read is no work there");
+});
