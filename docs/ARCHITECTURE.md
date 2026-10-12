@@ -666,7 +666,9 @@ sequenceDiagram
 - **Model rules** tab: the prompts of each task are editable and exportable.
 - **CLI safety:** `claude -p` runs with no tools, no MCP, no slash commands, in an empty temp folder, without
   session persistence; credentials are never read or forwarded (the header of `cli.js`; Windows specifics in
-  RA §14.4).
+  RA §14.4). Cursor's `agent` runs in `ask` mode with every tool denied (`CURSOR_PERMISSIONS`), and since 0.1.127 each
+  of its prompts starts with `CURSOR_NO_TOOLS` (answer from the text only, no tool, skill or rule): its skills reach
+  the model as context, and a segmentation request went to "check" one first.
 
 ### 6.8 Review and verdicts
 

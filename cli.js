@@ -548,6 +548,13 @@ function removeCursorTraces(dir, home = os.homedir()) {
   return failed ? "failed" : removed ? "removed" : "none";
 }
 
+/* Cursor's agent knows the person's skills and rules even with every tool denied (CURSOR_PERMISSIONS): they are in its
+   context. Asked to segment a transcript, it said it was "checking the transcript-analysis skill" and wrote that
+   before the JSON (2 of 2 runs on the owner's test-pw session, 0.1.126), once with ranges that overlap. So every
+   request starts with this (0.1.127): with it, 2 of 2 replies were the JSON alone. */
+const CURSOR_NO_TOOLS =
+  "Answer from the text below only. Do not use any tool: do not read or search files, load skills or rules, or run commands. Your whole reply is the answer the text asks for.";
+
 /* One request, as runClaude: resolves {text, costUsd, ms, traces} or {error: {code, message}, traces}; never throws.
    traces is what removeCursorTraces() did. `home` is for tests. */
 /** @param {{ system?: string, user?: string, model?: string, cliPath?: string, timeoutMs?: number, home?: string }} [opts] */
@@ -556,7 +563,7 @@ async function runCursor({ system, user, model, cliPath, timeoutMs, home } = {})
   if (model && !MODEL_RX.test(String(model))) return { error: { code: "model", message: String(model).slice(0, 60) } };
   const bin = resolveCursorCli(cliPath);
   if (!PATH_RX.test(bin)) return { error: { code: "notfound", message: bin.slice(0, 80) } };
-  const prompt = system ? `${system}\n\n${user || ""}` : String(user || "");
+  const prompt = `${CURSOR_NO_TOOLS}\n\n` + (system ? `${system}\n\n${user || ""}` : String(user || ""));
   if (Buffer.byteLength(prompt, "utf8") > MAX_STDIN) return { error: { code: "toobig", message: "" } };
 
   let dir, result;
@@ -675,6 +682,7 @@ module.exports = {
   resolveCodexCli,
   resolveCursorCli,
   CURSOR_PERMISSIONS,
+  CURSOR_NO_TOOLS,
   classify,
   MODEL_RX,
   buildWinCommand,
