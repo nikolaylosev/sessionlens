@@ -682,6 +682,8 @@
   }
   /* An assertion line of the profile that is not a comment line (//, #, /* or * inside a block). A commented-out
      assertion never runs: until 0.1.120 it still counted, so commenting one out was not "fewer assertions". */
+  // a call of a page object's assertion method, await searchPage.expectSearchOpen() (as ESLint's expect-expect, #154)
+  const PO_ASSERT_CALLS = /\.expect[A-Z]\w*\s*\(/g;
   function isAssertLine(ln, cfg) {
     return !/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && cfg.assert_line_patterns.some((p) => p.test(ln));
   }
@@ -788,7 +790,10 @@
       if (nb == null) continue;
       const oa = asserts(ob),
         na = asserts(nb);
-      if (na.length < oa.length) res.removed.push({ test: name, before: oa.length, after: na.length });
+      /* the assertions moved into a page object: the new test calls an expect…() method it did not call before (a
+         rewrite to Page Object Model; the page object's own assertions are compared in its file, 0.1.127) */
+      const moved = (nb.match(PO_ASSERT_CALLS) || []).length > (ob.match(PO_ASSERT_CALLS) || []).length;
+      if (na.length < oa.length && !moved) res.removed.push({ test: name, before: oa.length, after: na.length });
       for (let i = 0; i < Math.min(oa.length, na.length); i++) {
         for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
           if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i]) && (!(opt && opt.sameSubject) || subjectOf(oa[i]) === subjectOf(na[i]))) {
@@ -1446,12 +1451,20 @@
     return "";
   }
   // project: the name of the transcript's folder in ~/.cursor/projects, when the file was picked there
-  function fromCursorJsonl(text, cfg, outputs, project) {
+  /* edits: what Cursor's IDE database kept of each edit, the whole file before and after ({ path, before, after },
+     0.1.127). The transcript has only what the agent sent: a Write's new text, a StrReplace's two fragments, and no
+     file the agent read, so a file written over in one go had no earlier version and test_deleted could not see the
+     tests it lost. An edit of the same file whose text after matches (a Write's text, a StrReplace's new fragment)
+     gives the step its file before and after, the way Claude Code's toolUseResult does. */
+  const samePath = (a, b) => a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
+  function fromCursorJsonl(text, cfg, outputs, project, edits) {
     const lines = [],
       names = [],
       paths = [],
       done = new Set(),
-      outs = Array.isArray(outputs) ? outputs.filter((o) => o && typeof o.command === "string" && typeof o.output === "string") : [];
+      outs = Array.isArray(outputs) ? outputs.filter((o) => o && typeof o.command === "string" && typeof o.output === "string") : [],
+      eds = Array.isArray(edits) ? edits.filter((e) => e && typeof e.path === "string" && typeof e.before === "string" && typeof e.after === "string") : [],
+      used = new Set();
     let next = 0;
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
@@ -1464,7 +1477,8 @@
       if (!rec || !["user", "assistant"].includes(rec.role) || !rec.message) continue;
       let ts = "";
       const content = [],
-        results = [];
+        results = [],
+        versions = [];
       for (const b of Array.isArray(rec.message.content) ? rec.message.content : []) {
         if (!b || typeof b !== "object") continue;
         if (b.type === "text" && rec.role === "user") {
@@ -1481,6 +1495,17 @@
           content.push({ type: "tool_use", id, name: as, input });
           names.push(name);
           if (typeof input.file_path === "string") paths.push(input.file_path);
+          if ((name === "Write" || name === "StrReplace") && typeof input.file_path === "string" && eds.length) {
+            const now = String((name === "Write" ? input.content : input.new_string) ?? "");
+            const k = eds.findIndex(
+              (e, i) => !used.has(i) && samePath(e.path, input.file_path) && (name === "Write" ? e.after.trimEnd() === now.trimEnd() : e.after.includes(now)),
+            );
+            if (k >= 0) {
+              used.add(k);
+              const e = eds[k];
+              versions.push({ id, before: e.before === "" && name === "Write" ? null : e.before, after: e.after });
+            }
+          }
           if (name !== "Shell" || typeof input.command !== "string") continue;
           const k = outs.findIndex((o, i) => i >= next && o.command.trim() === input.command.trim());
           if (k < 0) continue;
@@ -1492,6 +1517,15 @@
       }
       if (content.length) lines.push(JSON.stringify({ type: rec.role, timestamp: ts, message: { role: rec.role, content } }));
       if (results.length) lines.push(JSON.stringify({ type: "user", timestamp: "", message: { role: "user", content: results } }));
+      for (const v of versions)
+        lines.push(
+          JSON.stringify({
+            type: "user",
+            timestamp: "",
+            toolUseResult: { originalFile: v.before, content: v.after },
+            message: { role: "user", content: [{ type: "tool_result", tool_use_id: v.id, content: "ok" }] },
+          }),
+        );
     }
     const root = typeof project === "string" && project ? cursorRoot(paths, project) : "";
     if (root) lines.unshift(JSON.stringify({ type: "system", cwd: root })); // fromClaudeJsonl takes the first cwd
@@ -1862,7 +1896,10 @@
     }
     if (t.startsWith("{") && isCursorStreamJson(t)) return stripNonSource(diffMessageVersions(fromCursorStreamJson(text, cfg), cfg), cfg);
     if (t.startsWith("{") && isCursorJsonl(t))
-      return stripNonSource(diffMessageVersions(fromCursorJsonl(text, cfg, opts && opts.cursorOutputs, opts && opts.cursorProject), cfg), cfg);
+      return stripNonSource(
+        diffMessageVersions(fromCursorJsonl(text, cfg, opts && opts.cursorOutputs, opts && opts.cursorProject, opts && opts.cursorEdits), cfg),
+        cfg,
+      );
     if (t.startsWith("{") && isCodexJsonl(t)) return stripNonSource(diffMessageVersions(fromCodexJsonl(text, cfg), cfg), cfg);
     const ev = t.startsWith("{") ? fromClaudeJsonl(text, cfg) : fromText(text, cfg);
     return stripNonSource(diffMessageVersions(ev, cfg), cfg);
@@ -1945,6 +1982,13 @@
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
   const SUBAGENT_TOOLS = ["Agent", "Task"];
+  /* A Cursor Agent transcript with edits and none of the files before and after them that Cursor's IDE database keeps:
+     imported before 0.1.127, or dropped onto the panel. Picked again, the file brings them (fromCursorJsonl's edits). */
+  function cursorEditsMissing(s) {
+    if (!s || s.source_edits || s.agent !== "cursor") return false;
+    if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false; // an Agent CLI log has them
+    return (s.events || []).some((e) => (e.kind === "write" || e.kind === "edit") && (e.tool === "Write" || e.tool === "StrReplace"));
+  }
   function subagentsMissing(s) {
     const ev = (s && s.events) || [];
     return ev.some((e) => e.kind === "tool" && SUBAGENT_TOOLS.includes(e.tool)) && !ev.some((e) => e.agent);
@@ -2020,6 +2064,7 @@
     if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
     if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
+    if ((s.importGen || 0) < 9 && cursorEditsMissing(s)) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
@@ -3649,6 +3694,7 @@
     IMPORT_GEN,
     needsReimport,
     subagentsMissing,
+    cursorEditsMissing,
     transcriptMatch,
     pickConversation,
     runChecks,

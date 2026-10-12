@@ -13,7 +13,10 @@
    - the IDE: <Cursor user data>/User/globalStorage/state.vscdb, table `cursorDiskKV`: `composerData:<id>` lists the
      bubbles in order (`fullConversationHeadersOnly`), and `bubbleId:<id>:<bubble>` holds a tool call as
      `toolFormerData` with `name` (`run_terminal_command_v2`), `params` (JSON, `command`) and `result` (JSON, `output`,
-     `exitCode` only when it is not 0).
+     `exitCode` only when it is not 0). An edit (`edit_file_v2`, since 0.1.127) has `params.relativeWorkspacePath` (an
+     absolute path in practice) and `result.beforeContentId` / `afterContentId`: keys of the same table whose value is
+     the whole file before and after, named by its SHA-256 (the hash of "" for a file that did not exist). The CLI keeps
+     no file before an edit, only "Wrote contents to …".
 
    Both are opened read-only through Node's built-in node:sqlite and closed at once. Without node:sqlite (VS Code
    before Node 22.13), with no database, or with a format this code does not know, there is no output, and the
@@ -25,6 +28,8 @@ const path = require("path");
 
 const ID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_OUTPUT = 200000; // per command; a runner's summary is at the end, so the end is kept
+const MAX_FILE = 400000; // a file before or after an edit; a longer one is left out
+const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 function sqlite() {
   try {
@@ -117,32 +122,48 @@ function fromCli(db) {
   });
 }
 
-/* The IDE's state.vscdb → the same list for the chat with this id; null when the chat or the format is not there */
+/* The IDE's state.vscdb → { outputs, edits } for the chat with this id: the same list of commands, and each edit's
+   file before and after ({ path, before, after }, before "" for a new file); null when the chat or the format is not
+   there */
 function fromIde(db, id) {
-  const get = (key) => {
+  const raw = (key) => {
     const r = db.prepare("SELECT value FROM cursorDiskKV WHERE key = ?").get(key);
-    return r ? parse(r.value) : null;
+    return r ? asText(r.value) : null;
   };
+  const get = (key) => {
+    const r = raw(key);
+    return r == null ? null : parse(r);
+  };
+  const file = (cid) => (typeof cid !== "string" ? null : cid.endsWith(EMPTY_SHA256) ? "" : raw(cid));
   const composer = get("composerData:" + id);
   const headers = composer && Array.isArray(composer.fullConversationHeadersOnly) ? composer.fullConversationHeadersOnly : null;
   if (!headers) return null;
-  const out = [];
+  const out = [],
+    edits = [];
   for (const h of headers) {
     if (!h || typeof h.bubbleId !== "string") continue;
     const b = get(`bubbleId:${id}:${h.bubbleId}`);
     const t = b && b.toolFormerData;
-    if (!t || t.name !== "run_terminal_command_v2") continue;
+    if (!t || (t.name !== "run_terminal_command_v2" && t.name !== "edit_file_v2")) continue;
     const params = typeof t.params === "string" ? parse(t.params) : t.params;
     const result = typeof t.result === "string" ? parse(t.result) : t.result;
+    if (t.name === "edit_file_v2") {
+      const before = file(result && result.beforeContentId),
+        after = file(result && result.afterContentId);
+      const p = params && typeof params.relativeWorkspacePath === "string" ? params.relativeWorkspacePath : "";
+      if (p && before != null && after != null && before.length <= MAX_FILE && after.length <= MAX_FILE) edits.push({ path: p, before, after });
+      continue;
+    }
     if (!params || typeof params.command !== "string") continue;
     const output = result && typeof result.output === "string" ? result.output : "";
     out.push({ command: params.command, output: tail(output), exitCode: result && Number.isInteger(result.exitCode) ? result.exitCode : result ? 0 : null });
   }
-  return out.length ? out : null;
+  return out.length || edits.length ? { outputs: out.length ? out : null, edits: edits.length ? edits : null } : null;
 }
 
-/* For a transcript file picked by the person: the commands Cursor kept for it, or why there are none.
-   → { outputs: [{command, output, exitCode}], source: "cli" | "ide" } | { outputs: null, reason }
+/* For a transcript file picked by the person: the commands Cursor kept for it, and from the IDE the files before and
+   after each edit (0.1.127), or why there is nothing.
+   → { outputs: [{command, output, exitCode}] | null, edits?: [{path, before, after}], source: "cli" | "ide" } | { outputs: null, reason }
    The options are for tests: another home, platform or environment, and a stand-in for node:sqlite (null: none). */
 /** @param {string} file @param {{ home?: string, platform?: string, env?: Record<string, string | undefined>, sqliteModule?: any }} [opts] */
 function cursorOutputs(file, { home = os.homedir(), platform = process.platform, env = process.env, sqliteModule } = {}) {
@@ -160,8 +181,9 @@ function cursorOutputs(file, { home = os.homedir(), platform = process.platform,
     let db = null;
     try {
       db = new S.DatabaseSync(file, { readOnly: true });
-      const outputs = source === "cli" ? fromCli(db) : fromIde(db, id);
-      if (outputs) return { outputs, source };
+      const got = source === "cli" ? { outputs: fromCli(db), edits: null } : fromIde(db, id);
+      if (got && got.outputs && !got.edits) return { outputs: got.outputs, source };
+      if (got && (got.outputs || got.edits)) return { outputs: got.outputs, edits: got.edits, source };
     } catch (e) {
       reason = `the ${source} database could not be read: ${String((e && e.code) || (e && e.message) || e).slice(0, 80)}`;
     } finally {
@@ -175,4 +197,4 @@ function cursorOutputs(file, { home = os.homedir(), platform = process.platform,
   return { outputs: null, reason };
 }
 
-module.exports = { cursorOutputs, transcriptId, ideDatabase, MAX_OUTPUT };
+module.exports = { cursorOutputs, transcriptId, ideDatabase, MAX_OUTPUT, MAX_FILE };

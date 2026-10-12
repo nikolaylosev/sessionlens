@@ -1554,7 +1554,12 @@ ${en.raw}`).join("\n\n\n");
     ]);
     if (source === null) return;
     const r = await pickTranscript(source);
-    if (r) askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), { cursorOutputs: r.cursorOutputs, cursorProject: r.cursorProject });
+    if (r)
+      askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
+        cursorOutputs: r.cursorOutputs,
+        cursorEdits: r.cursorEdits,
+        cursorProject: r.cursorProject
+      });
   }
   async function pickTranscript(source) {
     const r = await window.__slPickTranscript({ source: source === "other" ? void 0 : source });
@@ -1585,6 +1590,11 @@ ${en.raw}`).join("\n\n\n");
     const r = new FileReader();
     r.onload = () => cb(r.result, f.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""));
     r.readAsText(f);
+  }
+  function keptEdits(edits) {
+    if (!Array.isArray(edits) || !edits.length) return void 0;
+    const size = edits.reduce((n, e) => n + String(e.before || "").length + String(e.after || "").length, 0);
+    return size < 4e5 ? edits.map((e) => ({ path: e.path, before: e.before, after: e.after })) : void 0;
   }
   function keptOutputs(outputs) {
     if (!Array.isArray(outputs) || !outputs.length) return void 0;
@@ -1623,6 +1633,7 @@ ${en.raw}`).join("\n\n\n");
         source_text: text.length < 4e5 ? text : "",
         // kept with the text, so Back to regex parsing and Import again parse it the same way
         source_outputs: text.length < 4e5 ? keptOutputs(from.cursorOutputs) : void 0,
+        source_edits: text.length < 4e5 ? keptEdits(from.cursorEdits) : void 0,
         source_project: text.length < 4e5 ? from.cursorProject : void 0,
         agent: origin.agent,
         project: origin.project,
@@ -1815,7 +1826,7 @@ ${en.raw}`).join("\n\n\n");
       await needEngine(s.profile);
       await updateSession(state.current, (x) => {
         const cfg = Lens.profile(x.profile);
-        const from = { cursorOutputs: x.source_outputs, cursorProject: x.source_project };
+        const from = { cursorOutputs: x.source_outputs, cursorEdits: x.source_edits, cursorProject: x.source_project };
         x.events = Lens.pickConversation(x.events, Lens.importAny(x.source_text, cfg, from)) || x.events;
         x.seg = null;
         x.importGen = Lens.IMPORT_GEN;
@@ -1895,7 +1906,8 @@ ${en.raw}`).join("\n\n\n");
   async function reimport() {
     const sid = state.current, s = curS();
     if (!s) return;
-    let text = Lens.subagentsMissing(s) ? null : s.source_text, cursorOutputs = s.source_outputs, cursorProject = s.source_project;
+    const fromFile = (s.importGen || 0) < 9 && (Lens.subagentsMissing(s) || Lens.cursorEditsMissing(s));
+    let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project;
     if (!text) {
       const source = await chooseDialog(T("reimport_pick"), [
         { label: T("pick_source_claude"), value: "claude", primary: true },
@@ -1908,10 +1920,11 @@ ${en.raw}`).join("\n\n\n");
       if (!r) return;
       text = r.text;
       cursorOutputs = r.cursorOutputs;
+      cursorEdits = r.cursorEdits;
       cursorProject = r.cursorProject;
     }
     const cfg = Lens.profile(s.profile);
-    const events = Lens.pickConversation(s.events, Lens.importAny(text, cfg, { cursorOutputs, cursorProject }));
+    const events = Lens.pickConversation(s.events, Lens.importAny(text, cfg, { cursorOutputs, cursorEdits, cursorProject }));
     if (!events) {
       await alertDialog(T("no_events"));
       return;
@@ -1932,10 +1945,11 @@ ${en.raw}`).join("\n\n\n");
       x.seg = null;
       x.seg_error = null;
       x.seg_raw = null;
-      if (Lens.subagentsMissing(s) && text.length >= 4e5) delete x.source_text;
-      else if ((!x.source_text || Lens.subagentsMissing(s)) && text.length < 4e5) {
+      if (fromFile && text.length >= 4e5) delete x.source_text;
+      else if ((!x.source_text || fromFile) && text.length < 4e5) {
         x.source_text = text;
         x.source_outputs = keptOutputs(cursorOutputs);
+        x.source_edits = keptEdits(cursorEdits);
         x.source_project = cursorProject;
       }
       Object.assign(x, Lens.transcriptOrigin(text, { cursorProject }));

@@ -124,7 +124,12 @@ export async function pickAndImport() {
   ]);
   if (source === null) return; // the dialog's own Cancel button
   const r = await pickTranscript(source);
-  if (r) askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), { cursorOutputs: r.cursorOutputs, cursorProject: r.cursorProject });
+  if (r)
+    askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
+      cursorOutputs: r.cursorOutputs,
+      cursorEdits: r.cursorEdits,
+      cursorProject: r.cursorProject,
+    });
 }
 
 /* The host's file dialog for `source` (claude | codex | cursor | other). → { name, text, cursorOutputs, cursorProject } or null when
@@ -168,6 +173,14 @@ export function readFile(f, cb) {
   r.readAsText(f);
 }
 
+/* What a session keeps of the files before and after a Cursor chat's edits (0.1.127): all of them while they are not
+   much longer than a transcript kept whole, else none (Import again then asks for the file). */
+export function keptEdits(edits) {
+  if (!Array.isArray(edits) || !edits.length) return undefined;
+  const size = edits.reduce((n, e) => n + String(e.before || "").length + String(e.after || "").length, 0);
+  return size < 400000 ? edits.map((e) => ({ path: e.path, before: e.before, after: e.after })) : undefined;
+}
+
 /* What a session keeps of a Cursor chat's command output: the end of each (a runner's summary is there), so the
    stored session does not grow by the full output of every command. */
 export function keptOutputs(outputs) {
@@ -209,6 +222,7 @@ export async function importText(text, name, from = {}) {
       source_text: text.length < 400000 ? text : "",
       // kept with the text, so Back to regex parsing and Import again parse it the same way
       source_outputs: text.length < 400000 ? keptOutputs(from.cursorOutputs) : undefined,
+      source_edits: text.length < 400000 ? keptEdits(from.cursorEdits) : undefined,
       source_project: text.length < 400000 ? from.cursorProject : undefined,
       agent: origin.agent,
       project: origin.project,

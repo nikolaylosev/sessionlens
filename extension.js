@@ -794,11 +794,22 @@ function wireMessages(
         // a Cursor transcript keeps no command output; Cursor's own database may (cursor-db.js, 0.1.121)
         if (uri.scheme === "file" && Lens.isCursorJsonl(text.trimStart())) {
           const r = cursorOutputs(uri.fsPath);
-          host.log(r.outputs ? `cursor: the output of ${r.outputs.length} commands from the ${r.source} database` : `cursor: no command output (${r.reason})`);
+          host.log(
+            r.outputs
+              ? `cursor: the output of ${r.outputs.length} commands from the ${r.source} database`
+              : `cursor: no command output (${r.reason || "none kept"})`,
+          );
+          if (r.edits) host.log(`cursor: the file before and after ${r.edits.length} edits from the ${r.source} database`);
           // ~/.cursor/projects/<workspace>/agent-transcripts/…: the folder's name gives the workspace's path (0.1.122)
           const parts = uri.fsPath.split(/[\\/]/),
             at = parts.lastIndexOf("agent-transcripts");
-          reply({ name: path.basename(uri.fsPath), text, cursorOutputs: r.outputs || undefined, cursorProject: at > 0 ? parts[at - 1] : undefined });
+          reply({
+            name: path.basename(uri.fsPath),
+            text,
+            cursorOutputs: r.outputs || undefined,
+            cursorEdits: r.edits || undefined,
+            cursorProject: at > 0 ? parts[at - 1] : undefined,
+          });
         } else {
           // a Claude Code session's subagents are in <session>/subagents/ next to its file (0.1.127)
           const subs = uri.scheme === "file" ? claudeSubagents(uri.fsPath) : [];

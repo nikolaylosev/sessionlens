@@ -45,7 +45,8 @@ const shell = (id, command) => ({ role: "assistant", content: [{ type: "tool-cal
 const result = (id, text) => ({ role: "tool", content: [{ type: "tool-result", toolCallId: id, toolName: "Shell", result: text }] });
 
 // the IDE's state.vscdb: cursorDiskKV with the composer and its bubbles
-function ideDb(h, bubbles) {
+// contents: { "composer.content.<sha256>": text } — the files an edit's result names (0.1.127)
+function ideDb(h, bubbles, contents = {}) {
   const file = ideDatabase(h, "darwin", {});
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new S.DatabaseSync(file);
@@ -53,6 +54,7 @@ function ideDb(h, bubbles) {
   const put = db.prepare("INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)");
   put.run("composerData:" + ID, JSON.stringify({ fullConversationHeadersOnly: bubbles.map((b, i) => ({ bubbleId: "b" + i, type: 2 })) }));
   bubbles.forEach((b, i) => put.run(`bubbleId:${ID}:b${i}`, JSON.stringify(b)));
+  for (const [k, v] of Object.entries(contents)) put.run(k, v);
   db.close();
   return file;
 }
@@ -64,4 +66,14 @@ const terminal = (command, output, exitCode) => ({
   },
 });
 
-module.exports = { S, ID, home, transcript, cliDb, shell, result, ideDb, terminal };
+// an edit of the IDE: the file before and after under the keys Cursor names them by (sha256 of the text)
+const contentId = (text) => "composer.content." + require("crypto").createHash("sha256").update(text).digest("hex");
+const ideEdit = (file, before, after) => ({
+  toolFormerData: {
+    name: "edit_file_v2",
+    params: JSON.stringify({ relativeWorkspacePath: file }),
+    result: JSON.stringify({ beforeContentId: contentId(before), afterContentId: contentId(after) }),
+  },
+});
+
+module.exports = { S, ID, home, transcript, cliDb, shell, result, ideDb, terminal, ideEdit, contentId };

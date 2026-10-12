@@ -4,7 +4,7 @@
 import { $, LABEL, SEV, T, VCOL, VLABEL, esc, fkey, srcLabel, state } from "./common.js";
 import { curS, needEngine, profileVerdicts, updateSession } from "./store.js";
 import { analyze, analyzeNow } from "./analysis.js";
-import { keptOutputs, pickTranscript, piDeps, profileSummary, readFile } from "./sessions.js";
+import { keptEdits, keptOutputs, pickTranscript, piDeps, profileSummary, readFile } from "./sessions.js";
 import { download } from "./calibration.js";
 
 export function initReview() {
@@ -110,7 +110,7 @@ export function initReview() {
     await updateSession(state.current, (x) => {
       const cfg = Lens.profile(x.profile);
       // the session's own conversation of the file, not the first one (fixed in 0.1.115)
-      const from = { cursorOutputs: x.source_outputs, cursorProject: x.source_project };
+      const from = { cursorOutputs: x.source_outputs, cursorEdits: x.source_edits, cursorProject: x.source_project };
       x.events = Lens.pickConversation(x.events, Lens.importAny(x.source_text, cfg, from)) || x.events;
       x.seg = null;
       x.importGen = Lens.IMPORT_GEN;
@@ -207,9 +207,13 @@ export async function reimport() {
   const sid = state.current,
     s = curS();
   if (!s) return;
-  // the text kept at import has no subagents in it: they are files next to the transcript (0.1.127)
-  let text = Lens.subagentsMissing(s) ? null : s.source_text,
+  // the text kept at import has no subagents in it, nor Cursor's files before and after an edit: they are read when
+  // the file is picked (0.1.127)
+  // (only for an import before 0.1.127: a later one has read the file already, with what it had)
+  const fromFile = (s.importGen || 0) < 9 && (Lens.subagentsMissing(s) || Lens.cursorEditsMissing(s));
+  let text = fromFile ? null : s.source_text,
     cursorOutputs = s.source_outputs,
+    cursorEdits = s.source_edits,
     cursorProject = s.source_project;
   if (!text) {
     const source = await chooseDialog(T("reimport_pick"), [
@@ -223,11 +227,12 @@ export async function reimport() {
     if (!r) return;
     text = r.text;
     cursorOutputs = r.cursorOutputs;
+    cursorEdits = r.cursorEdits;
     cursorProject = r.cursorProject;
   }
   const cfg = Lens.profile(s.profile);
   // a file with several conversations: the one closest to this session
-  const events = Lens.pickConversation(s.events, Lens.importAny(text, cfg, { cursorOutputs, cursorProject }));
+  const events = Lens.pickConversation(s.events, Lens.importAny(text, cfg, { cursorOutputs, cursorEdits, cursorProject }));
   if (!events) {
     await alertDialog(T("no_events"));
     return;
@@ -252,10 +257,11 @@ export async function reimport() {
     x.seg_error = null;
     x.seg_raw = null;
     // a kept text without the subagents is replaced, or dropped when the new one is too long to keep (0.1.127)
-    if (Lens.subagentsMissing(s) && text.length >= 400000) delete x.source_text;
-    else if ((!x.source_text || Lens.subagentsMissing(s)) && text.length < 400000) {
+    if (fromFile && text.length >= 400000) delete x.source_text;
+    else if ((!x.source_text || fromFile) && text.length < 400000) {
       x.source_text = text;
       x.source_outputs = keptOutputs(cursorOutputs);
+      x.source_edits = keptEdits(cursorEdits);
       x.source_project = cursorProject;
     }
     Object.assign(x, Lens.transcriptOrigin(text, { cursorProject })); // a session imported before 0.1.124 has neither
