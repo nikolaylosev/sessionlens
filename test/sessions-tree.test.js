@@ -434,6 +434,7 @@ test("Move to group…: a new group, then one there is, then out of it; the tree
   assert.deepEqual(await groups(h.tree), [
     ["Checkout", "2", ["b", "a"]],
     ["Login", "1", ["c"]],
+    ["Spike", "empty — drag sessions here", []], // its last session moved out: it stays (0.1.127)
   ]);
 
   answer = (items) => items.find((i) => i.label.startsWith("$(close)"));
@@ -574,17 +575,31 @@ test("+ New group in the title: a name, then the sessions with ticks; the tree s
     offered[1].items.filter((i) => i.picked).map((i) => i.id),
     ["c", "a"],
   );
-  assert.deepEqual(await groups(h.tree), [["Checkout", "3", ["c", "b", "a"]]], "one group, not checkout and Checkout");
+  assert.deepEqual(
+    await groups(h.tree),
+    [
+      ["Checkout", "3", ["c", "b", "a"]],
+      ["Login", "empty — drag sessions here", []],
+    ],
+    "one group, not checkout and Checkout; Login stays, empty (0.1.127)",
+  );
 });
 
-test("+ New group: Escape at the name, or no session ticked, makes nothing; with no sessions it says so", async () => {
-  let name;
-  const h = await host([session("a")], { inputBoxAnswer: () => name, quickPickAnswer: () => [] });
-  await h.registered.commands["sessionlens.newGroup"](); // Escape
+test("+ New group: Escape makes nothing; no session ticked makes an empty group (0.1.127); with no sessions it says so", async () => {
+  let name,
+    ticked = () => undefined;
+  const h = await host([session("a")], { inputBoxAnswer: () => name, quickPickAnswer: () => ticked() });
+  await h.registered.commands["sessionlens.newGroup"](); // Escape at the name
   name = "Spike";
+  await h.registered.commands["sessionlens.newGroup"](); // Escape at the sessions
+  assert.deepEqual(h.calls.configUpdates, []);
+  ticked = () => [];
   await h.registered.commands["sessionlens.newGroup"](); // nothing ticked
   assert.equal("group" in stored(h, "a"), false);
-  assert.deepEqual(h.calls.configUpdates, []);
+  assert.deepEqual(h.calls.configUpdates, [["sessionlens.sessionsGroupBy", "custom", h.vscode.ConfigurationTarget.Global]]);
+  const [spike, none] = await h.tree.getChildren();
+  assert.deepEqual([spike.label, spike.description, spike.contextValue], ["Spike", "empty — drag sessions here", "sessionlensGroupCustom"]);
+  assert.equal(none.label, "No group");
   const empty = await host([]);
   await empty.registered.commands["sessionlens.newGroup"]();
   assert.match(empty.calls.info[0], /no sessions yet/);
@@ -701,4 +716,97 @@ test("Open session…: a session's group is in its line, so typing the group's n
   assert.match(by.a, / · \$\(folder\) Checkout$/);
   assert.doesNotMatch(by.b, /folder/);
   assert.equal(offered.o.matchOnDescription, true);
+});
+
+test("an empty group (0.1.127): kept in groups.json for every window; drop onto it, rename it, delete it", async () => {
+  let rename = "Payments";
+  const h = await host([session("a"), session("b", { group: "Login" })], {
+    config: myGroups,
+    inputBoxAnswer: () => rename,
+    warningAnswer: (msg, o, button) => button,
+  });
+  const file = path.join(path.dirname(h.dir), "groups.json");
+  // another window made a group with no session: this one shows it
+  fs.writeFileSync(file, JSON.stringify({ groups: ["Checkout"] }));
+  const byLabel = async (label) => (await h.tree.getChildren()).find((g) => g.label === label);
+  assert.deepEqual(await groups(h.tree), [
+    ["Checkout", "empty — drag sessions here", []],
+    ["Login", "1", ["b"]],
+    ["No group", "1", ["a"]],
+  ]);
+  // drop a session onto it
+  const dnd = h.registered.treeViews.sessionlensSessionsTree.dragAndDropController;
+  const dt = new h.vscode.DataTransfer();
+  dnd.handleDrag(
+    (await treeSessions(h.tree)).filter((s) => s.id === "a"),
+    dt,
+  );
+  await dnd.handleDrop(await byLabel("Checkout"), dt);
+  assert.equal(stored(h, "a").group, "Checkout");
+  // b leaves Login: Login stays, empty
+  await h.registered.commands["sessionlens.moveToGroup"]({ id: "b" }); // Escape: no answer to the QuickPick
+  dnd.handleDrag(
+    (await treeSessions(h.tree)).filter((s) => s.id === "b"),
+    dt,
+  );
+  await dnd.handleDrop(await byLabel("Checkout"), dt);
+  assert.deepEqual(await groups(h.tree), [
+    ["Checkout", "2", ["b", "a"]],
+    ["Login", "empty — drag sessions here", []],
+  ]);
+  // rename the empty one; delete it
+  await h.registered.commands["sessionlens.renameGroup"](await byLabel("Login"));
+  assert.deepEqual(
+    (await groups(h.tree)).map((g) => g[0]),
+    ["Checkout", "Payments"],
+  );
+  await h.registered.commands["sessionlens.deleteGroup"](await byLabel("Payments"));
+  assert.deepEqual(
+    (await groups(h.tree)).map((g) => g[0]),
+    ["Checkout"],
+  );
+  // deleting a group with sessions: they go to No group, and the group does not come back as an empty one
+  await h.registered.commands["sessionlens.deleteGroup"](await byLabel("Checkout"));
+  assert.deepEqual(
+    (await groups(h.tree)).map((g) => g[0]),
+    ["No group"],
+  );
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")).groups, []);
+  // empty groups show only in My groups
+  const other = await host([session("a")], { config: { "sessionlens.sessionsGroupBy": "profile" } });
+  fs.writeFileSync(path.join(path.dirname(other.dir), "groups.json"), JSON.stringify({ groups: ["Checkout"] }));
+  assert.deepEqual(
+    (await groups(other.tree)).map((g) => g[0]),
+    ["qa-ts"],
+  );
+});
+
+test("another window's change of the groups redraws the tree when the panel shows again (0.1.127)", async () => {
+  const f = fakeVscode({ config: { global: myGroups } });
+  const ext = loadExtension(f.vscode);
+  ext._test.setNow(() => NOW);
+  const context = fakeContext({ globalState: { sessions: { a: session("a") } } });
+  ext.activate(context);
+  const wv = fakeWebviewView();
+  let shown = null;
+  wv.view.onDidChangeVisibility = (cb) => (shown = cb);
+  f.registered.views.sessionlensView.resolveWebviewView(wv.view);
+  await wv.send("secret:status", {});
+  const tree = f.registered.trees.sessionlensSessionsTree;
+  await tree.getChildren();
+  let fired = 0;
+  tree.onDidChangeTreeData(() => fired++);
+  const settle = () => new Promise((r) => setTimeout(r, 50));
+  wv.view.visible = true;
+  shown();
+  await settle();
+  assert.equal(fired, 0, "nothing changed: no redraw");
+  fs.writeFileSync(path.join(context.globalStorageUri.fsPath, "groups.json"), JSON.stringify({ groups: ["Checkout"] }));
+  shown();
+  await settle();
+  assert.ok(fired > 0, "the list of groups changed: redrawn");
+  assert.deepEqual(
+    (await groups(tree)).map((g) => g[0]),
+    ["Checkout", "No group"],
+  );
 });

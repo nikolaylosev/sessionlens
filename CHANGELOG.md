@@ -3,6 +3,10 @@
 ## 0.1.127
 
 ### Added
+- **Empty groups in My groups.** A group used to exist only while a session was in it, so you could not make a group
+  first and drag sessions onto it later, and moving a group's last session out made it disappear. Now a group stays
+  until **Delete group**: **+ New group** with no session ticked makes an empty one, and an empty group shows as "empty
+  — drag sessions here". Every VS Code window sees the same groups.
 - **Sessions grouped by project.** The button in the Sessions list's title now groups by **Project** too
   (`sessionlens.sessionsGroupBy`: `project`): the folder the agent worked in. That is where most of the files it wrote
   are, else the folder it started in, so a session started in a skill's folder that wrote tests in your project is in
