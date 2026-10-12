@@ -372,7 +372,9 @@ Key points:
 - **Verdict key** is `check@seq@first 40 characters of the message`. Renaming a check detaches old verdicts: the
   CHANGELOG says so whenever it happens. A message a new version words differently keeps its verdict since 0.1.116:
   after each analysis `Lens.carryVerdicts` moves a verdict whose key matches no finding to the one finding of the
-  same check and step that has none.
+  same check and step that has none. Since 0.1.127 it also follows a finding to another step (an import that numbers
+  the steps anew): to the finding of the same check and wording, numbers aside, when there are as many such findings
+  as such verdicts, paired in the order of steps. Import again's trial analysis works on a copy of the verdicts.
 - **Summary** (`*.meta.json`) is what the sidebar, Calibration and Rules need without loading every session. The
   host computes it from the session (RA §15.1). Schema 3 (0.1.116) added `started`, the time of the first step with
   one, which the effect of a moved rule uses, and `hiddenCount`, the findings calibration hides, which the Sessions

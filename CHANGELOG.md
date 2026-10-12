@@ -19,6 +19,12 @@
 - **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
   even when a later run had passed in between: with the generator's tests now read, writing new tests after a
   temporary check had failed once was a high finding. A run with no failures now ends that failure.
+- **Verdicts stay with their findings after Import again.** A verdict is stored with the step its finding is at, and
+  this version's import numbers the steps anew in most older sessions: it reads a subagent's steps and the files a
+  command wrote, and leaves out text Claude Code put into your turn. Your verdicts would have come loose from their
+  findings: on the owner's sessions 288 of 378. Now a verdict follows its finding to another step when the check and
+  the wording match; 348 of the 378 stay. Import again asks only about the ones that would really be lost (a finding
+  that is gone), and Cancel now leaves every verdict where it was.
 - **Only your own words are your messages.** Claude Code and the editor put text into your turn that you did not
   write: a slash command's record, the browser extension's instructions, "The user opened the file … in the IDE", a
   background task's notice, an image's caption, a skill's text. SessionLens took all of it for your messages: on the

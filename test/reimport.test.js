@@ -81,6 +81,7 @@ async function tab(opts = {}) {
   const events = opts.events || oldEvents(transcript());
   const findings = Lens.runChecks(events, cfg).map((f) => Object.assign(f, { source: "formal" }));
   const claim = findings.find((f) => f.check === "pass_claim_without_run");
+  const more = (opts.alsoOn || []).map((c) => findings.find((f) => f.check === c));
   const s = {
     id: "reimp1",
     name: "old session",
@@ -90,7 +91,7 @@ async function tab(opts = {}) {
     created: "2026-09-01T00:00:00.000Z",
     events,
     findings,
-    verdicts: { [Lens.fkey(claim)]: { v: "ok", note: "seen", at: "2026-09-01T00:00:00.000Z" } },
+    verdicts: Object.fromEntries([claim, ...more].map((f) => [Lens.fkey(f), { v: "ok", note: "seen", at: "2026-09-01T00:00:00.000Z" }])),
     spec: "R1 the discount is applied",
     source_text: opts.sourceText || "",
   };
@@ -104,7 +105,7 @@ async function tab(opts = {}) {
   });
   const p = await openPage(host, { sessionId: s.id });
   await p.ready();
-  return { dir, p, s, claimKey: Lens.fkey(claim) };
+  return { dir, p, s, claimKey: Lens.fkey(claim), moreKeys: more.map(Lens.fkey) };
 }
 // what is on disk, read the way another window would
 async function disk(dir) {
@@ -265,13 +266,43 @@ test("Import again: a pick the host refuses is said in a dialog, nothing is writ
   p.close();
 });
 
-test("Import again that would detach verdicts asks first (the steps are numbered differently now)", async () => {
+test("Import again with the steps numbered differently: the verdict moves with its finding, nothing is asked (0.1.127)", async () => {
   const text = transcript();
-  // one event fewer at the start, as when an older import skipped an event the new one keeps (a Codex deletion)
+  // one event fewer at the start, as when an older import kept an event the new one leaves out (Claude Code's own text)
   const events = oldEvents(text)
     .slice(1)
     .map((e, i) => Object.assign(e, { seq: i }));
   const { dir, p, claimKey } = await tab({ events, sourceText: text });
+  const asked = [];
+  p.window.confirmDialog = async (msg) => (asked.push(msg), true);
+  const n0 = puts(p).length;
+  click(p, "#reimport-go");
+  await until(() => puts(p).length > n0);
+  await p.idle();
+  assert.deepEqual(asked, [], "no verdict is lost, so nothing is asked");
+  const { session: s } = await disk(dir);
+  assert.equal(s.importGen, Lens.IMPORT_GEN);
+  const claim = s.findings.find((f) => f.check === "pass_claim_without_run");
+  assert.notEqual(Lens.fkey(claim), claimKey, "the step's number changed");
+  assert.deepEqual(s.verdicts[Lens.fkey(claim)], { v: "ok", note: "seen", at: "2026-09-01T00:00:00.000Z" }, "the verdict followed it");
+  assert.equal(s.verdicts[claimKey], undefined);
+  p.close();
+});
+
+test("Import again that would detach a verdict asks first; Cancel leaves the verdicts as they were", async () => {
+  // the new transcript runs the tests before it says they pass: the finding the verdict is on is gone
+  const rec = (o) => JSON.stringify(o);
+  const lines = transcript().split("\n");
+  const text = [
+    ...lines.slice(0, -1),
+    rec({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "r2", name: "Bash", input: { command: "npx playwright test" } }] },
+    }),
+    rec({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "r2", content: "1 passed" }] } }),
+    lines.at(-1),
+  ].join("\n");
+  const { dir, p, claimKey } = await tab({ events: oldEvents(transcript()), sourceText: text });
   const asked = [];
   let answer = false;
   p.window.confirmDialog = async (msg) => (asked.push(msg), answer);
@@ -281,6 +312,7 @@ test("Import again that would detach verdicts asks first (the steps are numbered
   await p.idle();
   assert.match(asked[0], /^1 verdict would no longer match a finding/);
   assert.equal(puts(p).length, n0, "cancelled: nothing written");
+  assert.ok((await disk(dir)).session.verdicts[claimKey], "the verdict is where it was");
   answer = true;
   click(p, "#reimport-go");
   await until(() => puts(p).length > n0);
@@ -289,9 +321,45 @@ test("Import again that would detach verdicts asks first (the steps are numbered
   assert.equal(s.importGen, Lens.IMPORT_GEN);
   assert.ok(s.verdicts[claimKey], "the verdict itself is kept");
   assert.equal(
-    s.findings.some((f) => Lens.fkey(f) === claimKey),
+    s.findings.some((f) => f.check === "pass_claim_without_run"),
     false,
   );
+  p.close();
+});
+
+test("Cancel leaves the verdicts as they were, also one the trial import moved (0.1.127)", async () => {
+  // a step more at the start (every finding moves) and a green run before the claim (the claim's finding is gone)
+  const rec = (o) => JSON.stringify(o);
+  const lines = transcript().split("\n");
+  const text = [
+    lines[0],
+    rec({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "rd", name: "Read", input: { file_path: "/w/e2e/cart.spec.ts" } }] },
+    }),
+    rec({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "rd", content: "…" }] } }),
+    ...lines.slice(1, -1),
+    rec({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "r2", name: "Bash", input: { command: "npx playwright test" } }] },
+    }),
+    rec({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "r2", content: "1 passed" }] } }),
+    lines.at(-1),
+  ].join("\n");
+  const { dir, p, moreKeys } = await tab({ events: oldEvents(transcript()), sourceText: text, alsoOn: ["fix_after_fail_without_triage"] });
+  const asked = [];
+  p.window.confirmDialog = async (msg) => (asked.push(msg), false);
+  click(p, "#reimport-go");
+  await until(() => asked.length);
+  await p.idle();
+  assert.match(asked[0], /^1 verdict would no longer match a finding/, "the claim's; the other one would move");
+  // a verdict given after Cancel writes the session: the other verdict is still on its finding
+  const n0 = puts(p).length;
+  click(p, '.f[data-k^="pass_claim_without_run@"] .v-fp');
+  await until(() => puts(p).length > n0);
+  await p.idle();
+  const { session: s } = await disk(dir);
+  assert.deepEqual(s.verdicts[moreKeys[0]], { v: "ok", note: "seen", at: "2026-09-01T00:00:00.000Z" });
   p.close();
 });
 

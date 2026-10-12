@@ -3393,23 +3393,47 @@
      finding differently (0.1.113: "skip / xfail / retry added" became "skip / retry added"), the analysis after the
      update makes a finding with a new key, and the verdict would no longer count. carryVerdicts() moves such a verdict
      to the finding of the same check and step, if there is exactly one without a verdict of its own; a finding that is
-     really gone keeps nothing. Runs after every analysis, over the findings shown and hidden. → how many moved */
+     really gone keeps nothing. Since 0.1.127 a verdict also follows its finding to another step: an import that reads
+     more steps (a subagent's, a file a command wrote) or fewer (Claude Code's own text in the person's turn) numbers
+     them anew. Then it is the finding of the same check and the same wording (its numbers aside), when there are as
+     many such findings as such verdicts: the first verdict to the first finding, and so on. Runs after every
+     analysis, over the findings shown and hidden. → how many moved */
   function carryVerdicts(s) {
     const verdicts = s && s.verdicts;
     if (!verdicts || typeof verdicts !== "object") return 0;
     const all = [...(Array.isArray(s.findings) ? s.findings : []), ...(Array.isArray(s.calibHidden) ? s.calibHidden : [])];
     const now = new Set(all.map(fkey));
     let moved = 0;
-    for (const k of Object.keys(verdicts)) {
-      if (now.has(k)) continue;
-      const [check, seq] = k.split("@");
-      const free = all.filter((f) => f.check === check && String(f.seq) === seq && !verdicts[fkey(f)]);
-      if (free.length !== 1) continue;
-      const nk = fkey(free[0]);
+    const move = (k, f) => {
+      const nk = fkey(f);
       verdicts[nk] = verdicts[k];
       delete verdicts[k];
       now.add(nk);
       moved++;
+    };
+    // the same step, new wording
+    for (const k of Object.keys(verdicts)) {
+      if (now.has(k)) continue;
+      const [check, seq] = k.split("@");
+      const free = all.filter((f) => f.check === check && String(f.seq) === seq && !verdicts[fkey(f)]);
+      if (free.length === 1) move(k, free[0]);
+    }
+    /* another step, the same check and wording (the numbers in the text, a step or a count, may have moved with it):
+       as many old as new ones, paired in the order of steps; one and one is the common case */
+    const words = (k) => k.split("@").slice(2).join("@").replace(/\d+/g, "#");
+    const groups = new Map();
+    const group = (check, w) => {
+      const k = check + "@" + w;
+      if (!groups.has(k)) groups.set(k, { old: [], now: [] });
+      return groups.get(k);
+    };
+    for (const k of Object.keys(verdicts)) if (!now.has(k)) group(k.split("@")[0], words(k)).old.push(k);
+    for (const f of all) if (!verdicts[fkey(f)]) group(f.check, words(fkey(f))).now.push(f);
+    for (const g of groups.values()) {
+      if (!g.old.length || g.old.length !== g.now.length) continue;
+      g.old.sort((a, b) => Number(a.split("@")[1]) - Number(b.split("@")[1]));
+      g.now.sort((a, b) => a.seq - b.seq);
+      g.old.forEach((k, i) => move(k, g.now[i]));
     }
     return moved;
   }
