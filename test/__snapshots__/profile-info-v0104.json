@@ -159,6 +159,11 @@
       "engineOnly": true
      },
      {
+      "name": "icon_glyph_locator",
+      "off": false,
+      "engineOnly": false
+     },
+     {
       "name": "no_assertion_after_action",
       "off": false,
       "engineOnly": true
@@ -221,7 +226,7 @@
     ]
    }
   ],
-  "count": 36,
+  "count": 37,
   "engine": {
    "kind": "eslint",
    "state": "on"
@@ -398,6 +403,11 @@
       "engineOnly": true
      },
      {
+      "name": "icon_glyph_locator",
+      "off": false,
+      "engineOnly": false
+     },
+     {
       "name": "focused_test",
       "off": false,
       "engineOnly": false
@@ -455,7 +465,7 @@
     ]
    }
   ],
-  "count": 34,
+  "count": 35,
   "engine": {
    "kind": "eslint-cypress",
    "state": "on"
