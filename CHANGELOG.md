@@ -40,6 +40,9 @@
   tests after a temporary check had failed once was a high finding. A run with no failures now ends that failure when
   it ran the failed tests (their files are in its command) or as many tests as the failed run had; a run of another
   test does not (a healer first runs one test it trusts: 1 passed, after 17 of 19 had failed).
+- **The same assertion before and after an action is no "duplicate assert".** A test that checks the counter, clicks,
+  and checks the counter again proves the click left it alone; it was a low `duplicate_assert`, six times in one
+  Playwright session. Now a repeat counts only with nothing but assertions between the two.
 - **A report of a red run is no "claims the tests pass".** After a run with a failure, a message like «"Add a single
   todo" падает… seed проходит» was a high finding: it has "проходит" in it, though it says which test fails. Now, when
   the last run was red and the message says a test fails, it is a report of that run. "Nothing fails", "0 failed" and
