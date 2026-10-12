@@ -10,6 +10,15 @@
   timeline, in order of time, each marked with the agent that made it. What the main agent tells a subagent is not
   taken for your message. A session imported before that started subagents shows **Import again**, which asks for the
   file. A transcript dropped onto the panel or pasted has no subagents.
+- **Playwright's test agents are read.** The planner, generator and healer that `npx playwright init-agents` sets up
+  work through Playwright's MCP server: the generator writes a test with `generator_write_test`, the healer runs tests
+  with `test_run` and `test_debug`, the planner saves its plan with `planner_save_plan`. SessionLens took these for
+  plain tool calls, so the generated tests were never checked, their runs did not count, and a test run could be taken
+  for a look at the page in the browser. Now they are a write of the test, a test run with its result, and a write of
+  the plan. A session imported before with such steps shows **Import again**.
+- **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
+  even when a later run had passed in between: with the generator's tests now read, writing new tests after a
+  temporary check had failed once was a high finding. A run with no failures now ends that failure.
 
 ## 0.1.126
 
