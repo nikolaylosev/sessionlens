@@ -432,6 +432,12 @@ flowchart TD
   list reporter's output parsed as usual); a path from the project folder is made absolute with the session's `cwd`
   (`toolInput()` / `playwrightTestTool()` in `lens.js`). The server's `browser_*` tools are a look at the page
   (`browserLook`); its setup, log, list and test tools are housekeeping.
+  **A file a shell command writes from a here-document** (since 0.1.127; `heredocWrites()` in `lens.js`): `cat > f
+  <<'EOF' … EOF`, `cat <<EOF > f`, `cat >> f` and `tee [-a] f` become a `write` (an `edit` for `>>`, only of a file the
+  session saw) before the command's own step, the path resolved from a `cd` before it in the command or from `cwd`.
+  Not a here-document inside `$(…)` (a commit message), one fed to another program (`python3 - <<EOF`: what it writes
+  is not known, nor is a Python or `sed -i` edit), `cat <<EOF` with no file, or a scratch file: a temporary folder,
+  `*.tmp.*`, a path from a shell variable. Cursor's shell commands are read the same way.
 - **Codex `rollout-*.jsonl`** gives file changes as unified diffs, applied to the last known content; a deleted file
   becomes a `delete` event, and a moved file (an update with `move_path`, since 0.1.122) an `edit` of its new name
   from the old text. Up to Codex 0.154 a change is an `event_msg` `patch_apply_end`; from 0.155 (Sept 2026) it

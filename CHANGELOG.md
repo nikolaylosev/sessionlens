@@ -19,6 +19,13 @@
 - **"Fix after a failure with no triage" ends at a green run.** An edit long after a failing run counted as its fix
   even when a later run had passed in between: with the generator's tests now read, writing new tests after a
   temporary check had failed once was a high finding. A run with no failures now ends that failure.
+- **A file written by a shell command is read.** An agent often writes a file with a here-document,
+  `cat > tests/pages/todo-page.ts <<'EOF' … EOF`, and SessionLens saw only a command: the file's code was not checked,
+  and a weakened assertion in it was not seen. Now `cat > f`, `cat <<EOF > f`, `cat >> f` and `tee f` with a
+  here-document are a write of that file, before the command. A here-document in a commit message, one given to another
+  program (`python3 - <<EOF`) and the agent's scratch files (a temporary folder, `*.tmp.*`) are not. A file changed by a
+  Python script or `sed -i` is still not seen. A session imported before with such a command shows **Import again**;
+  the steps after such a file get new numbers, so a verdict on a later finding may have to be given again.
 
 ## 0.1.126
 
