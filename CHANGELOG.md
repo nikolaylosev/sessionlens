@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.128
+
+### Changed
+- **The qa-ts profile says Playwright.** In the profile list it read "TypeScript / JavaScript", so a Playwright user had to
+  guess which profile was theirs; Cypress and Detox are named in theirs. It now reads "Playwright, Jest, Vitest,
+  TypeScript / JavaScript".
+
 ## 0.1.127
 
 ### Added
