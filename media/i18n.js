@@ -520,7 +520,7 @@
       s_reset_all_done: "Done — everything cleared.",
       unverified_opt: " (unvalidated)",
       // ---- phase 7: what a profile checks (under the Profile list) ----
-      "profile_desc_qa-ts": "TypeScript / JavaScript",
+      "profile_desc_qa-ts": "Playwright, Jest, Vitest, TypeScript / JavaScript",
       "profile_desc_qa-cypress": "Cypress, TypeScript / JavaScript",
       "profile_desc_qa-detox": "Detox, TypeScript / JavaScript",
       "profile_desc_qa-python": "Python",
