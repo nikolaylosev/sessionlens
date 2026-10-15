@@ -4,7 +4,7 @@
 
 ### Changed
 - **A new icon.** The extension's icon, in the Marketplace, Open VSX and on a session's editor tab, is now a cat with
-  a magnifying glass over a transcript.
+  a magnifying glass over a transcript, and the activity bar shows the same cat in outline, in your theme's colour.
 - **The qa-ts profile says Playwright.** In the profile list it read "TypeScript / JavaScript", so a Playwright user had to
   guess which profile was theirs; Cypress and Detox are named in theirs. It now reads "Playwright, Jest, Vitest,
   TypeScript / JavaScript".
