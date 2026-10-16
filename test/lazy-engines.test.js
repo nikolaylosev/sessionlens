@@ -110,6 +110,20 @@ test("sidebar import of qa-java: loads tree-sitter.js and lint-java.js, boots wi
   sb.close();
 });
 
+test("sidebar import of qa-python: loads tree-sitter, Ruff and lint-python.js, boots with the URIs of both .wasm (0.1.129)", async () => {
+  const host = hostWith("qa-python");
+  const sb = await openPage(host, { engines: { "lint-python.js": fakeTreeSitterEngine("LensLintPython", "python/swallowed-exception") } });
+  await sb.ready();
+  await importVia(sb, "qa-python");
+  assert.deepEqual(sb.engineLoads, ["tree-sitter.js", "vendor-ruff.js", "lint-ruff.js", "lint-python.js"]);
+  const booted = sb.window.eval("LensLintPython.booted");
+  assert.equal(booted.length, 1);
+  assert.match(booted[0].pythonWasmUrl, /media[\\/]tree-sitter-python\.wasm$/);
+  assert.match(booted[0].ruffWasmUrl, /media[\\/]ruff\.wasm$/);
+  assert.deepEqual(sb.errors, []);
+  sb.close();
+});
+
 test("an idle sidebar loads no engine; a tab loads only its language's files; opening a session writes nothing", async () => {
   const host = hostWith("qa-java");
   const imp = await openPage(host, { engines: { "lint-java.js": JAVA, "vendor-eslint.js": FAKE_ESLINT } });
@@ -131,7 +145,11 @@ test("an idle sidebar loads no engine; a tab loads only its language's files; op
   assert.equal(puts(sb).length, 0);
 
   // qa-api: the Python engine for its .py files (0.1.129)
-  const expect = { "qa-java": ["tree-sitter.js", "lint-java.js"], "qa-ts": ["vendor-eslint.js"], "qa-api": ["tree-sitter.js", "lint-python.js"] };
+  const expect = {
+    "qa-java": ["tree-sitter.js", "lint-java.js"],
+    "qa-ts": ["vendor-eslint.js"],
+    "qa-api": ["tree-sitter.js", "vendor-ruff.js", "lint-ruff.js", "lint-python.js"],
+  };
   for (const [p, files] of Object.entries(expect)) {
     const tab = await openPage(host, { sessionId: ids[p], engines: { "lint-java.js": JAVA, "vendor-eslint.js": FAKE_ESLINT } });
     await tab.ready();

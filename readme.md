@@ -57,7 +57,7 @@ transcript ──▶ Sessions ──▶ Review ──▶ verdicts ──▶ Cali
                         (wording, severity, on/off of each check)
 ```
 
-- **Checks** look at the session and produce findings. Most are plain pattern checks that run instantly and offline. The optional model review and the static-analysis pass for `qa-ts`, `qa-cypress`, `qa-detox` (ESLint), `qa-java`/`qa-c#`/`qa-python` (tree-sitter) and `qa-robot` (a small hand-written parser) add more.
+- **Checks** look at the session and produce findings. Most are plain pattern checks that run instantly and offline. The optional model review and the static-analysis pass for `qa-ts`, `qa-cypress`, `qa-detox` (ESLint), `qa-java`/`qa-c#`/`qa-python` (tree-sitter; for Python also Ruff) and `qa-robot` (a small hand-written parser) add more.
 - **Verdicts** are yours. They are the ground truth SessionLens learns from.
 - **Calibration** measures how often each check is right on your sessions and proposes rules from the findings you keep confirming.
 - **Rules** is where you decide how each check is worded and how loudly it speaks.
@@ -106,7 +106,7 @@ Everything about one session. It opens in its own editor tab when you click a se
 Learning from your verdicts.
 
 - **Check precision:** for every check and source (regex, lint, gherkin, spec, model, imported; lint is static analysis, whichever engine ran), how many findings you confirmed or rejected. A check with at least 10 verdicts for one source and precision below 50% is automatically demoted to low severity for that source. Below 30% it is switched off for that source. So when ESLint and a regex check report under the same name, for example `weak_assert`, a poor record of one never switches off the other. The demo session's verdicts never count here; until you have sessions of your own, the table says so.
-  - **What is calibrated:** the regex checks, static analysis (ESLint, tree-sitter, Robot Framework), the Gherkin checks, and two specification checks that are guesses: `test_without_requirement` and `out_of_scope_tested`.
+  - **What is calibrated:** the regex checks, static analysis (ESLint, tree-sitter, Ruff, Robot Framework), the Gherkin checks, and two specification checks that are guesses: `test_without_requirement` and `out_of_scope_tested`.
   - **What is never switched off,** marked **not calibrated** in the table with the reason on hover: the model's findings (their precision depends on the model and the prompt, not on the check; the table still shows it, so you can compare models and prompts), `no_spec` and `spec_uncovered` (facts, not guesses), `hardcoded_secret` (a missed token costs more than a false alarm; untick it on the Rules tab if you need to), and imported findings.
   - A switched-off check still runs: its findings are kept out of sight and its verdicts keep counting, so it stays off until you decide otherwise. The line **Disabled for low precision** under a session's findings names each one with its source.
   - **To bring one back,** tick it on the **Rules** tab. A check you tick on there is never switched off by calibration, and the table and the Rules tab mark it **on by hand**.
@@ -152,7 +152,7 @@ Only the instruction part is editable. The specification, code and transcript ar
 - **Minimum gap between requests:** in milliseconds. The default 6500 keeps you under the free Gemini limit of about 10 requests a minute. Rate-limit errors are retried automatically.
 - **Code limit in the prompt:** how many characters of code are sent to the model (40000 by default). Lower it for small local models.
 - **Verification call:** on by default. It doubles the number of requests and makes model findings noticeably more precise.
-- **Static analysis:** on by default. `qa-ts` (ESLint via eslint-plugin-playwright), `qa-cypress` (ESLint via eslint-plugin-cypress), `qa-detox` (ESLint, hand-authored rules — see [Detox](#detox)), `qa-java`/`qa-c#`/`qa-python` (a real parse tree via tree-sitter, also hand-authored — see [Java](#java), [C#](#c), [Python](#python)), `qa-api` (the Python engine for its `.py` files: an API test on pytest gets a test with no assertion and an exception swallowed too), and `qa-robot` (a small hand-written parser — see [Robot Framework](#robot-framework)). Each engine is loaded the first time a session of its profile is analyzed, and only in the page that analyzes it (a session tab, or the sidebar during an import); until then the finding list says "static analysis: engine loading…". With static analysis off, nothing is loaded.
+- **Static analysis:** on by default. `qa-ts` (ESLint via eslint-plugin-playwright), `qa-cypress` (ESLint via eslint-plugin-cypress), `qa-detox` (ESLint, hand-authored rules — see [Detox](#detox)), `qa-java`/`qa-c#`/`qa-python` (a real parse tree via tree-sitter, also hand-authored — see [Java](#java), [C#](#c), [Python](#python); Python also gets [Ruff](https://docs.astral.sh/ruff/)), `qa-api` (the Python engine for its `.py` files: an API test on pytest gets a test with no assertion and an exception swallowed too), and `qa-robot` (a small hand-written parser — see [Robot Framework](#robot-framework)). Each engine is loaded the first time a session of its profile is analyzed, and only in the page that analyzes it (a session tab, or the sidebar during an import); until then the finding list says "static analysis: engine loading…". With static analysis off, nothing is loaded.
 - **Hide the "Try a demo session" button:** off by default. Tick it once you have sessions of your own and no longer need the demo on the Sessions tab. It applies at once; a demo session you already opened stays in the list until you delete it.
 - **Debug model:** off by default. Turn it on to see **Model request and reply** — the exact prompt sent to the model and its raw reply — in a session (below Transcript) and on the Calibration tab. It's meant for troubleshooting a request, not everyday use: the prompts include the session's code and transcript excerpts.
 - **Reset settings:** **Reset settings to defaults** puts every setting on this page back to what a fresh install has: theme (it follows VS Code again), all configured models and their keys, the model per request, the local server and Qwen addresses, request pacing, code limit, static analysis, verification, the debug model toggle and the Hide the "Try a demo session" button checkbox. The four VS Code settings above are set back to their defaults too. It asks for confirmation first, because saved keys are removed. Sessions, verdicts, rule wording, prompts and the profile are kept. The Claude Code, Codex and Cursor CLI paths are VS Code settings and are not changed.
@@ -305,6 +305,19 @@ Only for the `qa-python` profile, via tree-sitter — three of the four Java/C# 
 | `no_assertion_after_action` | High | A `test_…` function or method calls other code but has no `assert` statement, `assert*(...)` call, or `with pytest.raises(...)`/`with pytest.warns(...)` anywhere — nothing is actually verified. Functions decorated `@pytest.fixture` are never checked, even if named `test_…` |
 | `swallowed_exception` | High | An `except:` block whose body is only `pass` or `...` |
 | `assert_args_reversed` | Medium | unittest-style `self.assertEqual(actualValue, 5)` — the literal usually goes first. Does not apply to a plain `assert` statement, which has no fixed argument order |
+
+Since 0.1.129 the Python engine also runs [Ruff](https://docs.astral.sh/ruff/) (in `qa-python`, and on `qa-api`'s `.py` files). Its rules report under checks SessionLens already has; a finding's tag says `ruff`:
+
+| Ruff rule | Check | Default | Raised when |
+|---|---|---|---|
+| `B015` | `weak_assert` | High | A comparison with no `assert`: `r.status_code == 201` on a line of its own checks nothing |
+| `PT011`, `B017` | `weak_assert` | Medium | `pytest.raises(Exception)`, or `pytest.raises(ValueError)` with no `match=`: any such error passes the test |
+| `PT018` | `assertion_roulette` | Low | `assert a and b`: when it fails, it does not say which part |
+| `BLE001`, `E722` | `swallowed_exception` | High | `except Exception:` or a bare `except:` that does not re-raise: it also catches the test's own `AssertionError` (once per line with tree-sitter's `except: pass`) |
+| `T100` | `debug_leftover` | Medium | `breakpoint()`, `pdb.set_trace()` (replaces the regex finding) |
+| `T201`, `T203` | `debug_leftover` | Low | `print()`, `pprint()` left in a test |
+
+Left out on purpose: `PLR2004` (it would report every `== 200` of an API test), `S105`/`S106` (a test user's password, which no profile counts as a secret), `PT015`/`B011` (`assert False` is a deliberate fail). If Ruff does not load, the engine runs on tree-sitter alone and the note under the findings says "tree-sitter" instead of "tree-sitter and Ruff".
 
 #### Robot Framework
 

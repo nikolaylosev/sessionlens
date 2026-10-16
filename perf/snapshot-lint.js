@@ -121,12 +121,18 @@ async function loadEngines() {
   global.TreeSitter = require(path.join(MEDIA, "tree-sitter.js"));
   global.LensLintJava = require(path.join(MEDIA, "lint-java.js"));
   global.LensLintCSharp = require(path.join(MEDIA, "lint-csharp.js"));
+  global.LensLintRuff = require(path.join(MEDIA, "lint-ruff.js")); // Ruff, booted by LensLintPython (0.1.129)
   global.LensLintPython = require(path.join(MEDIA, "lint-python.js"));
   global.LensLintRobot = require(path.join(MEDIA, "lint-robot.js"));
   const core = () => path.join(MEDIA, "tree-sitter.wasm");
   await global.LensLintJava.boot({ locateCore: core, javaWasmUrl: path.join(MEDIA, "tree-sitter-java.wasm") });
   await global.LensLintCSharp.boot({ locateCore: core, csharpWasmUrl: path.join(MEDIA, "tree-sitter-c_sharp.wasm") });
-  await global.LensLintPython.boot({ locateCore: core, pythonWasmUrl: path.join(MEDIA, "tree-sitter-python.wasm") });
+  await global.LensLintPython.boot({
+    locateCore: core,
+    pythonWasmUrl: path.join(MEDIA, "tree-sitter-python.wasm"),
+    ruffWasmBytes: fs.readFileSync(path.join(MEDIA, "ruff.wasm")),
+  });
+  if (!global.LensLintRuff.isReady()) throw new Error(`LensLintRuff did not boot: ${global.LensLintRuff.bootError()}`);
   for (const g of ["LensLintJava", "LensLintCSharp", "LensLintPython"])
     if (!global[g].isReady()) throw new Error(`${g} did not boot: ${global[g].bootError()}`);
   engines = true;

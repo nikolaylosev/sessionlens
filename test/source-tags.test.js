@@ -77,6 +77,15 @@ test("a lint finding names the engine of its session's profile; the filter says 
     assert.deepEqual(tags["weak_assert #1"], [engine, "srctag lint"], profile);
     assert.ok(chips.includes("lint") && !chips.includes("eslint"), `${profile}: ${chips}`);
   }
+  // the Python engine is two (0.1.129): a Ruff rule's finding says ruff, tree-sitter's says tree-sitter
+  for (const profile of ["qa-python", "qa-api"]) {
+    const { tags } = await tagsOf(profile, [
+      Object.assign(F("weak_assert", "high", 1, "lint"), { rule: "ruff/B015" }),
+      Object.assign(F("swallowed_exception", "high", 2, "lint"), { rule: "python/swallowed-exception" }),
+    ]);
+    assert.deepEqual(tags["weak_assert #1"], ["ruff", "srctag lint"], profile);
+    assert.deepEqual(tags["swallowed_exception #2"], ["tree-sitter", "srctag lint"], profile);
+  }
 });
 
 test("every colour the stylesheet uses is defined, for the light and the dark theme", () => {

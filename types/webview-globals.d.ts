@@ -16,6 +16,8 @@ declare const LensLintDetox: any;
 declare const LensLintJava: any;
 declare const LensLintCSharp: any;
 declare const LensLintPython: any;
+declare const LensLintRuff: any;
+declare const RuffWasm: any;
 declare const TreeSitter: any;
 declare const chrome: any;
 declare const I18N: any;

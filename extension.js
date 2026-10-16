@@ -37,6 +37,8 @@ const ENGINE_SCRIPTS = [
   "tree-sitter.js",
   "lint-java.js",
   "lint-csharp.js",
+  "vendor-ruff.js",
+  "lint-ruff.js",
   "lint-python.js",
 ];
 // Binary WASM assets are not <script>s — they can't go through SCRIPT_FILES/asWebviewUri-in-src-attribute
@@ -45,7 +47,8 @@ const ENGINE_SCRIPTS = [
 // the same way the open-session id already does below: as a data-attribute on <body>, read into a plain
 // global by vscode-bridge.js before app.js runs (an inline <script> here would be silently blocked —
 // script-src has no 'unsafe-inline'). tree-sitter.wasm (the core runtime) is shared by all three grammars.
-const WASM_ASSETS = ["tree-sitter.wasm", "tree-sitter-java.wasm", "tree-sitter-c_sharp.wasm", "tree-sitter-python.wasm"];
+// ruff.wasm (0.1.129) is Ruff's, the second half of the Python engine (lint-ruff.js).
+const WASM_ASSETS = ["tree-sitter.wasm", "tree-sitter-java.wasm", "tree-sitter-c_sharp.wasm", "tree-sitter-python.wasm", "ruff.wasm"];
 
 function buildHtml(webview, extensionUri, initialSessionId) {
   const mediaUri = vscode.Uri.joinPath(extensionUri, "media");

@@ -249,7 +249,7 @@ const EXPECTED = {
   "2 page.pause (Playwright)": ["debug_leftover/lint <playwright/no-page-pause>"],
   "2 debugger (Playwright)": ["debug_leftover/formal"],
   "2 cy.pause and cy.debug (Cypress)": ["debug_leftover/lint <cypress/no-debug>", "debug_leftover/lint <cypress/no-pause>"],
-  "2 breakpoint (Python)": ["debug_leftover/formal"],
+  "2 breakpoint (Python)": ["debug_leftover/lint <ruff/T100>"], // Ruff's T100 replaces the regex finding (0.1.129)
   "2 duplicate hooks (Playwright)": [],
   "2 nested test.step (Playwright)": [],
   "2 .and() (Cypress)": [],

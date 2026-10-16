@@ -84,6 +84,7 @@ test("every registry entry is named in another test file", () => {
 const KEEP_BOTH = {
   weak_assert: "regex: toBeDefined()/toBeTruthy()/expect(true).toBe(true); engines: no expect at all, a useless .not, a malformed expect",
   cypress_async_test: "regex: an untitled before/beforeEach and any after/afterEach; engine: an async it() and a titled before/beforeEach",
+  assertion_roulette: "regex: many assertions without a message in one test; Ruff (PT018): one `assert a and b` (0.1.129)",
 };
 
 test("SUPERSEDES agrees with the registry's sources (§6.3, §11.5)", () => {

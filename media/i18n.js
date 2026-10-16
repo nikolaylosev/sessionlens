@@ -539,6 +539,7 @@
       "pi_eng_eslint-cypress": "ESLint with the Cypress plugin",
       "pi_eng_eslint-detox": "ESLint with the Detox plugin",
       "pi_eng_tree-sitter": "tree-sitter",
+      "pi_eng_tree-sitter-ruff": "tree-sitter and Ruff",
       "pi_eng_robot-parser": "built-in Robot Framework parser",
       pi_eng_none: "none for this profile",
       pi_eng_files: "{ext} files",

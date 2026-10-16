@@ -7,6 +7,14 @@
   pytest got the API checks but not "test has no assertions" or "exception swallowed" (`except: pass`), which the
   `qa-python` profile finds. Now `qa-api` runs the Python engine on its `.py` files. **What this profile checks** says
   "tree-sitter (.py files)".
+- **Ruff in the Python engine.** `qa-python`, and `qa-api` on its `.py` files, now also run
+  [Ruff](https://docs.astral.sh/ruff/), the Python linter, next to tree-sitter. Its rules report under the checks
+  SessionLens already has: a comparison with no `assert` (`r.status_code == 201` on a line of its own) and a
+  `pytest.raises(Exception)` are `weak_assert`; `except Exception:` and a bare `except:` that also catch the test's
+  `AssertionError` are `swallowed_exception`; `assert a and b` is `assertion_roulette`; `breakpoint()`, `print()`
+  and `pprint()` are `debug_leftover`. A Ruff finding's tag says `ruff`. The note under the findings says
+  "tree-sitter and Ruff"; if Ruff does not load, the engine runs on tree-sitter alone and says "tree-sitter". The
+  extension is about 3.8 MB larger; Ruff is loaded only by a page that analyzes a Python session.
 - **`qa-python` reports a hard-coded secret and a hard-coded host.** `hardcoded_secret` (a key, a token, a JWT in the
   code) and `hardcoded_base_url` (a real host in a test instead of configuration) were in the TypeScript, Cypress,
   Detox, API and mobile profiles, not in `qa-python`, so a pytest file with an API key or a staging URL gave nothing.

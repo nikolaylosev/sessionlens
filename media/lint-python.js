@@ -17,7 +17,10 @@
    `assert` statement (not just an assert*-named call) and a `with pytest.raises(...)`/`with
    pytest.warns(...)` block as evidence something was actually checked. `swallowed-exception` maps to
    Python's `except: pass` (Python can't have a truly empty block — `pass`, or a bare `...`, is its
-   equivalent of an empty body). */
+   equivalent of an empty body).
+
+   Since 0.1.129 Ruff (lint-ruff.js) is the engine's second half: boot() boots both, the engine is ready once
+   tree-sitter is and Ruff has loaded or failed to, and lint() adds Ruff's messages for the "ruff/…" rules. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else /** @type {any} */ (root).LensLintPython = factory();
@@ -29,16 +32,26 @@
     booting = null,
     cachedTS = null;
 
+  // Ruff's layer, when its files are loaded (the page: lint.js's ENGINE_FILES; Node: a global the tests set)
+  const ruff = () => (typeof LensLintRuff !== "undefined" ? /** @type {any} */ (LensLintRuff) : null);
+
   function boot(opts) {
     opts = opts || {};
     if (booting) return booting;
+    const r = ruff();
+    if (r) booting = Promise.all([bootTreeSitter(opts), r.boot(opts)]).then(() => undefined);
+    else booting = bootTreeSitter(opts);
+    return booting;
+  }
+
+  function bootTreeSitter(opts) {
     const TS = typeof TreeSitter !== "undefined" ? TreeSitter : typeof require === "function" ? require("web-tree-sitter") : null;
     if (!TS) {
       bootError = "tree-sitter core (TreeSitter/web-tree-sitter) not loaded";
       return Promise.resolve();
     }
     cachedTS = TS;
-    booting = TS.init(opts.locateCore ? { locateFile: opts.locateCore } : undefined)
+    return TS.init(opts.locateCore ? { locateFile: opts.locateCore } : undefined)
       .then(() => TS.Language.load(opts.pythonWasmUrl || "tree-sitter-python.wasm"))
       .then((lang) => {
         language = lang;
@@ -46,10 +59,11 @@
       .catch((e) => {
         bootError = String((e && e.message) || e);
       });
-    return booting;
   }
 
-  const isReady = () => !!language;
+  // a result with Ruff's findings, or without because Ruff did not load: never one taken while Ruff is still loading
+  const isReady = () => !!language && (!ruff() || !booting || ruff().settled());
+  const withRuff = () => !!(ruff() && ruff().isReady());
 
   const LITERAL_TYPES = new Set(["integer", "float", "true", "false", "none", "string", "ellipsis"]);
 
@@ -168,9 +182,15 @@
         return { messages, error: `${ruleId}: ${String((e && e.message) || e)}` };
       }
     }
+    if (withRuff()) {
+      // `except Exception: pass` is tree-sitter's swallowed-exception and Ruff's BLE001 on the same line: once is enough
+      const swallowed = new Set(messages.filter((m) => m.ruleId === "python/swallowed-exception").map((m) => m.line));
+      const r = ruff().lint(code, Object.keys(rules || {}));
+      for (const m of r.messages) if (!(/^ruff\/(?:BLE001|E722)$/.test(m.ruleId) && swallowed.has(m.line))) messages.push(m);
+    }
     return { messages };
   }
 
   const RULES = { python: Object.keys(RULE_IMPLS).map((n) => "python/" + n) };
-  return { lint, RULES, boot, isReady, bootError: () => bootError };
+  return { lint, RULES, boot, isReady, withRuff, bootError: () => bootError };
 });
