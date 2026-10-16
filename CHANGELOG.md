@@ -7,6 +7,10 @@
   pytest got the API checks but not "test has no assertions" or "exception swallowed" (`except: pass`), which the
   `qa-python` profile finds. Now `qa-api` runs the Python engine on its `.py` files. **What this profile checks** says
   "tree-sitter (.py files)".
+- **`qa-python` reports a hard-coded secret and a hard-coded host.** `hardcoded_secret` (a key, a token, a JWT in the
+  code) and `hardcoded_base_url` (a real host in a test instead of configuration) were in the TypeScript, Cypress,
+  Detox, API and mobile profiles, not in `qa-python`, so a pytest file with an API key or a staging URL gave nothing.
+  An environment variable, `localhost`, a comment and a docstring do not count.
 
 ## 0.1.128
 

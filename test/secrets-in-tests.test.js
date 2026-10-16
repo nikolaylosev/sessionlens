@@ -1,7 +1,7 @@
 "use strict";
 /* hardcoded_secret and hardcoded_base_url (phase 10, step 3): since 0.1.113 also in qa-ts, qa-cypress, qa-detox and
-   qa-mobile, not only qa-api. What must not count: a runner's config file for the base URL, a relative goto(), a
-   value typed into a field, an environment variable, a placeholder. */
+   qa-mobile, not only qa-api; since 0.1.129 in qa-python. What must not count: a runner's config file for the base URL,
+   a relative goto(), a value typed into a field, an environment variable, a placeholder, a comment or a docstring. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -58,8 +58,42 @@ test("a host in a regular expression is one host, with its escaped dots; a bare 
   assert.deepEqual(found("qa-ts", F, "test('http:// and no www redirect to https://www', async () => {});\n"), []);
 });
 
-test("Java, C# and Python profiles are not changed", () => {
-  for (const p of ["qa-java", "qa-c#", "qa-python"]) {
+test("qa-python: a key and a staging host in a pytest file; an env variable, a local host, a comment, a docstring are not (0.1.129)", () => {
+  const F = "tests/test_orders.py";
+  assert.deepEqual(
+    found(
+      "qa-python",
+      F,
+      [
+        'API_KEY = "sk_live_51HxQ2bE8aZ0kLmN"',
+        'HEADERS = {"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcDEF123"}',
+        "",
+        "def test_create_order():",
+        '    r = requests.post("https://staging.shop-acme.io/orders", headers=HEADERS)',
+        "    assert r.status_code == 201",
+      ].join("\n"),
+    ),
+    [
+      `hardcoded_base_url: ${F}: hard-coded host staging.shop-acme.io — take the base URL from configuration`,
+      `hardcoded_secret: ${F}: credential in the code — JWT: “eyJh… (46)”`,
+      `hardcoded_secret: ${F}: credential in the code — secret assigned in code: “sk_l… (24)”`,
+    ],
+  );
+  const none = [
+    'TOKEN = os.environ["API_TOKEN"]',
+    'BASE = os.getenv("BASE_URL", "http://localhost:8000")',
+    "# the docs: https://staging.shop-acme.io/docs",
+    "",
+    "def test_list_orders(base_url):",
+    '    """Lists the orders, as on https://staging.shop-acme.io/orders."""',
+    '    r = requests.get(f"{base_url}/orders")',
+    "    assert r.json() == []",
+  ].join("\n");
+  assert.deepEqual(found("qa-python", F, none), []);
+});
+
+test("Java and C# profiles are not changed", () => {
+  for (const p of ["qa-java", "qa-c#"]) {
     const cks = Lens.profile(p).checks;
     assert.ok(!cks.includes("hardcoded_secret") && !cks.includes("hardcoded_base_url"), p);
   }
