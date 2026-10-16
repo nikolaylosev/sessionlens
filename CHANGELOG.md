@@ -15,6 +15,9 @@
   and `pprint()` are `debug_leftover`. A Ruff finding's tag says `ruff`. The note under the findings says
   "tree-sitter and Ruff"; if Ruff does not load, the engine runs on tree-sitter alone and says "tree-sitter". The
   extension is about 3.8 MB larger; Ruff is loaded only by a page that analyzes a Python session.
+- **New check `test_shadowed` (Python).** A second test with the same name, such as `def test_create_order` twice in
+  one file or class, replaces the first: pytest collects only the last one, so the first test never runs and nothing
+  says so. Found by Ruff (`F811`), only for test names; a helper or an import defined twice is not reported.
 - **`qa-python` reports a hard-coded secret and a hard-coded host.** `hardcoded_secret` (a key, a token, a JWT in the
   code) and `hardcoded_base_url` (a real host in a test instead of configuration) were in the TypeScript, Cypress,
   Detox, API and mobile profiles, not in `qa-python`, so a pytest file with an API key or a staging URL gave nothing.

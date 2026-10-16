@@ -107,6 +107,7 @@
     "ruff/T100": ["debug_leftover", "medium"], // breakpoint(), pdb.set_trace()
     "ruff/T201": ["debug_leftover", "low"], // print()
     "ruff/T203": ["debug_leftover", "low"], // pprint()
+    "ruff/F811": ["test_shadowed", "high"], // a second def test_x: the first never runs (only test_… names, lint-ruff.js)
   };
   // Robot Framework (media/lint-robot.js) — a hand-written parser, not tree-sitter or ESLint (see that
   // file's header), still mapped the same way: three of the four reuse existing check vocabulary

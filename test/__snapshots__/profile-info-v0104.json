@@ -897,6 +897,11 @@
       "name": "hardcoded_base_url",
       "off": false,
       "engineOnly": false
+     },
+     {
+      "name": "test_shadowed",
+      "off": false,
+      "engineOnly": true
      }
     ]
    },
@@ -926,7 +931,7 @@
     ]
    }
   ],
-  "count": 34,
+  "count": 35,
   "engine": {
    "kind": "tree-sitter-ruff",
    "state": "on"
@@ -1577,6 +1582,11 @@
       "name": "hardcoded_base_url",
       "off": false,
       "engineOnly": false
+     },
+     {
+      "name": "test_shadowed",
+      "off": false,
+      "engineOnly": true
      }
     ]
    },
@@ -1636,7 +1646,7 @@
     ]
    }
   ],
-  "count": 40,
+  "count": 41,
   "engine": {
    "kind": "tree-sitter-ruff",
    "state": "on",
