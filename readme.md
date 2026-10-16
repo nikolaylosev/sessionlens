@@ -219,7 +219,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `assert_weakened` | High | An existing assertion was made weaker, or assertions were removed. In a test, and in a page object or helper (by its methods), where Page Object Model puts the assertions |
 | `weak_assert` | High | An assertion only checks "didn't crash" instead of a value. In Playwright also, at medium, an assertion that reads the page once and never retries, such as `expect(await x.isVisible()).toBeTruthy()` instead of `await expect(x).toBeVisible()` (ESLint `prefer-web-first-assertions`), in a spec or a Page Object |
 | `sleep_or_skip_added` | High | A fixed sleep, a skipped test (`skip`, `@Disabled`, `[Ignore]`) or a retry on a test (`@flaky`, `[Retry]`, `describe.configure({ retries })`) was added. Retries in the runner's config are `config_weakened` |
-| `hardcoded_date` | Medium | A date is asserted and will break when content changes |
+| `hardcoded_date` | Medium | A date is asserted and will break when content changes: in text (`2026-10-16`) or, in Python, `date(2026, 10, 16)` / `datetime(…)` |
 | `fragile_wait` | Medium | The test depends on timing or page internals: `networkidle` waits, exact element counts, `force: true`, element handles, `eval`, waits without a timeout |
 | `expected_failure` | Medium | Tests marked as expected failures (`xfail`, `test.fail()`) keep the suite green while a bug is open |
 | `magic_number` | Low | Unexplained numbers in assertions |
