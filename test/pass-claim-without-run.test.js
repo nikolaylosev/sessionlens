@@ -3,7 +3,8 @@
    with a result, or the last one was red. What must not count: a claim after a green last run, a user who asks for
    passing tests, a message without a claim, a claim phrase inside another word ("bypassing", "проходить"; reported
    until 0.1.119). Since 0.1.121 the 6 steps leave out the ones that change no code: reads, searches, other tools (a
-   browser, MCP), git and other commands. */
+   browser, MCP), git and other commands. Since 0.1.129 also a claim after a green run when a code, test or runner config
+   file changed after it and nothing ran since; a note or a doc changed after it does not count. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -36,11 +37,11 @@ function transcript(steps) {
   });
   return L.join("\n");
 }
-const findings = (steps) => {
-  const cfg = Lens.profile("qa-ts");
+const findings = (steps, profile = "qa-ts") => {
+  const cfg = Lens.profile(profile);
   return Lens.runChecks(Lens.importAny(transcript(steps), cfg), cfg).filter((f) => f.check === "pass_claim_without_run");
 };
-const found = (steps) => findings(steps).map((f) => `${f.severity}: ${f.message}`);
+const found = (steps, profile) => findings(steps, profile).map((f) => `${f.severity}: ${f.message}`);
 
 const SPEC = ["write", "e2e/cart.spec.ts", "test('total', async () => {\n  expect(cart.total()).toBe(3);\n});\n"];
 const RED = ["bash", "npx playwright test", "  1 passed\n  1 failed"];
@@ -103,6 +104,49 @@ test("not reported: a claim after a green last run, a user asking for it, no cla
   assert.deepEqual(found([RED, GREEN, ["say", "Fixed, tests pass."]]), [], "red, then green: the last run decides");
   assert.deepEqual(found([["user", "Make sure all tests pass."]]), [], "the user's message is not the agent's claim");
   assert.deepEqual(found([SPEC, ["say", "I wrote the test, now I will run it."]]), []);
+});
+
+test("green, then a code file changed and nothing ran since: the claim is about code no run has seen (0.1.129)", () => {
+  const SPEC2 = ["write", "e2e/cart.spec.ts", SPEC[2] + "test('total again', async () => {\n  expect(cart.total()).toBe(3);\n});\n"];
+  const after = (file) => `high: Claims tests pass, but ${file} changed at seq 3, after the last run, and nothing ran since`;
+  assert.deepEqual(found([SPEC, GREEN, SPEC2, ["say", "Added one more test, all tests pass."]]), [after("e2e/cart.spec.ts")]);
+  assert.deepEqual(found([SPEC, GREEN, SPEC2, ["say", "Добавила ещё тест, все проходят."]]), [after("e2e/cart.spec.ts")], "in Russian");
+  assert.deepEqual(found([SPEC, GREEN, ["write", "src/cart.ts", "export const total = () => 3;\n"], ["say", "All tests pass."]]), [after("src/cart.ts")]);
+  assert.deepEqual(
+    found([SPEC, GREEN, ["write", "playwright.config.ts", "export default {};\n"], ["say", "All tests pass."]]),
+    [after("playwright.config.ts")],
+    "a runner's config",
+  );
+  // not reported: a run after the change, a note or a doc changed, a change before the green run
+  assert.deepEqual(found([SPEC, GREEN, SPEC2, GREEN, ["say", "All tests pass."]]), []);
+  assert.deepEqual(found([SPEC, GREEN, ["write", "README.md", "# Tests\n"], ["write", "notes/plan.txt", "x\n"], ["say", "All tests pass."]]), []);
+  assert.deepEqual(found([SPEC, SPEC2, GREEN, ["say", "All tests pass."]]), []);
+  // an Edit, as in the session that showed it (the agent added a test with the name of an old one)
+  const cfg = Lens.profile("qa-python");
+  const ev = [
+    { seq: 1, kind: "run_tests", cmd: "python -m pytest -q tests", tests: { passed: 9, failed: 0, errors: 0, failed_names: [] } },
+    { seq: 2, kind: "edit", file: "tests/test_navigation.py", new_content: "def test_about_section():\n    assert True\n" },
+    { seq: 3, kind: "message", text: "Готово. В tests/test_navigation.py 9 тестов, все проходят." },
+  ];
+  assert.deepEqual(
+    Lens.runChecks(ev, cfg)
+      .filter((f) => f.check === "pass_claim_without_run")
+      .map((f) => f.message),
+    ["Claims tests pass, but tests/test_navigation.py changed at seq 2, after the last run, and nothing ran since"],
+  );
+  // a profile that reads any file (qa-generic): a doc is still no code; pytest's own config is (qa-python)
+  assert.deepEqual(
+    found([SPEC, ["bash", "npm test", "Tests: 2 passed, 2 total"], ["write", "README.md", "# Tests\n"], ["say", "All tests pass."]], "qa-generic"),
+    [],
+  );
+  const PY = ["write", "tests/test_cart.py", "def test_total():\n    assert total() == 3\n"];
+  assert.deepEqual(
+    found(
+      [PY, ["bash", "pytest -q", "1 passed in 0.01s"], ["write", "pytest.ini", "[pytest]\naddopts = -p no:randomly\n"], ["say", "All tests pass."]],
+      "qa-python",
+    ),
+    [after("pytest.ini")],
+  );
 });
 
 test("a claim phrase counts only as whole words; an English one may end in -es, -ed or -ing", () => {
