@@ -887,6 +887,16 @@
       "name": "test_deleted",
       "off": false,
       "engineOnly": false
+     },
+     {
+      "name": "hardcoded_secret",
+      "off": false,
+      "engineOnly": false
+     },
+     {
+      "name": "hardcoded_base_url",
+      "off": false,
+      "engineOnly": false
      }
     ]
    },
@@ -916,7 +926,7 @@
     ]
    }
   ],
-  "count": 32,
+  "count": 34,
   "engine": {
    "kind": "tree-sitter",
    "state": "on"
