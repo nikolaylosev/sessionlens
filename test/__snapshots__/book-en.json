@@ -333,6 +333,15 @@
   "edited": false
  },
  {
+  "check": "test_shadowed",
+  "group": "code",
+  "rule": "Give every test a name of its own. In Python a second def with the same name replaces the first: pytest collects only the last one, so the first test never runs, and nothing says so.",
+  "severity": "high",
+  "enabled": true,
+  "good": "def test_create_order_rejects_empty_body(client): …  — a name of its own for every test",
+  "edited": false
+ },
+ {
   "check": "status_only_assert",
   "group": "api",
   "rule": "Assert the body, not just the status. A test that checks only “200” also passes on an empty response or an error page. Check the fields, their types and the headers that matter.",
