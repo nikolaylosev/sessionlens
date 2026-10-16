@@ -40,7 +40,7 @@ test("profileInfo agrees with the structures it is derived from", () => {
         assert.equal(LensChecks.CHECKS[c.name].group, g.group, `${p}: ${c.name} in its registry group`);
       }
     for (const k of cfg.checks) assert.ok(names.includes(k), `${p}: profile check ${k} is listed`);
-    const files = LensLint.ENGINE_FILES[cfg.language];
+    const files = LensLint.ENGINE_FILES[Lens.lintLanguage(cfg)];
     if (files) assert.ok(info.engine.kind === (files.boot ? "tree-sitter" : info.engine.kind) && info.engine.kind !== "none", `${p}: engine`);
     else assert.ok(["none", "robot-parser"].includes(info.engine.kind), `${p}: no engine files`);
     for (const e of info.spec.read) assert.equal(LensSpec.supports(cfg.language, "f" + e), true, `${p} ${e}`);
@@ -54,7 +54,11 @@ test("profileInfo agrees with the structures it is derived from", () => {
 test("settings, Rules overrides and verdicts show up in profileInfo", () => {
   assert.equal(Lens.profileInfo("qa-ts", deps({ settings: { lint: false } })).engine.state, "off");
   assert.equal(Lens.profileInfo("qa-ts", deps({ settings: {} })).engine.state, "on");
-  assert.equal(Lens.profileInfo("qa-api", deps({ settings: { lint: false } })).engine.state, "none");
+  assert.equal(Lens.profileInfo("qa-mobile", deps({ settings: { lint: false } })).engine.state, "none");
+  // qa-api: the Python engine, for its .py files only (0.1.129)
+  const api = Lens.profileInfo("qa-api", deps({ settings: {} })).engine;
+  assert.deepEqual([api.kind, api.state, api.files], ["tree-sitter", "on", [".py"]]);
+  assert.equal(Lens.profileInfo("qa-api", deps({ settings: { lint: false } })).engine.state, "off");
   const off = Lens.profileInfo("qa-ts", deps({ overrides: { magic_number: { enabled: false } } }));
   assert.equal(off.groups.flatMap((g) => g.checks).find((c) => c.name === "magic_number").off, true);
   assert.equal(Lens.profileInfo("qa-java", deps({ verdicts: 4 })).calibration.validated, false);
@@ -95,9 +99,11 @@ test("the block under Profile follows the selected profile, the settings and the
   await select(sb, "qa-robot");
   assert.match(text(sb), /built-in Robot Framework parser/);
   assert.match(text(sb), /not for \.resource/);
-  await select(sb, "qa-api");
+  await select(sb, "qa-mobile");
   assert.match(text(sb), /no static analysis/);
   assert.match(text(sb), /none for this profile/);
+  await select(sb, "qa-api");
+  assert.match(text(sb), /tree-sitter \(\.py files\)/);
   assert.deepEqual(sb.errors, []);
   sb.close();
 });

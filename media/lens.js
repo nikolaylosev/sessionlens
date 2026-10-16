@@ -251,6 +251,9 @@
     },
     "qa-api": {
       language: "api",
+      // its Python files go to the Python engine (0.1.129): a test with no assertion, an exception swallowed
+      lint_language: "python",
+      lint_ext: [".py"],
       code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cs", ".go", ".feature", ".postman_collection.json", ".postman_environment.json"],
       test_runner: "auto",
       test_runner_patterns: [
@@ -3588,7 +3591,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.128";
+  const ANALYSIS_VERSION = "0.1.129";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")
@@ -3777,10 +3780,13 @@
   function isValidated(name, verdicts) {
     return VALIDATED_PROFILES.includes(name) || (verdicts || 0) >= UNVERIFIED_MIN;
   }
+  /* The language of a profile's static analysis engine: its own, or for qa-api (any language) the Python engine for
+     its .py files (lint_language, lint_ext; 0.1.129) */
+  const lintLanguage = (cfg) => (cfg && (cfg.lint_language || cfg.language)) || "";
   function profileInfo(name, deps) {
     const d = deps || {},
       cfg = profile(name),
-      lang = cfg.language,
+      lang = lintLanguage(cfg),
       C = d.checks,
       L = d.lint,
       S = d.spec;
@@ -3821,17 +3827,18 @@
         ? "robot-parser"
         : "none";
     const engine = { kind, state: kind === "none" ? "none" : settings.lint === false ? "off" : "on" };
+    if (kind !== "none" && cfg.lint_ext) engine.files = cfg.lint_ext.slice(); // qa-api: only its .py files (0.1.129)
     const exts = (cfg.code_ext && cfg.code_ext.length ? cfg.code_ext : PROBE_EXT).filter((e) => !/\.(?:postman_\w+\.)?json$/.test(e));
     const spec = S
       ? {
-          read: exts.filter((e) => S.supports(lang, "file" + e)),
-          notRead: exts.filter((e) => !S.supports(lang, "file" + e)),
+          read: exts.filter((e) => S.supports(cfg.language, "file" + e)),
+          notRead: exts.filter((e) => !S.supports(cfg.language, "file" + e)),
           anyFile: !(cfg.code_ext && cfg.code_ext.length),
         }
       : null;
     return {
       profile: cfg.profile,
-      language: lang,
+      language: cfg.language,
       codeExt: cfg.code_ext || [],
       runners: cfg.test_runner_patterns || [],
       groups,
@@ -3851,6 +3858,7 @@
 
   return {
     profile,
+    lintLanguage,
     PROFILES: VISIBLE,
     ALIAS,
     redactSecrets,
