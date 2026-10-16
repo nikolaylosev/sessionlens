@@ -147,7 +147,7 @@
       s.lintWhy = lr.why || [];
       s.lintLog = lr.log || [];
       if (lr.pending) s.lintPending = true;
-      if (lr.ran) base = LensLint.merge(formal, lr.findings, cfg.language);
+      if (lr.ran) base = LensLint.merge(formal, lr.findings, Lens.lintLanguage(cfg));
     }
     const cal = Lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai], calibStatsBySource(), state.ruleOverrides);
     s.findings = Lens.sortFindings(LensRules.apply(cal.findings, state.ruleOverrides));
@@ -1688,7 +1688,7 @@ ${en.raw}`).join("\n\n\n");
       T("profile_desc_" + info.profile),
       runners.slice(0, 4).join(", ") + (runners.length > 4 ? ", …" : ""),
       T("pi_s_checks", { n: info.count }),
-      info.engine.kind === "none" ? T("pi_s_noengine") : T("pi_eng_" + info.engine.kind) + (info.engine.state === "off" ? " (" + T("pi_off") + ")" : ""),
+      info.engine.kind === "none" ? T("pi_s_noengine") : T("pi_eng_" + info.engine.kind) + (info.engine.files ? " (" + T("pi_eng_files", { ext: info.engine.files.join(" ") }) + ")" : "") + (info.engine.state === "off" ? " (" + T("pi_off") + ")" : ""),
       spec,
       info.calibration.validated ? T("pi_validated") : T("pi_unvalidated_short")
     ].filter(Boolean).join(" · ");
@@ -1702,7 +1702,7 @@ ${en.raw}`).join("\n\n\n");
     const li = (label, value) => `<li><span class="pi-k">${esc(label)}</span> ${value}</li>`;
     const code = (x) => `<code>${esc(x)}</code>`;
     const files = info.codeExt.length ? info.codeExt.map(code).join(" ") : esc(T("pi_any_file"));
-    const eng = info.engine.kind === "none" ? esc(T("pi_eng_none")) : esc(T("pi_eng_" + info.engine.kind)) + " — " + esc(info.engine.state === "off" ? T("pi_off") : T("pi_on"));
+    const eng = info.engine.kind === "none" ? esc(T("pi_eng_none")) : esc(T("pi_eng_" + info.engine.kind)) + (info.engine.files ? " " + esc("(" + T("pi_eng_files", { ext: info.engine.files.join(" ") }) + ")") : "") + " — " + esc(info.engine.state === "off" ? T("pi_off") : T("pi_on"));
     const sp = info.spec, spec = !sp ? "" : !sp.read.length ? esc(T("pi_spec_none")) : !sp.notRead.length && !sp.anyFile ? esc(T("pi_spec_all")) : sp.read.map(code).join(" ") + (sp.notRead.length && !sp.anyFile ? " · " + esc(T("pi_spec_not", { list: sp.notRead.join(" ") })) : "");
     const cal = info.calibration.validated ? esc(T(info.calibration.builtIn ? "pi_validated_builtin" : "pi_validated")) : esc(T("pi_unvalidated", { n: info.calibration.verdicts, min: info.calibration.min }));
     const groups = info.groups.map(
@@ -2298,7 +2298,7 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
     const language = ev && ev.detail && ev.detail.language;
     booted.then(async () => {
       const s = curS();
-      if (s && s.lintPending && Lens.profile(s.profile).language === language) {
+      if (s && s.lintPending && Lens.lintLanguage(Lens.profile(s.profile)) === language) {
         try {
           if (await updateSession(state.current, (x) => analyze(x), { skipIfSame: true })) renderReview();
         } catch (e) {
@@ -2309,7 +2309,7 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
   }
   async function repairLint() {
     if (IS_TAB || state.lintRepair >= LINT_REPAIR_VERSION || state.settings.lint === false) return;
-    const ids = metas().filter((m) => TREE_SITTER_LANGS.has(Lens.profile(m.profile).language)).map((m) => m.id);
+    const ids = metas().filter((m) => TREE_SITTER_LANGS.has(Lens.lintLanguage(Lens.profile(m.profile)))).map((m) => m.id);
     const stale = [];
     await fetchSessions(ids, (x) => {
       if ((x.lintWhy || []).some((w) => /still loading/.test(String(w)))) stale.push({ id: x.id, profile: x.profile });
@@ -2376,7 +2376,7 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
       clear: () => window.__slSessionClear()
     };
     genNow = () => Lens.analysisGen({ ruleOverrides: state.ruleOverrides, lint: state.settings.lint !== false, epoch: state.analysisEpoch });
-    needEngine = (profile) => state.settings.lint === false ? Promise.resolve("off") : LensLint.ensure(Lens.profile(profile).language);
+    needEngine = (profile) => state.settings.lint === false ? Promise.resolve("off") : LensLint.ensure(Lens.lintLanguage(Lens.profile(profile)));
     metas = () => Object.values(state.index).sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.created).localeCompare(String(b.created)));
     curS = () => state.loaded[state.current];
     bgRun = 0;

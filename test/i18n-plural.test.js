@@ -18,8 +18,9 @@ test("{n|one|other} picks the word for the count", () => {
   assert.equal(I18N.t("events", { n: 10 }), "10 events");
 });
 
-// the number before the word is never 1: a threshold (5 verdicts), or not a number at all ({f} is a file name)
-const ALLOWED = ["unverified", "pi_unvalidated", "p_compress_sub"];
+// the number before the word is never 1: a threshold (5 verdicts), or not a number at all ({f} is a file name, {ext}
+// an extension: ".py files")
+const ALLOWED = ["unverified", "pi_unvalidated", "p_compress_sub", "pi_eng_files"];
 
 test("no string in the dictionary puts a plural word right after a {placeholder}", () => {
   // "{n} findings" or "{s} sessions" reads wrong for 1: use "{n} {n|finding|findings}".

@@ -296,6 +296,8 @@
     const byName = new Map();
     for (const e of session.events) {
       if (!e.new_content) continue;
+      // a profile whose engine reads only some of its files (qa-api: .py), and no code from a message
+      if (cfg.lint_ext && !(e.file && cfg.lint_ext.some((x) => e.file.endsWith(x)))) continue;
       const name = e.file || `${T("in_msg")} (seq ${e.seq})`;
       if (e.file && !isSource(name)) continue; // code shown in a message has no name: keep it
       byName.set(name, { seq: e.seq, name, code: e.new_content, fromMessage: !e.file });
@@ -306,17 +308,17 @@
   /* Lint every code block of the session. Returns { findings, note, ran } and, while the engine is still loading in
      this page, pending: true (note lint_loading) — the result is then not final. */
   function run(session, cfg, settings) {
-    const engine = ENGINES[cfg.language];
+    const lang = cfg.lint_language || cfg.language; // qa-api: the Python engine for its .py files (0.1.129)
+    const engine = ENGINES[lang];
     if (!engine) return { findings: [], note: T("lint_profile"), ran: false };
     const core = engine.core();
     const loading = () => ({ findings: [], note: T("lint_loading"), ran: false, pending: true });
-    if (!core && !mayLoad(cfg.language)) return { findings: [], note: T("lint_missing"), ran: false };
+    if (!core && !mayLoad(lang)) return { findings: [], note: T("lint_missing"), ran: false };
     const blocks = codeBlocks(session, cfg);
     if (!core) return blocks.length ? loading() : { findings: [], note: T("lint_missing"), ran: false };
     if (!blocks.length) return { findings: [], note: T("lint_nocode"), ran: false };
     // a tree-sitter engine whose file is here but whose boot() has not finished
-    if (typeof core.isReady === "function" && !core.isReady() && !(typeof core.bootError === "function" && core.bootError()) && mayLoad(cfg.language))
-      return loading();
+    if (typeof core.isReady === "function" && !core.isReady() && !(typeof core.bootError === "function" && core.bootError()) && mayLoad(lang)) return loading();
     const rules = rulesConfig(engine.map, (settings && settings.lintExtraRules) || []);
     const findings = [];
     let errors = 0,
@@ -415,8 +417,9 @@
     };
   }
 
-  /* language: the profile's (cfg.language) — the engine whose findings these are. A regex finding is dropped only when
-     that engine looks for the same check and the same kind (every regex finding of a SUPERSEDES check has one). */
+  /* language: the engine's (Lens.lintLanguage: the profile's, or python for qa-api) — the engine whose findings these
+     are. A regex finding is dropped only when that engine looks for the same check and the same kind (every regex
+     finding of a SUPERSEDES check has one). */
   const merge = (regexFindings, lintFindings, language) => {
     const c = covers(language);
     return regexFindings.filter((f) => !SUPERSEDES.has(f.check) || !c.has(f.check + "|" + f.kind)).concat(lintFindings);

@@ -130,7 +130,8 @@ test("an idle sidebar loads no engine; a tab loads only its language's files; op
   assert.deepEqual(sb.engineLoads, [], "idle sidebar");
   assert.equal(puts(sb).length, 0);
 
-  const expect = { "qa-java": ["tree-sitter.js", "lint-java.js"], "qa-ts": ["vendor-eslint.js"], "qa-api": [] };
+  // qa-api: the Python engine for its .py files (0.1.129)
+  const expect = { "qa-java": ["tree-sitter.js", "lint-java.js"], "qa-ts": ["vendor-eslint.js"], "qa-api": ["tree-sitter.js", "lint-python.js"] };
   for (const [p, files] of Object.entries(expect)) {
     const tab = await openPage(host, { sessionId: ids[p], engines: { "lint-java.js": JAVA, "vendor-eslint.js": FAKE_ESLINT } });
     await tab.ready();

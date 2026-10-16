@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.129
+
+### Added
+- **API tests in Python get the Python checks too.** The `qa-api` profile had no static analysis, so an API test on
+  pytest got the API checks but not "test has no assertions" or "exception swallowed" (`except: pass`), which the
+  `qa-python` profile finds. Now `qa-api` runs the Python engine on its `.py` files. **What this profile checks** says
+  "tree-sitter (.py files)".
+
 ## 0.1.128
 
 ### Changed

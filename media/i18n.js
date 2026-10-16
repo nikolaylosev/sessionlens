@@ -541,6 +541,7 @@
       "pi_eng_tree-sitter": "tree-sitter",
       "pi_eng_robot-parser": "built-in Robot Framework parser",
       pi_eng_none: "none for this profile",
+      pi_eng_files: "{ext} files",
       pi_on: "on",
       pi_off: "off in ⚙ Settings",
       pi_spec: "Specification coverage:",

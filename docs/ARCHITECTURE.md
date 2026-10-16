@@ -540,7 +540,7 @@ tests, debugging leftovers, weak assertions, test functions and assertion lines.
 | `qa-python` | pytest | tree-sitter |
 | `qa-java` | JUnit / TestNG (Java, Kotlin) | tree-sitter (`.java`) |
 | `qa-c#` | xUnit, NUnit, MSTest | tree-sitter |
-| `qa-api` | HTTP API tests in any stack, Postman, Karate | none |
+| `qa-api` | HTTP API tests in any stack, Postman, Karate | tree-sitter (Python), its `.py` files only (0.1.129) |
 | `qa-mobile` | Appium in any stack | none |
 | `qa-robot` | Robot Framework | own parser |
 | `qa-generic` | any language, process checks only | none |
@@ -843,7 +843,7 @@ session is analyzed again after the update (§6.3).
 
 - **Regex checks are heuristics.** They read what the transcript shows; calibration exists because some will be
   wrong for a given team.
-- **No engine** for qa-api, qa-mobile and qa-generic; Kotlin files in qa-java get regex checks only.
+- **No engine** for qa-mobile and qa-generic, nor for qa-api's files other than `.py` (its Python files use the Python engine since 0.1.129: `lint_language` / `lint_ext` on the profile, `Lens.lintLanguage`); Kotlin files in qa-java get regex checks only.
 - **Fragments.** A file first seen as an edit fragment, with no `toolUseResult`, cannot be compared: deletions and
   loosened configs in it are not reported.
 - **Stored sessions** keep the events they were imported with: findings that need `prev_content` or a Codex

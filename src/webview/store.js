@@ -36,7 +36,7 @@ export function initStore() {
   genNow = () => Lens.analysisGen({ ruleOverrides: state.ruleOverrides, lint: state.settings.lint !== false, epoch: state.analysisEpoch });
   // Phase 5: before analyze() of a session, its language's lint engine is loaded (once per page). Never rejects: an
   // engine that failed to load leaves the analysis without lint, as a missing bundle always did.
-  needEngine = (profile) => (state.settings.lint === false ? Promise.resolve("off") : LensLint.ensure(Lens.profile(profile).language));
+  needEngine = (profile) => (state.settings.lint === false ? Promise.resolve("off") : LensLint.ensure(Lens.lintLanguage(Lens.profile(profile))));
   // the index in the order sessions were added: the order 0.1.100 walked its sessions object in (calibration, rules, evidence)
   metas = () => Object.values(state.index).sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.created).localeCompare(String(b.created)));
   curS = () => state.loaded[state.current];

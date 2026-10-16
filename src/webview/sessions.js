@@ -286,7 +286,11 @@ export function profileSummary(info) {
     T("profile_desc_" + info.profile),
     runners.slice(0, 4).join(", ") + (runners.length > 4 ? ", …" : ""),
     T("pi_s_checks", { n: info.count }),
-    info.engine.kind === "none" ? T("pi_s_noengine") : T("pi_eng_" + info.engine.kind) + (info.engine.state === "off" ? " (" + T("pi_off") + ")" : ""),
+    info.engine.kind === "none"
+      ? T("pi_s_noengine")
+      : T("pi_eng_" + info.engine.kind) +
+        (info.engine.files ? " (" + T("pi_eng_files", { ext: info.engine.files.join(" ") }) + ")" : "") +
+        (info.engine.state === "off" ? " (" + T("pi_off") + ")" : ""),
     spec,
     info.calibration.validated ? T("pi_validated") : T("pi_unvalidated_short"),
   ]
@@ -306,7 +310,10 @@ export function renderProfileInfo() {
   const eng =
     info.engine.kind === "none"
       ? esc(T("pi_eng_none"))
-      : esc(T("pi_eng_" + info.engine.kind)) + " — " + esc(info.engine.state === "off" ? T("pi_off") : T("pi_on"));
+      : esc(T("pi_eng_" + info.engine.kind)) +
+        (info.engine.files ? " " + esc("(" + T("pi_eng_files", { ext: info.engine.files.join(" ") }) + ")") : "") +
+        " — " +
+        esc(info.engine.state === "off" ? T("pi_off") : T("pi_on"));
   const sp = info.spec,
     spec = !sp
       ? ""

@@ -206,7 +206,7 @@ export function onEngineSettled(ev) {
   const language = ev && ev.detail && ev.detail.language;
   booted.then(async () => {
     const s = curS();
-    if (s && s.lintPending && Lens.profile(s.profile).language === language) {
+    if (s && s.lintPending && Lens.lintLanguage(Lens.profile(s.profile)) === language) {
       try {
         if (await updateSession(state.current, (x) => analyze(x), { skipIfSame: true })) renderReview();
       } catch (e) {
@@ -220,7 +220,7 @@ export function onEngineSettled(ev) {
 export async function repairLint() {
   if (IS_TAB || state.lintRepair >= LINT_REPAIR_VERSION || state.settings.lint === false) return;
   const ids = metas()
-    .filter((m) => TREE_SITTER_LANGS.has(Lens.profile(m.profile).language))
+    .filter((m) => TREE_SITTER_LANGS.has(Lens.lintLanguage(Lens.profile(m.profile))))
     .map((m) => m.id);
   const stale = [];
   await fetchSessions(ids, (x) => {

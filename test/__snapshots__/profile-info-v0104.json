@@ -1529,6 +1529,21 @@
       "engineOnly": false
      },
      {
+      "name": "no_assertion_after_action",
+      "off": false,
+      "engineOnly": true
+     },
+     {
+      "name": "swallowed_exception",
+      "off": false,
+      "engineOnly": true
+     },
+     {
+      "name": "assert_args_reversed",
+      "off": false,
+      "engineOnly": true
+     },
+     {
       "name": "focused_test",
       "off": false,
       "engineOnly": false
@@ -1611,10 +1626,13 @@
     ]
    }
   ],
-  "count": 37,
+  "count": 40,
   "engine": {
-   "kind": "none",
-   "state": "none"
+   "kind": "tree-sitter",
+   "state": "on",
+   "files": [
+    ".py"
+   ]
   },
   "spec": {
    "read": [
