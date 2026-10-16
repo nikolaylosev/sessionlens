@@ -15,6 +15,13 @@
   `October 16, 2026`). Now `assert order.created == date(2026, 10, 16)` is reported too, and so are `datetime(…)`,
   `datetime.date(…)` and `date(year=2026, …)`: a year in numbers first. `date.today()` and `date(year, 1, 1)` are not.
 
+### Fixed
+- **The note under the findings names the engine that ran.** It said "ESLint: 2 findings in 1 block" for Python, Java,
+  C# and Robot Framework too, and "ESLint could not parse…" when tree-sitter could not. Now it says "tree-sitter: …" or
+  "built-in Robot Framework parser: …", as **What this profile checks** does. A profile with no engine says "static
+  analysis: none for this profile", not "qa-ts only". The **Static analysis** checkbox in Settings lost its "(ESLint)":
+  it switches off every engine.
+
 ## 0.1.128
 
 ### Changed
