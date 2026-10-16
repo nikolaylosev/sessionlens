@@ -2946,7 +2946,8 @@
       return [F("tests_never_run", "high", code[code.length - 1].seq, T("never_run", { n: code.length }))];
     },
     /* a commented-out assertion never runs: a line that is a comment (//, #, /* or * inside a block) is skipped (0.1.118),
-       and since 0.1.121 a line inside a block comment without a leading * too */
+       and since 0.1.121 a line inside a block comment without a leading * too. An assertion line has expect, not as part
+       of "expected" or "expectation" (0.1.129): `expected = date(2026, 10, 16)` is a date in a variable */
     hardcoded_date(ev) {
       const RX =
         /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\b20\d{2}-\d{2}-\d{2}\b|\b(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*\s+\d{4}/i;
@@ -2957,7 +2958,7 @@
       for (const e of ev) {
         if (!e.new_content) continue;
         for (const ln of linesOf(e).split("\n"))
-          if (!/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && /expect|assert|toHaveText|getByText/.test(ln) && (RX.test(ln) || PY_DATE.test(ln)))
+          if (!/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && /expect(?!ed|ation)|assert|toHaveText|getByText/.test(ln) && (RX.test(ln) || PY_DATE.test(ln)))
             out.push(F("hardcoded_date", "medium", e.seq, T("hard_date", { file: e.file || inMsg(), line: clip(ln.trim(), 80) })));
       }
       return out;

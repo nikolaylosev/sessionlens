@@ -1,6 +1,7 @@
 "use strict";
 /* hardcoded_date: a calendar date on an assertion line. What must not count: a date in a variable outside the
-   assertion, an assertion without a date, a commented-out assertion (a comment never runs; reported until 0.1.118). */
+   assertion, also one named expected (reported until 0.1.129: "expected" has "expect" in it), an assertion without a
+   date, a commented-out assertion (a comment never runs; reported until 0.1.118). */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -48,6 +49,22 @@ test("Python: date(…) and datetime(…) with a year in numbers in an assertion
     assert.deepEqual(py(line), [], line);
   // JavaScript's Date and C#'s DateTime are not asked for
   assert.deepEqual(found("e2e/order.spec.ts", "expect(order.created).toEqual(new Date(2026, 9, 16));\n"), []);
+});
+
+test("not reported: a date in a variable named expected; still reported: expect(), a page object's expect…() (0.1.129)", () => {
+  const ts = "e2e/deadline.spec.ts",
+    py = "tests/test_orders.py";
+  for (const line of [
+    "const expected = '2026-03-15';",
+    "const expectedDeadline = 'March 15, 2026';",
+    "const unexpected = '2026-03-15';",
+    "const expectation = '2026-03-15';",
+  ])
+    assert.deepEqual(found(ts, line + "\n"), [], line);
+  for (const line of ["expected = date(2026, 10, 16)", "expected_created = datetime(2026, 10, 16, 9, 30)"])
+    assert.deepEqual(found(py, `def test_order():\n    ${line}\n`, "qa-python"), [], line);
+  for (const line of ["await searchPage.expectDeadline('2026-03-15');", "expect(deadline).toEqual(expected ?? '2026-03-15');"])
+    assert.deepEqual(found(ts, line + "\n"), [`medium: ${ts}: date in an assertion “${line}” — will go red when content changes`], line);
 });
 
 test("not reported: a commented-out assertion with a date; the code line next to it still is", () => {

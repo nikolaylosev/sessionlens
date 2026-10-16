@@ -32,6 +32,10 @@
   "built-in Robot Framework parser: …", as **What this profile checks** does. A profile with no engine says "static
   analysis: none for this profile", not "qa-ts only". The **Static analysis** checkbox in Settings lost its "(ESLint)":
   it switches off every engine.
+- **A date in a variable named `expected` is no hard-coded date.** `hardcoded_date` took a line for an assertion if it
+  had the word `expect` in it, so `expected = date(2026, 10, 16)` in Python or `const expected = '2026-03-15'` in
+  TypeScript was reported, although a date in a variable is what the check asks for. Now `expected`, `expectedDate`,
+  `unexpected` and `expectation` are no assertion; `expect(…)` and a page object's `expectDeadline(…)` still are.
 
 ## 0.1.128
 
