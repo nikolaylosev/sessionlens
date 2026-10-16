@@ -417,8 +417,9 @@
     };
   }
 
-  /* language: the profile's (cfg.language) — the engine whose findings these are. A regex finding is dropped only when
-     that engine looks for the same check and the same kind (every regex finding of a SUPERSEDES check has one). */
+  /* language: the engine's (Lens.lintLanguage: the profile's, or python for qa-api) — the engine whose findings these
+     are. A regex finding is dropped only when that engine looks for the same check and the same kind (every regex
+     finding of a SUPERSEDES check has one). */
   const merge = (regexFindings, lintFindings, language) => {
     const c = covers(language);
     return regexFindings.filter((f) => !SUPERSEDES.has(f.check) || !c.has(f.check + "|" + f.kind)).concat(lintFindings);
