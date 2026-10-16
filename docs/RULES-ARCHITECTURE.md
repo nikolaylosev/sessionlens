@@ -526,6 +526,7 @@ const SAME_AS_REGEX = {                       // engine rule → the kinds of re
   "cypress/no-pause": ["debug_leftover|pause"],
   "cypress/no-debug": ["debug_leftover|debug"],
   "robot/sleep-or-skip": ["sleep_or_skip_added|sleep", "sleep_or_skip_added|skip"],
+  "ruff/T100": ["debug_leftover|breakpoint"],  // 0.1.129
   "playwright/no-force-option": [],           // reported under one of these names, but looks for something else
   …
 };
@@ -592,7 +593,7 @@ which order:
 | `detox` | `vendor-eslint-detox.js` | no |
 | `java` | `tree-sitter.js`, `lint-java.js` | yes, `tree-sitter.wasm` + `tree-sitter-java.wasm` |
 | `csharp` | `tree-sitter.js`, `lint-csharp.js` | yes, `tree-sitter.wasm` + `tree-sitter-c_sharp.wasm` |
-| `python` | `tree-sitter.js`, `lint-python.js` | yes, `tree-sitter.wasm` + `tree-sitter-python.wasm` |
+| `python` | `tree-sitter.js`, `vendor-ruff.js`, `lint-ruff.js`, `lint-python.js` | yes, `tree-sitter.wasm` + `tree-sitter-python.wasm` + `ruff.wasm` (0.1.129; `lint-python.js` boots Ruff too) |
 
 `robot` is not in the map: `lint-robot.js` is small and synchronous, it is in the
 core of the page. `api`, `mobile`, `any`, `go` have no engine.
@@ -791,13 +792,13 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | snapshot_overwritten | process | high | regex (lens.js) |
 | config_weakened | process | high | regex (lens.js) |
 | assert_weakened | code | high | regex (lens.js) |
-| weak_assert | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress), both kept (§6.3) |
+| weak_assert | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, Ruff: B015, PT011, B017), both kept (§6.3) |
 | sleep_or_skip_added | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox, Robot), an engine replaces the kinds it finds itself (§6.3) |
 | hardcoded_date | code | medium | regex (lens.js) |
 | fragile_wait | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox), an engine replaces the kinds it finds itself (§6.3) |
 | expected_failure | code | medium | regex (lens.js) |
 | magic_number | code | low | regex (lens.js) |
-| assertion_roulette | code | low | regex (lens.js) |
+| assertion_roulette | code | low | regex (lens.js) + Ruff (PT018, `assert a and b`), both kept (0.1.129) |
 | conditional_logic | code | low | regex (lens.js) + engines (ESLint Playwright), an engine replaces the kinds it finds itself (§6.3) |
 | duplicate_assert | code | low | regex (lens.js) |
 | raw_locator | code | low | engines only (ESLint Playwright, ESLint Cypress) |
@@ -806,11 +807,11 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | no_assertion_after_action | code | high | engines only (ESLint Playwright, ESLint Detox, Java, C#, Python, Robot) |
 | no_app_reset | code | medium | engines only (ESLint Detox) |
 | unannotated_test_method | code | high | engines only (Java, C#) |
-| swallowed_exception | code | high | engines only (Java, C#, Python) |
+| swallowed_exception | code | high | engines only (Java, C#, Python; Ruff's BLE001 and E722 since 0.1.129, once per line with tree-sitter's) |
 | assert_args_reversed | code | medium | engines only (Java, C#, Python) |
 | lint_valid_title | code | low | engines only (ESLint Playwright) |
 | focused_test | code | high | regex (lens.js) + engines (ESLint Playwright), an engine replaces the kinds it finds itself (§6.3) |
-| debug_leftover | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress), an engine replaces the kinds it finds itself (§6.3) |
+| debug_leftover | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, Ruff: T100, T201, T203), an engine replaces the kinds it finds itself (§6.3) |
 | cypress_async_test | code | medium | ESLint Cypress (async `it`, titled `before`/`beforeEach`) + regex in qa-cypress (other hooks), both kept (§6.3) |
 | test_deleted | code | high | regex (lens.js) |
 | hardcoded_secret | code | high | regex (lens.js) |
@@ -993,6 +994,7 @@ Closed items are kept for the record. The list was opened at v0.1.98; later item
 | `media/lens.js` | 36 regex checks, calibration/suppression, sorting, the Gherkin parser and checks, the `RULE_KEYS`/`RULES` Proxy, profiles (`PROFILES`/`cfg.checks`), profile details (§8.4) |
 | `media/lint.js` | The engine dispatcher (`ENGINES`), mapping rule id → check name (`*_RULE_MAP`), `SUPERSEDES`, message capping; lazy loading of the engines (`ENGINE_FILES`, `ensure()`, §7) |
 | `media/lint-java.js`, `lint-csharp.js`, `lint-python.js` | tree-sitter engines, their own rules, async `boot()` (called by `lint.js`, §7) |
+| `media/lint-ruff.js`, `vendor-ruff.js` | Ruff (0.1.129): its rules for the Python engine, booted and called by `lint-python.js`; the vendored WebAssembly wrapper |
 | `media/lint-robot.js` | A line-based Robot Framework parser of its own, its own rules, synchronous |
 | `media/vendor-eslint*.js` | ESLint bundles (ready-made/built), their own rules |
 | `media/spec.js` | 4 checks where the specification meets the tests; which tests are found (§17) |

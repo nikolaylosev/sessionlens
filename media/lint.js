@@ -97,6 +97,16 @@
     "python/no-assertion-after-action": ["no_assertion_after_action", "high"],
     "python/swallowed-exception": ["swallowed_exception", "high"],
     "python/assert-args-reversed": ["assert_args_reversed", "medium"],
+    // Ruff (lint-ruff.js, 0.1.129): what each rule finds in a test, under the check that already names it
+    "ruff/B015": ["weak_assert", "high"], // `r.status_code == 201` with no assert: checks nothing
+    "ruff/PT011": ["weak_assert", "medium"], // pytest.raises(ValueError) with no match=: any such error passes
+    "ruff/B017": ["weak_assert", "medium"], // pytest.raises(Exception): any error at all passes
+    "ruff/PT018": ["assertion_roulette", "low"], // assert a and b: a failure does not say which
+    "ruff/BLE001": ["swallowed_exception", "high"], // except Exception: also catches the test's AssertionError
+    "ruff/E722": ["swallowed_exception", "high"], // a bare except: the same, and more
+    "ruff/T100": ["debug_leftover", "medium"], // breakpoint(), pdb.set_trace()
+    "ruff/T201": ["debug_leftover", "low"], // print()
+    "ruff/T203": ["debug_leftover", "low"], // pprint()
   };
   // Robot Framework (media/lint-robot.js) — a hand-written parser, not tree-sitter or ESLint (see that
   // file's header), still mapped the same way: three of the four reuse existing check vocabulary
@@ -141,6 +151,7 @@
     "cypress/no-debug": ["debug_leftover|debug"],
     "detox/no-hardcoded-wait": ["sleep_or_skip_added|sleep"],
     "robot/sleep-or-skip": ["sleep_or_skip_added|sleep", "sleep_or_skip_added|skip"],
+    "ruff/T100": ["debug_leftover|breakpoint"],
     // reported under these names, but looking for something else: they replace no regex finding
     "playwright/no-conditional-expect": [],
     "playwright/no-element-handle": [],
@@ -152,6 +163,8 @@
     "cypress/no-assigning-return-values": [],
     "cypress/unsafe-to-chain-command": [],
     "detox/waitfor-requires-timeout": [],
+    "ruff/T201": [], // print(): no regex check looks for it
+    "ruff/T203": [],
   };
   // → Set of "check|kind" the engine of `language` finds itself: what merge() may drop
   function covers(language) {
@@ -171,7 +184,8 @@
     detox: { js: ["vendor-eslint-detox.js"] },
     java: { js: ["tree-sitter.js", "lint-java.js"], boot: "java" },
     csharp: { js: ["tree-sitter.js", "lint-csharp.js"], boot: "csharp" },
-    python: { js: ["tree-sitter.js", "lint-python.js"], boot: "python" },
+    // Ruff before lint-python.js, whose boot() boots it too (0.1.129)
+    python: { js: ["tree-sitter.js", "vendor-ruff.js", "lint-ruff.js", "lint-python.js"], boot: "python" },
   };
   const G = typeof globalThis !== "undefined" ? globalThis : typeof self !== "undefined" ? self : this;
   // Options for a tree-sitter engine's boot(): the WASM URIs vscode-bridge.js read from <body>. Without them (a page
@@ -179,7 +193,12 @@
   const BOOT_OPTS = {
     java: () => G.SL_WASM_URIS_JAVA && { locateCore: () => G.SL_WASM_URIS_JAVA.core, javaWasmUrl: G.SL_WASM_URIS_JAVA.java },
     csharp: () => G.SL_WASM_URIS_CSHARP && { locateCore: () => G.SL_WASM_URIS_CSHARP.core, csharpWasmUrl: G.SL_WASM_URIS_CSHARP.csharp },
-    python: () => G.SL_WASM_URIS_PYTHON && { locateCore: () => G.SL_WASM_URIS_PYTHON.core, pythonWasmUrl: G.SL_WASM_URIS_PYTHON.python },
+    python: () =>
+      G.SL_WASM_URIS_PYTHON && {
+        locateCore: () => G.SL_WASM_URIS_PYTHON.core,
+        pythonWasmUrl: G.SL_WASM_URIS_PYTHON.python,
+        ruffWasmUrl: G.SL_WASM_URIS_PYTHON.ruff,
+      },
   };
   // A page loads engines; Node (tests, the host) does not: there an engine is present as a global or not at all.
   const LOADER = typeof document !== "undefined" && typeof document.createElement === "function";
@@ -306,9 +325,17 @@
   }
 
   // the engine's name in the note under the findings, as What this profile checks names it (0.1.129: it said ESLint
-  // for tree-sitter and the Robot Framework parser too)
-  const engineName = (lang) =>
-    T(lang === "robot" ? "pi_eng_robot-parser" : ENGINE_FILES[lang] && ENGINE_FILES[lang].boot ? "pi_eng_tree-sitter" : "pi_eng_eslint");
+  // for tree-sitter and the Robot Framework parser too); "tree-sitter and Ruff" once Ruff has run with it
+  const engineName = (lang, core) =>
+    T(
+      lang === "robot"
+        ? "pi_eng_robot-parser"
+        : ENGINE_FILES[lang] && ENGINE_FILES[lang].boot
+          ? typeof core.withRuff === "function" && core.withRuff()
+            ? "pi_eng_tree-sitter-ruff"
+            : "pi_eng_tree-sitter"
+          : "pi_eng_eslint",
+    );
 
   /* Lint every code block of the session. Returns { findings, note, ran } and, while the engine is still loading in
      this page, pending: true (note lint_loading) — the result is then not final. */
@@ -417,8 +444,8 @@
       why,
       log,
       note: ran
-        ? T("lint_ran", { engine: engineName(lang), n: findings.length, b: blocks.length, e: errors ? T("lint_errors", { n: errors }) : "" })
-        : T("lint_failed", { engine: engineName(lang), n: blocks.length, why: why[0] || "?" }),
+        ? T("lint_ran", { engine: engineName(lang, core), n: findings.length, b: blocks.length, e: errors ? T("lint_errors", { n: errors }) : "" })
+        : T("lint_failed", { engine: engineName(lang, core), n: blocks.length, why: why[0] || "?" }),
     };
   }
 

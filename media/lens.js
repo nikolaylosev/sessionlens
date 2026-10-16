@@ -3820,7 +3820,9 @@
     const files = L && L.ENGINE_FILES ? L.ENGINE_FILES[lang] : null;
     const kind = files
       ? files.boot
-        ? "tree-sitter"
+        ? files.js.includes("lint-ruff.js")
+          ? "tree-sitter-ruff" // the Python engine since 0.1.129
+          : "tree-sitter"
         : lang === "cypress"
           ? "eslint-cypress"
           : lang === "detox"

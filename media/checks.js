@@ -171,7 +171,13 @@
       good: "const MAX_ATTEMPTS = 5; expect(attempts).toBe(MAX_ATTEMPTS)",
       sources: ["regex"],
     },
-    assertion_roulette: { group: "code", severity: "low", ruleKey: "r_roulette", good: "expect(status, 'lockout status').toBe(423)", sources: ["regex"] },
+    assertion_roulette: {
+      group: "code",
+      severity: "low",
+      ruleKey: "r_roulette",
+      good: "expect(status, 'lockout status').toBe(423)",
+      sources: ["regex", "lint"], // lint: Ruff's PT018, `assert a and b` (0.1.129)
+    },
     conditional_logic: {
       group: "code",
       severity: "low",

@@ -171,7 +171,7 @@
  },
  "qa-python": {
   "ran": true,
-  "note": "tree-sitter: 2 findings in 1 block",
+  "note": "tree-sitter and Ruff: 2 findings in 1 block",
   "findings": [
    {
     "check": "no_assertion_after_action",

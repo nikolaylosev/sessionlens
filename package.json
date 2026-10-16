@@ -22,6 +22,7 @@
     "perf": "node --max-old-space-size=3000 perf/run.js --n 200 --kb 1024 --runs 5",
     "lint": "eslint .",
     "build": "node scripts/build-webview.js",
+    "vendor:ruff": "node scripts/vendor-ruff.js",
     "build:check": "node scripts/build-webview.js --check",
     "format": "prettier --write \"**/*.js\"",
     "format:check": "prettier --check \"**/*.js\"",
@@ -348,6 +349,7 @@
     "AGENTS.md"
   ],
   "devDependencies": {
+    "@astral-sh/ruff-wasm-web": "0.16.10",
     "@eslint/js": "^9.39.5",
     "@types/node": "^22.20.4",
     "@types/vscode": "1.85",

@@ -928,7 +928,7 @@
   ],
   "count": 34,
   "engine": {
-   "kind": "tree-sitter",
+   "kind": "tree-sitter-ruff",
    "state": "on"
   },
   "spec": {
@@ -1638,7 +1638,7 @@
   ],
   "count": 40,
   "engine": {
-   "kind": "tree-sitter",
+   "kind": "tree-sitter-ruff",
    "state": "on",
    "files": [
     ".py"

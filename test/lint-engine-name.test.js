@@ -19,8 +19,9 @@ test("the note names ESLint, tree-sitter or the Robot Framework parser", async (
     note("qa-ts", "e2e/cart.spec.ts", "import { test } from '@playwright/test';\ntest('a', async ({ page }) => {\n  await page.goto('/');\n});\n"),
     "ESLint: 1 finding in 1 block",
   );
-  assert.equal(note("qa-python", "tests/test_orders.py", PY), "tree-sitter: 1 finding in 1 block");
-  assert.equal(note("qa-api", "tests/test_orders.py", PY), "tree-sitter: 1 finding in 1 block");
+  // the Python engine with Ruff (0.1.129); without it, test/ruff.test.js
+  assert.equal(note("qa-python", "tests/test_orders.py", PY), "tree-sitter and Ruff: 1 finding in 1 block");
+  assert.equal(note("qa-api", "tests/test_orders.py", PY), "tree-sitter and Ruff: 1 finding in 1 block");
   assert.equal(
     note("qa-java", "src/test/java/CartTest.java", "class CartTest {\n  @Test\n  void pays() {\n    cart.pay();\n  }\n}\n"),
     "tree-sitter: 1 finding in 1 block",

@@ -41,7 +41,9 @@ test("profileInfo agrees with the structures it is derived from", () => {
       }
     for (const k of cfg.checks) assert.ok(names.includes(k), `${p}: profile check ${k} is listed`);
     const files = LensLint.ENGINE_FILES[Lens.lintLanguage(cfg)];
-    if (files) assert.ok(info.engine.kind === (files.boot ? "tree-sitter" : info.engine.kind) && info.engine.kind !== "none", `${p}: engine`);
+    // the Python engine is tree-sitter and Ruff (0.1.129)
+    const boot = files && files.js.includes("lint-ruff.js") ? "tree-sitter-ruff" : "tree-sitter";
+    if (files) assert.ok(info.engine.kind === (files.boot ? boot : info.engine.kind) && info.engine.kind !== "none", `${p}: engine`);
     else assert.ok(["none", "robot-parser"].includes(info.engine.kind), `${p}: no engine files`);
     for (const e of info.spec.read) assert.equal(LensSpec.supports(cfg.language, "f" + e), true, `${p} ${e}`);
     for (const e of info.spec.notRead) assert.equal(LensSpec.supports(cfg.language, "f" + e), false, `${p} ${e}`);
@@ -57,7 +59,7 @@ test("settings, Rules overrides and verdicts show up in profileInfo", () => {
   assert.equal(Lens.profileInfo("qa-mobile", deps({ settings: { lint: false } })).engine.state, "none");
   // qa-api: the Python engine, for its .py files only (0.1.129)
   const api = Lens.profileInfo("qa-api", deps({ settings: {} })).engine;
-  assert.deepEqual([api.kind, api.state, api.files], ["tree-sitter", "on", [".py"]]);
+  assert.deepEqual([api.kind, api.state, api.files], ["tree-sitter-ruff", "on", [".py"]]);
   assert.equal(Lens.profileInfo("qa-api", deps({ settings: { lint: false } })).engine.state, "off");
   const off = Lens.profileInfo("qa-ts", deps({ overrides: { magic_number: { enabled: false } } }));
   assert.equal(off.groups.flatMap((g) => g.checks).find((c) => c.name === "magic_number").off, true);
@@ -103,7 +105,7 @@ test("the block under Profile follows the selected profile, the settings and the
   assert.match(text(sb), /no static analysis/);
   assert.match(text(sb), /none for this profile/);
   await select(sb, "qa-api");
-  assert.match(text(sb), /tree-sitter \(\.py files\)/);
+  assert.match(text(sb), /tree-sitter and Ruff \(\.py files\)/);
   assert.deepEqual(sb.errors, []);
   sb.close();
 });

@@ -103,7 +103,8 @@ test("Playwright: the engine's networkidle and if-in-a-test replace the regex on
 });
 
 test("covers(): an engine replaces only what its own rules look for", () => {
-  for (const l of ["java", "python", "csharp", "api"]) assert.deepEqual([...LensLint.covers(l)], [], l);
+  for (const l of ["java", "csharp", "api"]) assert.deepEqual([...LensLint.covers(l)], [], l);
+  assert.deepEqual([...LensLint.covers("python")], ["debug_leftover|breakpoint"]); // Ruff's T100 (0.1.129)
   assert.deepEqual([...LensLint.covers("cypress")].sort(), ["debug_leftover|debug", "debug_leftover|pause", "sleep_or_skip_added|sleep"]);
   assert.deepEqual([...LensLint.covers("detox")], ["sleep_or_skip_added|sleep"]);
   assert.deepEqual([...LensLint.covers("robot")].sort(), ["sleep_or_skip_added|skip", "sleep_or_skip_added|sleep"]);

@@ -20,6 +20,8 @@ const PAGE_GLOBALS = {
   LensLintJava: "readonly",
   LensLintCSharp: "readonly",
   LensLintPython: "readonly",
+  LensLintRuff: "readonly",
+  RuffWasm: "readonly",
   TreeSitter: "readonly",
   I18N: "readonly",
   alertDialog: "readonly",
@@ -31,7 +33,18 @@ const PAGE_GLOBALS = {
 };
 
 module.exports = [
-  { ignores: ["node_modules/**", "media/vendor-eslint*.js", "media/tree-sitter.js", "media/app.js", "media/app.js.map", "*.vsix", ".vscode-test/**"] },
+  {
+    ignores: [
+      "node_modules/**",
+      "media/vendor-eslint*.js",
+      "media/vendor-ruff.js",
+      "media/tree-sitter.js",
+      "media/app.js",
+      "media/app.js.map",
+      "*.vsix",
+      ".vscode-test/**",
+    ],
+  },
   js.configs.recommended,
   {
     files: ["**/*.js"],

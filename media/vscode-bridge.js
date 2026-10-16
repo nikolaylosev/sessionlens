@@ -32,7 +32,7 @@
     if (d.treeSitterWasm) {
       if (d.treeSitterJavaWasm) window.SL_WASM_URIS_JAVA = { core: d.treeSitterWasm, java: d.treeSitterJavaWasm };
       if (d.treeSitterCSharpWasm) window.SL_WASM_URIS_CSHARP = { core: d.treeSitterWasm, csharp: d.treeSitterCSharpWasm };
-      if (d.treeSitterPythonWasm) window.SL_WASM_URIS_PYTHON = { core: d.treeSitterWasm, python: d.treeSitterPythonWasm };
+      if (d.treeSitterPythonWasm) window.SL_WASM_URIS_PYTHON = { core: d.treeSitterWasm, python: d.treeSitterPythonWasm, ruff: d.ruffWasm };
     }
   }
 

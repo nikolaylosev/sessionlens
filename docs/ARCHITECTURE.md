@@ -128,6 +128,8 @@ media/                everything the webview loads (also required by Node tests)
   lens.js             import, profiles, regex checks, calibration, sorting, metrics, profileInfo
   lint.js             lint dispatcher: engines, rule maps, merge(), lazy loading (RA §6, §7)
   lint-java.js / lint-csharp.js / lint-python.js   tree-sitter engines (+ *.wasm)
+  lint-ruff.js        Ruff, the second half of the Python engine (0.1.129)
+  vendor-ruff.js      Ruff's WebAssembly wrapper + ruff.wasm (vendored, built by scripts/vendor-ruff.js)
   lint-robot.js       hand-written Robot Framework parser
   vendor-eslint*.js   prebuilt ESLint bundles: Playwright, Cypress, Detox rules (vendored, never edited)
   tree-sitter.js      web-tree-sitter runtime (vendored)
@@ -537,10 +539,10 @@ tests, debugging leftovers, weak assertions, test functions and assertion lines.
 | `qa-ts` | TypeScript / JavaScript, Jest, Vitest, Playwright | ESLint (Playwright rules) |
 | `qa-cypress` | Cypress | ESLint (Cypress rules) |
 | `qa-detox` | Detox (React Native) | ESLint (own Detox rules) |
-| `qa-python` | pytest | tree-sitter |
+| `qa-python` | pytest | tree-sitter and Ruff (0.1.129) |
 | `qa-java` | JUnit / TestNG (Java, Kotlin) | tree-sitter (`.java`) |
 | `qa-c#` | xUnit, NUnit, MSTest | tree-sitter |
-| `qa-api` | HTTP API tests in any stack, Postman, Karate | tree-sitter (Python), its `.py` files only (0.1.129) |
+| `qa-api` | HTTP API tests in any stack, Postman, Karate | tree-sitter and Ruff (Python), its `.py` files only (0.1.129) |
 | `qa-mobile` | Appium in any stack | none |
 | `qa-robot` | Robot Framework | own parser |
 | `qa-generic` | any language, process checks only | none |
@@ -609,6 +611,7 @@ flowchart LR
   E -->|cypress| C[vendor-eslint-cypress.js]
   E -->|detox| D[vendor-eslint-detox.js]
   E -->|java / csharp / python| T[tree-sitter.js + lint-*.js<br/>+ .wasm grammars]
+  E -->|python| RF[+ vendor-ruff.js, lint-ruff.js<br/>+ ruff.wasm]
   E -->|robot| RB[lint-robot.js]
   E -->|api, mobile, any| N[no engine]
   R --> M[merge with regex findings]
@@ -616,6 +619,18 @@ flowchart LR
 
 Engines load lazily (`LensLint.ensure`), only the files one language needs, with a 30 s timeout; a failed engine
 leaves the regex findings in place and says so in the session (RA §7).
+
+**Ruff (0.1.129).** The Python engine is tree-sitter and [Ruff](https://docs.astral.sh/ruff/) (MIT):
+`lint-python.js` boots both and adds the messages of `lint-ruff.js` for the `ruff/…` rules of `PYTHON_RULE_MAP`,
+each under a check that already exists (`B015` → `weak_assert`, `BLE001` → `swallowed_exception`, `T100` →
+`debug_leftover`…). If Ruff does not load, the engine runs on tree-sitter alone and its note says "tree-sitter", not
+"tree-sitter and Ruff". Why a new dependency: the rules a test needs (a comparison with no `assert`, a
+`pytest.raises(Exception)`, an `except Exception:` that also catches the test's `AssertionError`) are Ruff's,
+maintained and tested there, and Ruff is the linter Python teams already run; writing them again on tree-sitter would
+be a second, weaker copy. The cost is size: `ruff.wasm` is 10.9 MB (3.8 MB in the `.vsix`), loaded only by a page that
+analyzes a Python session. It is `@astral-sh/ruff-wasm-web`, a devDependency pinned to one version; `node
+scripts/vendor-ruff.js` turns it into `media/vendor-ruff.js` + `media/ruff.wasm`, and `test/ruff.test.js` fails when
+they differ from what the pinned package gives.
 
 ### 6.6 Specification and coverage
 
@@ -812,7 +827,7 @@ flowchart LR
   on old data, a session tab, refusals of `validate.js`.
 - **Packaging:** `check:vsix` compares the files `vsce` would package with an allow-list; sources, tests and docs
   stay out.
-- No runtime dependencies: the bundles are vendored, the host uses only Node and VS Code APIs.
+- No runtime dependencies: the bundles are vendored (Ruff too, §6.5), the host uses only Node and VS Code APIs.
 
 The test suite in detail (harnesses, what each file checks, how to update each snapshot, how to add a test) is in
 [`TESTING.md`](TESTING.md).
