@@ -576,7 +576,7 @@ flowchart LR
 
 ### 6.4 Checks
 
-63 checks in nine groups (Methodology, Process, Code, API, Mobile, Gherkin, Robot, Specification, Model). The
+64 checks in nine groups (Methodology, Process, Code, API, Mobile, Gherkin, Robot, Specification, Model). The
 registry `media/checks.js` is the single source of truth; `test/rules-consistency.test.js` fails when a detector
 emits a name that is not there, or a registry entry has no detector. The user-facing table is in the
 [readme](../readme.md#the-checks); the developer table with sources is RA §9.

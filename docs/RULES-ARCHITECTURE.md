@@ -816,6 +816,7 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | test_deleted | code | high | regex (lens.js) |
 | hardcoded_secret | code | high | regex (lens.js) |
 | hardcoded_base_url | code | medium | regex (lens.js) |
+| test_shadowed | code | high | engine only: Ruff F811 on a `test_…` name (Python, 0.1.129) |
 | status_only_assert | api | medium | regex (lens.js) |
 | mocked_service | api | medium | regex (lens.js) |
 | no_negative_cases | api | medium | regex (lens.js) |

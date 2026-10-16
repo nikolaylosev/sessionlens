@@ -300,6 +300,14 @@
       good: "BASE_URL = os.environ.get('BASE_URL', 'http://localhost:8080')",
       sources: ["regex"],
     },
+    // Python: a second def test_x with the same name replaces the first, which then never runs (Ruff F811, 0.1.129)
+    test_shadowed: {
+      group: "code",
+      severity: "high",
+      ruleKey: "r_test_shadowed",
+      good: "def test_create_order_rejects_empty_body(client): …  — a name of its own for every test",
+      sources: ["lint"],
+    },
     // ---- api ----
     status_only_assert: {
       group: "api",

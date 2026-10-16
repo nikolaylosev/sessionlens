@@ -103,6 +103,52 @@ def test_login(base_url):
   );
 });
 
+test("test_shadowed: a second test with the same name hides the first; a helper or an import defined twice is not one", async () => {
+  await loadEngines();
+  const code = `from helpers import make_order
+import pytest
+
+
+def make_order():
+    return {}
+
+
+def test_create_order(client):
+    assert client.post("/orders").status_code == 201
+
+
+class TestOrders:
+    def test_get(self, client):
+        assert client.get("/orders/1").ok
+
+    def test_get(self, client):
+        assert client.get("/orders/2").ok
+
+
+@pytest.mark.parametrize("x", [1, 2])
+def test_create_order(client, x):
+    assert client.post("/orders", json={"x": x}).status_code == 201
+`;
+  assert.deepEqual(found(code), ["17 test_shadowed high ruff/F811", "22 test_shadowed high ruff/F811"]);
+  assert.deepEqual(found(code, "qa-api"), found(code));
+  assert.equal(
+    run(code).findings.find((f) => f.line === 22).message,
+    `${F}:22 — \`test_create_order\` is defined again: the test of line 9 is replaced and never runs [ruff/F811]`,
+  );
+  // two tests with names of their own: nothing
+  assert.deepEqual(
+    found(
+      code
+        .replace(
+          'def test_get(self, client):\n        assert client.get("/orders/2")',
+          'def test_get_other(self, client):\n        assert client.get("/orders/2")',
+        )
+        .replace(/(@pytest[^\n]*\n)def test_create_order/, "$1def test_create_order_x"),
+    ),
+    [],
+  );
+});
+
 test("Ruff's breakpoint replaces the regex finding; its print() has no regex twin", async () => {
   await loadEngines();
   const cfg = Lens.profile("qa-python");

@@ -237,6 +237,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `test_deleted` | High | A test was removed from a file, or a test file was deleted (`rm`, `git rm`, a Codex patch). High right after a failing run, medium otherwise. A test renamed with the same body, moved to another file or restored later does not count |
 | `hardcoded_secret` | High | A token, key or credential is written in the code. The report shows only its first four characters (TypeScript, Cypress, Detox, Python, API and mobile profiles) |
 | `hardcoded_base_url` | Medium | A real host is written in a test instead of coming from configuration. A runner's config file, where the base URL belongs, does not count (same profiles) |
+| `test_shadowed` | High | Python: a second test with the same name (`def test_create_order` twice, in a file or a class). Python keeps only the last one, so pytest never runs the first, and nothing says so. Found by Ruff (`F811`), in `qa-python` and `qa-api`'s `.py` files; a helper or an import defined twice does not count |
 
 #### API
 
@@ -316,6 +317,7 @@ Since 0.1.129 the Python engine also runs [Ruff](https://docs.astral.sh/ruff/) (
 | `BLE001`, `E722` | `swallowed_exception` | High | `except Exception:` or a bare `except:` that does not re-raise: it also catches the test's own `AssertionError` (once per line with tree-sitter's `except: pass`) |
 | `T100` | `debug_leftover` | Medium | `breakpoint()`, `pdb.set_trace()` (replaces the regex finding) |
 | `T201`, `T203` | `debug_leftover` | Low | `print()`, `pprint()` left in a test |
+| `F811` | `test_shadowed` | High | A second `def test_…` with the same name: the first test is replaced and never runs (only test names; a helper or an import defined twice is not reported) |
 
 Left out on purpose: `PLR2004` (it would report every `== 200` of an API test), `S105`/`S106` (a test user's password, which no profile counts as a secret), `PT015`/`B011` (`assert False` is a deliberate fail). If Ruff does not load, the engine runs on tree-sitter alone and the note under the findings says "tree-sitter" instead of "tree-sitter and Ruff".
 

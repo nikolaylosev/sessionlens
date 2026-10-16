@@ -4,7 +4,8 @@
    assertEqual's arguments the wrong way round, `except: pass`. Ruff adds what its own rules already find well in a
    test, each under a check SessionLens has (lint.js's PYTHON_RULE_MAP): a comparison with no assert (B015), a
    pytest.raises() that takes any exception (PT011, B017), `assert a and b` (PT018), `except Exception:` and a bare
-   `except:` that also catch the AssertionError of the test (BLE001, E722), breakpoint() and print() (T100, T201, T203).
+   `except:` that also catch the AssertionError of the test (BLE001, E722), breakpoint() and print() (T100, T201, T203),
+   a second test with the same name, which hides the first (F811: only for a test_… name, not an import or a helper).
    Left out on purpose: PLR2004 (every `== 200` of an API test), S105/S106 (a test user's password, which no profile
    counts as a secret), PT015/B011 (`assert False` is a deliberate fail).
 
@@ -51,6 +52,13 @@
   }
 
   const isReady = () => ready;
+  // F811 is any name defined twice: a test is what SessionLens asks about ("Redefinition of unused `test_x` from line 7")
+  // and its words say what that means for the test
+  const SHADOWED_TEST = /^Redefinition of unused `(test\w*)` from line (\d+)/;
+  const say = (d) => {
+    const m = d.code === "F811" && SHADOWED_TEST.exec(d.message);
+    return m ? `\`${m[1]}\` is defined again: the test of line ${m[2]} is replaced and never runs` : String(d.message);
+  };
   // booted, or failed to: either way the engine need not wait for it any longer
   const settled = () => ready || !!bootError;
 
@@ -72,7 +80,9 @@
       }
       const out = workspaces.get(key).check(code);
       return {
-        messages: out.filter((d) => select.includes(d.code)).map((d) => ({ ruleId: "ruff/" + d.code, message: String(d.message), line: d.start_location.row })),
+        messages: out
+          .filter((d) => select.includes(d.code) && (d.code !== "F811" || SHADOWED_TEST.test(d.message)))
+          .map((d) => ({ ruleId: "ruff/" + d.code, message: say(d), line: d.start_location.row })),
       };
     } catch (e) {
       return { messages: [], error: `ruff: ${String((e && e.message) || e)}` };
