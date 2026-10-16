@@ -184,7 +184,7 @@
       test_runner_patterns: ["pytest"],
       src_dirs: ["src", "app", "services", "lib"],
       test_dirs: ["tests", "test"],
-      checks: [...METHOD, ...PROCESS, ...CODE, "debug_leftover", "config_weakened"],
+      checks: [...METHOD, ...PROCESS, ...CODE, "debug_leftover", ...SECRETS, "config_weakened"], // SECRETS since 0.1.129
       sleep_patterns: [delayCall(String.raw`\btime\.sleep`, String.raw`[\d.]`), delayCall(String.raw`\basyncio\.sleep`, String.raw`[\d.]`)],
       debug_patterns: { pause: /\bpage\.pause\s*\(/, breakpoint: BREAKPOINT_PY }, // Playwright for Python too (0.1.121)
       // pytest-rerunfailures: reruns=N in a marker, --reruns N on a command line (not the word in a docstring, 0.1.121)
