@@ -131,7 +131,7 @@
  },
  "qa-java": {
   "ran": true,
-  "note": "ESLint: 2 findings in 1 block",
+  "note": "tree-sitter: 2 findings in 1 block",
   "findings": [
    {
     "check": "swallowed_exception",
@@ -151,7 +151,7 @@
  },
  "qa-c#": {
   "ran": true,
-  "note": "ESLint: 2 findings in 1 block",
+  "note": "tree-sitter: 2 findings in 1 block",
   "findings": [
    {
     "check": "swallowed_exception",
@@ -171,7 +171,7 @@
  },
  "qa-python": {
   "ran": true,
-  "note": "ESLint: 2 findings in 1 block",
+  "note": "tree-sitter: 2 findings in 1 block",
   "findings": [
    {
     "check": "no_assertion_after_action",
@@ -191,7 +191,7 @@
  },
  "qa-robot": {
   "ran": true,
-  "note": "ESLint: 3 findings in 1 block",
+  "note": "built-in Robot Framework parser: 3 findings in 1 block",
   "findings": [
    {
     "check": "empty_test_case",

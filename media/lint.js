@@ -305,6 +305,11 @@
     return [...byName.values()];
   }
 
+  // the engine's name in the note under the findings, as What this profile checks names it (0.1.129: it said ESLint
+  // for tree-sitter and the Robot Framework parser too)
+  const engineName = (lang) =>
+    T(lang === "robot" ? "pi_eng_robot-parser" : ENGINE_FILES[lang] && ENGINE_FILES[lang].boot ? "pi_eng_tree-sitter" : "pi_eng_eslint");
+
   /* Lint every code block of the session. Returns { findings, note, ran } and, while the engine is still loading in
      this page, pending: true (note lint_loading) — the result is then not final. */
   function run(session, cfg, settings) {
@@ -412,8 +417,8 @@
       why,
       log,
       note: ran
-        ? T("lint_ran", { n: findings.length, b: blocks.length, e: errors ? T("lint_errors", { n: errors }) : "" })
-        : T("lint_failed", { n: blocks.length, why: why[0] || "?" }),
+        ? T("lint_ran", { engine: engineName(lang), n: findings.length, b: blocks.length, e: errors ? T("lint_errors", { n: errors }) : "" })
+        : T("lint_failed", { engine: engineName(lang), n: blocks.length, why: why[0] || "?" }),
     };
   }
 

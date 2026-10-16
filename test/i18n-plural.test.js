@@ -40,7 +40,10 @@ test('no string in the dictionary writes a plural as "(s)": "1 message(s)" (0.1.
     .filter((line) => /"[^"]*\w\(s\)[^"]*"/.test(line));
   assert.deepEqual(bad, []);
   assert.equal(I18N.t("never_run", { n: 1 }), "Tests written in 1 message, never executed — a hypothesis about tests, not tests");
-  assert.equal(I18N.t("lint_ran", { n: 3, b: 1, e: I18N.t("lint_errors", { n: 2 }) }), "ESLint: 3 findings in 1 block · 2 blocks failed to parse");
+  assert.equal(
+    I18N.t("lint_ran", { engine: "ESLint", n: 3, b: 1, e: I18N.t("lint_errors", { n: 2 }) }),
+    "ESLint: 3 findings in 1 block · 2 blocks failed to parse",
+  );
   assert.equal(I18N.t("dismissed_note", { n: 1 }), "1 rule hidden via Delete — it stays hidden until restored, even for new sessions.");
   assert.match(I18N.t("expected_failure", { file: "a.spec.ts", n: 2 }), /^a\.spec\.ts: 2 tests marked .* the bug they document is open$/);
 });
