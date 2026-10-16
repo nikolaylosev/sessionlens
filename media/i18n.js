@@ -13,6 +13,7 @@
       peeked: "Read {file} before the plan was approved — product code is off-limits during generation",
       pass_no_run: "Claims tests pass, but no test run in the preceding steps",
       pass_red: "Claims tests pass while the last run was {passed} passed / {failed} failed",
+      pass_after_edit: "Claims tests pass, but {file} changed at seq {seq}, after the last run, and nothing ran since",
       weakened: "{file}: {test} — assertion weakened ({reason})",
       removed: "{file}: {test} — fewer assertions ({before} → {after})",
       weak_assert: "{file}: weak assertion “{line}” — checks “didn't crash”, not a value",

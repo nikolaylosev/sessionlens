@@ -32,6 +32,11 @@
   "built-in Robot Framework parser: …", as **What this profile checks** does. A profile with no engine says "static
   analysis: none for this profile", not "qa-ts only". The **Static analysis** checkbox in Settings lost its "(ESLint)":
   it switches off every engine.
+- **"All tests pass" after a change that no run has seen.** `pass_claim_without_run` accepted the claim when a green
+  run was among the last steps, even if the agent changed a test or code after that run. In a test session the agent
+  added a test with the name of an existing one (so the old one stopped running), did not run the tests and wrote
+  "all pass". Now that is reported: "Claims tests pass, but tests/test_navigation.py changed at seq 14, after the last
+  run, and nothing ran since". A note or a doc changed after the run does not count.
 - **A date in a variable named `expected` is no hard-coded date.** `hardcoded_date` took a line for an assertion if it
   had the word `expect` in it, so `expected = date(2026, 10, 16)` in Python or `const expected = '2026-03-15'` in
   TypeScript was reported, although a date in a variable is what the check asks for. Now `expected`, `expectedDate`,

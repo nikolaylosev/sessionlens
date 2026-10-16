@@ -2469,11 +2469,16 @@
       const vars = { n: looks.length, first: looks[0].seq, last: looks[looks.length - 1].seq };
       return [F("browser_check_not_in_test", "medium", looks[0].seq, T(looks.length === 1 ? "browser_unasserted_one" : "browser_unasserted", vars))];
     },
-    /* Since 0.1.127, after a red run, a message that says a test fails reports that run, though it has "passes" in it:
+    /* Since 0.1.129 a claim after a green run is reported too when a code or test file changed after that run and no run
+       came since: "added one more test, all pass" (a test session on birdhospital.ru: the new test had the name of an
+       old one, so the old one stopped running, and nothing ran to show it).
+       Since 0.1.127, after a red run, a message that says a test fails reports that run, though it has "passes" in it:
        the owner's test-pw session, in Russian: '"Add a single todo" fails… "Empty input" passes falsely… the seed passes'.
        A failure word with a "no" before it ("nothing fails", 0 failed, no failures) is still a claim that all is well,
        and with no run before it a claim stays one ("The test passes. Checking that it fails without the fix"). */
     pass_claim_without_run(ev, cfg) {
+      // a change that a test run would see: code, a test, a runner's config; not a note or a doc (0.1.129)
+      const changesCode = (f) => !!f && ((isCode(f, cfg) && !NOT_SOURCE.test(f)) || isRunnerConfig(f));
       const out = [],
         pats = cfg.pass_claim_patterns.map(
           (p) =>
@@ -2502,6 +2507,12 @@
           // the last run was red and the message says a test fails: a report of that run, not a claim it is green
           if ((l.failed || l.errors) && !saysFailure(t))
             out.push(F("pass_claim_without_run", "high", e.seq, T("pass_red", { passed: l.passed, failed: l.failed })));
+          else if (!(l.failed || l.errors)) {
+            // 0.1.129: green, then a code file changed and no run since: the claim is about code no run has seen
+            const lastRun = near[near.length - 1].seq;
+            const changed = ev.find((x) => x.seq > lastRun && x.seq < e.seq && (x.kind === "write" || x.kind === "edit") && changesCode(x.file));
+            if (changed) out.push(F("pass_claim_without_run", "high", e.seq, T("pass_after_edit", { file: changed.file, seq: changed.seq })));
+          }
         }
       }
       return out;
