@@ -299,7 +299,7 @@ Only for the `qa-c#` profile, via tree-sitter, same recipe as Java — same four
 
 #### Python
 
-Only for the `qa-python` profile, via tree-sitter — three of the four Java/C# checks, since pytest's name-based test discovery has no missing-annotation smell to detect, and a plain `assert a == b` has no argument order to get backwards.
+For the `qa-python` profile, and for the `.py` files of `qa-api` (0.1.129). Via tree-sitter, three of the four Java/C# checks, since pytest's name-based test discovery has no missing-annotation smell to detect, and a plain `assert a == b` has no argument order to get backwards. Ruff adds more, in the table after this one.
 
 | Check | Default | Raised when |
 |---|---|---|

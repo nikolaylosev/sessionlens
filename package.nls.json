@@ -27,7 +27,7 @@
   "config.minGapMs": "Minimum pause between two model requests, in milliseconds (request pacing). While this is not set, a local server gets no pause and every other provider 6500 ms. Same as ⚙ Settings in the panel.",
   "config.maxCode": "How many characters of the agent's code go into a model request. While this is not set, a local server gets 12000 and every other provider 40000. Same as ⚙ Settings in the panel.",
   "config.verify": "Let a second model request verify the findings of the model review before they are shown. Same as ⚙ Settings in the panel.",
-  "config.lint": "Static analysis (ESLint for `qa-ts`, `qa-cypress`, `qa-detox`; tree-sitter for `qa-java`, `qa-c#`, `qa-python`). Changing it re-analyzes every session. Same as ⚙ Settings in the panel.",
+  "config.lint": "Static analysis (ESLint for `qa-ts`, `qa-cypress`, `qa-detox`; tree-sitter for `qa-java`, `qa-c#`; tree-sitter and Ruff for `qa-python` and the `.py` files of `qa-api`; a built-in parser for `qa-robot`). Changing it re-analyzes every session. Same as ⚙ Settings in the panel.",
   "config.rulesTarget": "Which project file the proposed rules, **Compress rules.md** and **Generate skill** are written for. Same as **Target file** on the Calibration tab.",
   "config.rulesTarget.claude": "CLAUDE.md (Claude Code)",
   "config.rulesTarget.codex": "AGENTS.md (Codex, Cursor and other agents that read it)",
