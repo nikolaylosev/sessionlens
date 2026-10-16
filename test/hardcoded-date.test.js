@@ -26,6 +26,30 @@ test("not reported: a date outside an assertion, or an assertion without a date"
   assert.deepEqual(found("e2e/deadline.spec.ts", "expect(page.getByRole('heading', { name: 'Paid' })).toBeVisible();\n"), []);
 });
 
+test("Python: date(…) and datetime(…) with a year in numbers in an assertion (0.1.129)", () => {
+  const F = "tests/test_orders.py";
+  const py = (line) => found(F, `def test_order():\n    ${line}\n`, "qa-python");
+  for (const line of [
+    "assert order.created == date(2026, 10, 16)",
+    "assert order.created == datetime.date(2026, 10, 16)",
+    "assert order.paid_at == datetime(2026, 10, 16, 9, 30, tzinfo=timezone.utc)",
+    "assert order.paid_at == datetime.datetime( 2026 , 1, 1)",
+    "assert order.created == date(year=2026, month=10, day=16)",
+  ])
+    assert.deepEqual(py(line), [`medium: ${F}: date in an assertion “${line}” — will go red when content changes`], line);
+  // a date computed at run time, a year from a variable, a date outside an assertion, another function's name
+  for (const line of [
+    "assert order.created == date.today()",
+    "assert order.created == date(year, 10, 16)",
+    "want = date(2026, 10, 16)",
+    "assert update(2026, 10) == 1",
+    "assert to_date(2026, 10) == x",
+  ])
+    assert.deepEqual(py(line), [], line);
+  // JavaScript's Date and C#'s DateTime are not asked for
+  assert.deepEqual(found("e2e/order.spec.ts", "expect(order.created).toEqual(new Date(2026, 9, 16));\n"), []);
+});
+
 test("not reported: a commented-out assertion with a date; the code line next to it still is", () => {
   assert.deepEqual(found("e2e/deadline.spec.ts", "// expect(text).toHaveText('2026-03-15');\nexpect(text).toMatch(/Deadline/);\n"), []);
   assert.deepEqual(found("e2e/deadline.spec.ts", "/* expect(text).toHaveText('March 15, 2026'); */\n"), []);

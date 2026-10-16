@@ -11,6 +11,9 @@
   code) and `hardcoded_base_url` (a real host in a test instead of configuration) were in the TypeScript, Cypress,
   Detox, API and mobile profiles, not in `qa-python`, so a pytest file with an API key or a staging URL gave nothing.
   An environment variable, `localhost`, a comment and a docstring do not count.
+- **A Python date in an assertion is a hard-coded date.** `hardcoded_date` read only a date in text (`2026-10-16`,
+  `October 16, 2026`). Now `assert order.created == date(2026, 10, 16)` is reported too, and so are `datetime(…)`,
+  `datetime.date(…)` and `date(year=2026, …)`: a year in numbers first. `date.today()` and `date(year, 1, 1)` are not.
 
 ## 0.1.128
 

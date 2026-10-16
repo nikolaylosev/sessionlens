@@ -2950,11 +2950,14 @@
     hardcoded_date(ev) {
       const RX =
         /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\b20\d{2}-\d{2}-\d{2}\b|\b(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*\s+\d{4}/i;
+      // Python's date(2026, 10, 16), datetime(2026, 10, 16, 9, 30), datetime.date(year=2026, …) (0.1.129): a year in
+      // numbers first. Lower case only: JavaScript's Date and C#'s DateTime are not asked for here
+      const PY_DATE = /\b(?:date|datetime)\(\s*(?:year\s*=\s*)?\d{4}\s*,/;
       const out = [];
       for (const e of ev) {
         if (!e.new_content) continue;
         for (const ln of linesOf(e).split("\n"))
-          if (!/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && /expect|assert|toHaveText|getByText/.test(ln) && RX.test(ln))
+          if (!/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && /expect|assert|toHaveText|getByText/.test(ln) && (RX.test(ln) || PY_DATE.test(ln)))
             out.push(F("hardcoded_date", "medium", e.seq, T("hard_date", { file: e.file || inMsg(), line: clip(ln.trim(), 80) })));
       }
       return out;
