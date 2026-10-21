@@ -58,6 +58,9 @@
   plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
+- **Tests made in a loop over the cases cover their IDs.** `for (const item of links) test(\`${item.id}: …\`)` names
+  no ID in its title, so every case in `links` had "no test" (a real session: 19 of 26). Now such a test covers the
+  IDs written as strings in the array it loops over (`{ id: 'NAV-02', … }`), with `for … of` or `forEach`.
 - **Playwright's test agents in a Cursor session.** Cursor keeps an MCP call's arguments one level down, and the
   import did not read them: a test the generator wrote had no file and no code, so no check saw it; a run had no file
   list, and the planner's plan was lost. Now they are read as in a Claude Code session. A Cursor session imported
