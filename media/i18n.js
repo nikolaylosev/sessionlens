@@ -263,6 +263,9 @@
       src_gherkin: "gherkin",
       src_external: "imported",
       demoted: "demoted for precision",
+      trial: "new check, on trial",
+      trial_hint:
+        "A new check: its findings are shown as low until it has 10 verdicts. Mark them True or False: with 10, it gets its own severity, or calibration demotes it or switches it off.",
       btn_ok: "Confirm",
       btn_fp: "False",
       ph_note: "comment",
@@ -327,6 +330,7 @@
       st_off: "disabled",
       st_demoted: "demoted",
       st_need: "need {n} more",
+      st_trial: "on trial, low: need {n} more",
       st_ok: "ok",
       st_not_calibrated: "not calibrated",
       st_why_ai:

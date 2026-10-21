@@ -3834,6 +3834,7 @@
      (their precision depends on the model and the prompt; the Calibration tab only shows it). Never a check the
      registry marks calibrate: false (hardcoded_secret, decided 03.10). */
   const CALIBRATED_SPEC = new Set(["test_without_requirement", "out_of_scope_tested"]);
+  const isTrial = (check) => (C().CHECKS[check] || {}).trial === true;
   function calibrated(f) {
     if ((C().CHECKS[f.check] || {}).calibrate === false) return false;
     const src = f.source || "formal";
@@ -3843,8 +3844,9 @@
      calib: { check: { source: { ok, fp } } } (calibStatsBySource): stats per check AND source, so an engine's poor
      record never switches off the regex check of the same name, or the other way round.
      overrides: the Rules tab's; a check ticked on there by hand (enabled: true) is never hidden.
-     → { findings: shown (a demoted one is low), hidden: an "off" check's (kept with the session as calibHidden and
-         counted by sessionSummary(), never shown: not running it lost their verdicts, test/calibration-loop.test.js),
+     → { findings: shown (a demoted one is low, and so is a trial check's with fewer than 10 verdicts),
+         hidden: an "off" check's (kept with the session as calibHidden and counted by sessionSummary(), never
+         shown: not running it lost their verdicts, test/calibration-loop.test.js),
          suppressed: [{ check, source, precision, n }], one per check and source that hid something here } */
   function calibrate(findings, calib, overrides) {
     const shown = [],
@@ -3861,6 +3863,8 @@
         hidden.push(f);
         off.set(f.check + "|" + src, { check: f.check, source: src, precision: cl.p, n: cl.n });
       } else if (cl.level === "demoted") shown.push({ ...f, severity: "low", demoted: true });
+      // a new check with fewer than 10 verdicts: low, marked, until reviewers have judged it (0.1.130)
+      else if (cl.level === "need" && isTrial(f.check)) shown.push({ ...f, severity: "low", trial: true });
       else shown.push(f);
     }
     return { findings: shown, hidden, suppressed: [...off.values()] };
@@ -4231,6 +4235,7 @@
     runChecks,
     calibrate,
     isCalibrated: (check, source) => calibrated({ check, source }),
+    isTrial,
     gherkinChecks,
     sortFindings,
     metrics,

@@ -34,6 +34,7 @@ async function panel() {
     block("spec_uncovered", "spec", 10, 1), // a fact: never calibrated
     block("test_without_requirement", "spec", 3, 1), // calibrated, too few verdicts
     block("hardcoded_secret", "formal", 10, 0), // never calibrated (0.1.116), however poor its record
+    block("empty_result_unverified", "formal", 4, 3), // a new check on trial (0.1.130): low until 10 verdicts
   ];
   const ruleOverrides = { raw_locator: { enabled: true }, magic_number: { severity: "high" } };
   const s = {
@@ -80,6 +81,7 @@ test("the Calibration table: one row per check and source, with the status calib
     "spec_uncovered/spec": "not calibrated",
     "test_without_requirement/spec": "need 7 more",
     "hardcoded_secret/regex": "not calibrated",
+    "empty_result_unverified/regex": "on trial, low: need 6 more",
   });
   const why = (check, src) =>
     [...sb.document.querySelectorAll("#precision tr")].find((tr) => tr.children[0].textContent === check && tr.children[1].textContent === src).lastElementChild
@@ -88,6 +90,7 @@ test("the Calibration table: one row per check and source, with the status calib
   assert.match(why("spec_uncovered", "spec"), /A fact, not a guess/);
   assert.match(why("hardcoded_secret", "regex"), /Missing one costs more than a false alarm/);
   assert.match(why("raw_locator", "lint"), /you ticked it on/);
+  assert.match(why("empty_result_unverified", "regex"), /shown as low until it has 10 verdicts/);
   assert.equal(why("weak_assert", "regex"), "", "no tooltip on an ordinary row");
   assert.deepEqual(sb.errors, []);
   sb.close();
