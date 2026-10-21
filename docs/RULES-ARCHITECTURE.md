@@ -525,7 +525,8 @@ function run(session, cfg, settings) {
 ### 6.3 `merge(regexFindings, lintFindings, language)`, `SUPERSEDES` and `SAME_AS_REGEX`
 
 ```js
-const SUPERSEDES = new Set(["sleep_or_skip_added", "fragile_wait", "conditional_logic", "focused_test", "debug_leftover"]);
+const SUPERSEDES = new Set(["sleep_or_skip_added", "fragile_wait", "conditional_logic", "focused_test", "debug_leftover",
+  "weak_assert"]);                            // weak_assert since 0.1.130: only its "awaited" kind
 const SAME_AS_REGEX = {                       // engine rule → the kinds of regex finding it finds just as well
   "playwright/no-wait-for-timeout": ["sleep_or_skip_added|sleep"],
   "playwright/no-skipped-test": ["sleep_or_skip_added|skip"],
@@ -536,7 +537,9 @@ const SAME_AS_REGEX = {                       // engine rule → the kinds of re
   "cypress/no-debug": ["debug_leftover|debug"],
   "robot/sleep-or-skip": ["sleep_or_skip_added|sleep", "sleep_or_skip_added|skip"],
   "ruff/T100": ["debug_leftover|breakpoint"],  // 0.1.129
+  "playwright/prefer-web-first-assertions": ["weak_assert|awaited"],  // 0.1.130
   "playwright/no-force-option": [],           // reported under one of these names, but looks for something else
+  "playwright/valid-expect": [], "ruff/B015": [],  // weak_assert, but not what its regex finds
   …
 };
 const merge = (regexFindings, lintFindings, language) => {
@@ -545,18 +548,19 @@ const merge = (regexFindings, lintFindings, language) => {
 };
 ```
 
-- **5 check names** are emitted by both a regex and an engine and may be replaced. If the lint engine parsed the
+- **6 check names** are emitted by both a regex and an engine and may be replaced. If the lint engine parsed the
   file (`lr.ran === true`), a regex finding of these checks is dropped **only when the engine of the profile's
-  language looks for the same kind of thing**, so as not to show it twice. Every regex finding of these five carries
-  a `kind`: `sleep_or_skip_added` — `sleep`, `skip`, `retry`; `fragile_wait` — `networkidle`, `count`;
+  language looks for the same kind of thing**, so as not to show it twice. A regex finding that may be replaced
+  carries a `kind`: `sleep_or_skip_added` — `sleep`, `skip`, `retry`; `fragile_wait` — `networkidle`, `count`;
   `conditional_logic` — `branch`; `focused_test` — `only`; `debug_leftover` — `pause`, `debug`, `debugger`,
-  `breakpoint` (one finding per file and kind, so a `debugger;` next to a `page.pause()` stays).
+  `breakpoint` (one finding per file and kind, so a `debugger;` next to a `page.pause()` stays); `weak_assert` —
+  `awaited` only (0.1.130), its other findings have no kind and are never replaced.
 - **History.** Until 0.1.113 any engine that parsed the file dropped all of them: Java, C# and Python, whose engines
   have no rule for sleeps or skips, never reported `Thread.sleep`, `@Disabled`, `time.sleep`, `@pytest.mark.skip`;
   Cypress and Detox lost `it.skip`; every engine lost a retry (#27). For a short while after that only
   `sleep_or_skip_added` compared the kind, so in qa-ts a `networkidle` and an `if` in a test were reported twice
   (#29). `test/supersedes.test.js` runs the real engines on each case.
-- **`SAME_AS_REGEX` lists every engine rule reported under one of the five names**, with `[]` for the ones that look
+- **`SAME_AS_REGEX` lists every engine rule reported under one of the six names**, with `[]` for the ones that look
   for something else (`playwright/no-force-option`, `cypress/no-force`, `detox/waitfor-requires-timeout`…).
   `test/supersedes.test.js` fails on a new rule until that is decided, and on a kind listed under another check.
   Nothing replaces a retry, an exact element count or a `debugger` statement.
@@ -569,13 +573,15 @@ const merge = (regexFindings, lintFindings, language) => {
   (see §5.2) — there is nothing to duplicate. `test/rules-consistency.test.js` ties `SUPERSEDES` to the registry's
   `sources`: every check in `SUPERSEDES` must be emitted by both a regex and an engine, and every check emitted by
   both must be either in `SUPERSEDES` or in the test's `KEEP_BOTH` with the reason.
-- **`weak_assert` keeps both** (`KEEP_BOTH`): the regex finds `toBeDefined()`,
-  `toBeTruthy()` and `expect(true).toBe(true)`; the engines map other rules to
-  the same name (a useless `.not`, a malformed `expect`, a standalone `expect`, and since 0.1.125 an assertion that
-  reads the page once and never retries, `playwright/prefer-web-first-assertions`, medium).
-  Superseding it would drop the regex findings the engines do not make. The regex `expect\s*\([^)]*\)` stops at the
-  first `)`, so it never matches `expect(await x.isVisible()).toBeTruthy()`: in qa-ts only the engine reports that
-  line, once.
+- **`weak_assert`, in `SUPERSEDES` for one kind** (0.1.130; until then in the test's `KEEP_BOTH`): the regex finds
+  `toBeDefined()`, `toBeTruthy()` and `expect(true).toBe(true)`; the engines map other rules to the same name (a
+  useless `.not`, a malformed or standalone `expect`, Ruff's B015 / PT011 / B017, all with `[]`), which the regex
+  does not look for, so those stay side by side. Since 0.1.130 the regex reads two levels of parentheses inside
+  `expect(…)`, so it also finds `expect(await x.isVisible()).toBeTruthy()`: a page's state read once, a medium
+  finding of kind `awaited` ("reads the page once"). `playwright/prefer-web-first-assertions` finds the same line,
+  so only that kind is replaced where ESLint ran; with static analysis off the regex reports it.
+- **`assertion_roulette` keeps both** (`KEEP_BOTH`, 0.1.129): the regex counts many assertions without a message in
+  one test; Ruff's PT018 finds one `assert a and b`. They never report the same thing.
 - **`cypress_async_test` keeps both** (0.1.121, qa-cypress): ESLint's `cypress/no-async-tests` finds an async `it()`
   and the vendored `cypress/no-async-before` only a titled `before` / `beforeEach`; the regex finds what they miss, an
   untitled `before` / `beforeEach` and any `after` / `afterEach`. They never report the same hook.
@@ -780,10 +786,10 @@ Rules and ⚙ Settings reach it when the Sessions tab is shown again and on a `k
 the one-line summary, also the `title` of the profile name in `#hdr`. The list options: `name — profile_desc_<name>`. All output goes through
 `esc()`; a check's rule text is the `title` attribute.
 
-## 9. The full table of checks at v0.1.127 (63 of them)
+## 9. The full table of checks at v0.1.130 (65 of them)
 
-The reference is `media/checks.js`; this table is a readable copy of it, generated from the registry and
-`LensLint.RULE_MAPS` (the "Source" column), not written by hand.
+The reference is `media/checks.js`; this table is a readable copy of it and of `LensLint.RULE_MAPS` (the "Source"
+column), kept by hand: no test compares them, so a new check adds its row here too (§12).
 
 | Check | Group | Severity (default) | Source |
 |---|---|---|---|
@@ -826,7 +832,7 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | hardcoded_secret | code | high | regex (lens.js) |
 | hardcoded_base_url | code | medium | regex (lens.js) |
 | test_shadowed | code | high | engine only: Ruff F811 on a `test_…` name (Python, 0.1.129) |
-| empty_result_unverified | code | medium | regex (lens.js), 0.1.130 |
+| empty_result_unverified | code | medium (on trial: low until it has 10 verdicts, §5.2) | regex (lens.js), 0.1.130 |
 | status_only_assert | api | medium | regex (lens.js) |
 | mocked_service | api | medium | regex (lens.js) |
 | no_negative_cases | api | medium | regex (lens.js) |
@@ -983,8 +989,8 @@ Closed items are kept for the record. The list was opened at v0.1.98; later item
    "an action without a check" → always `no_assertion_after_action`). Then step 3
    comes down to adding the source to `sources`.
 3. Add an entry to `media/checks.js` — at the end of its group: `group`,
-   `severity`, `ruleKey`, `good`, `sources`. A new group goes into `GROUPS_ORDER`
-   plus `g_<group>` in `i18n.js`.
+   `severity`, `ruleKey`, `good`, `sources`, and `trial: true` (since 0.1.130: a new check is low, marked "on trial",
+   until it has 10 verdicts, §5.2). A new group goes into `GROUPS_ORDER` plus `g_<group>` in `i18n.js`.
 4. Add the rule text (`ruleKey`) to `i18n.js`; for a regex check, also the keys
    of its messages.
 5. Implement the detector.
@@ -992,7 +998,8 @@ Closed items are kept for the record. The list was opened at v0.1.98; later item
    `test/finding-pipeline.test.js` is a model for an end-to-end check of one check.
    If the new check is found both by a regex and by an engine, decide `SUPERSEDES` and the kinds in
    `SAME_AS_REGEX` (§6.3): `test/rules-consistency.test.js` and `test/supersedes.test.js` fail until that is done.
-7. Add the profile's name list only where the check can fire (`focused_test` is in the JavaScript profiles, not in
+7. Add its row to the table in §9 and to the readme's table of checks (no test compares them).
+8. Add the profile's name list only where the check can fire (`focused_test` is in the JavaScript profiles, not in
    qa-java): "What this profile checks" lists `cfg.checks`. Add the cases that must NOT count to the check's test, and
    if it changes what a case of `test/rule-mapping.test.js` reports, update that table.
 
@@ -1280,9 +1287,15 @@ The panel (`app.js`) does not know about VS Code settings; it sees them inside `
 
 `profile` stays in `globalState`: it is the last value of the drop-down, not a setting.
 
-`sessionsGroupBy` (0.1.124, `date | profile | verdict | agent`, `scope: "application"`) is not one of the five: the
-page never sees it. Only the Sessions tree reads it (§16.3); the title button writes it to `ConfigurationTarget.Global`,
+`sessionsGroupBy` (0.1.124, `date | profile | verdict | agent`; `project` and `custom`, "My groups", since 0.1.127;
+`scope: "application"`) is not one of the five: the page never sees it. Only the Sessions tree reads it (§16.3); the title button writes it to `ConfigurationTarget.Global`,
 and a change of it from anywhere redraws the tree.
+
+`tokenPrices` (0.1.130, an object of model name or `prefix*` → prices per million tokens, `scope: "application"`) is not
+one of the five either: it is edited in `settings.json` only. `storage:get` adds it to `settings`, normalised by
+`Lens.normPrices`, only when it is not empty (so a page with none sees no field); `storage:set` drops it from what the
+page saves, so a page can never write it. A change of it sends `__slRefresh { scope: "keys" }`: the open pages redraw
+the cost, nothing is reanalysed.
 
 ### 16.2 Commands
 
@@ -1432,6 +1445,33 @@ right after them. A comment separated from the test by a blank line still belong
 Python needs none of this: its body is the indented lines only.
 
 `supports(language, file)` is the same decision as `true`/`false`; `Lens.profileInfo()` uses it (§8.4).
+
+### 17.1 Requirement IDs and how a test names them (0.1.130)
+
+`parse(text)` reads a requirement from a line that starts with an ID (`ID_RE`): `R1` / `S1`, with a ticket's prefix
+(`AUTH-142/R3`), or a key of a test management tool (`KEY`: `NAV-01`, `REQ-12`, `CIP-T123`). A key needs a mark after
+it (`.`, `:`, `)` or a dash), so `UTF-8 encoding is used` stays text; under a heading such as "Requirements" a space is
+enough (`KEY_IN_REQ`). A heading that starts with an ID (`### NAV-01. …`) is the requirement itself, under "Out of
+scope" an out-of-scope item; a heading without one is a section. Lines without an ID are numbered `R1…` by the parser
+(`auto`): such a specification is shown, but its coverage is not checked (§6.6 of ARCHITECTURE.md).
+
+A test covers a requirement (`coverage()`):
+
+- an `R` / `S` ID by `refs()` in its title, comment, docstring or first lines, also `test_r1_total` and `testR1Total`;
+  `TASK-1/R1` by its `R1` part;
+- a key by `namesKey()`: as written or as a name writes it (`nav_01`, `NAV01`), in any case, never inside a word or a
+  longer number;
+- a test made in a loop over the cases (`for (const item of links) test(\`${item.id}: …\`)`, `links.forEach(…)`, an
+  array written in the loop): `loopSource()` finds the loop right above the test and, when the title names its
+  variable, the array; the IDs written as strings in it are covered;
+- a plan of Playwright's planner (`## Test Scenarios`, `#### 1.1. Name`): each scenario is a requirement `1.1` with
+  `byTitle`, covered by a test whose title is its name (case, spaces and a final period aside); the plan's
+  `**Seed:**` files (`seeds`) hold no test without a requirement.
+
+`offers(events)` lists what the agent wrote that could be the specification: the plan of a `planner_save_plan` step
+(`plan`, rendered by `planMarkdown()` in `lens.js` as Playwright writes it) and a document (`.md`, `.txt`; its text
+kept as `doc_content`, §21) with two IDs or more. The last version per file, newest first. The session's tab
+offers them only while the session has no specification, and takes one only on **Use as specification**.
 
 ## 18. One code path: VS Code only (since v0.1.105)
 
