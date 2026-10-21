@@ -323,6 +323,8 @@
             req: Number.isInteger(s.usage.requests) ? ", " + T("m_tokens_req", { n: s.usage.requests }) : ""
           })
         ] : [],
+        // the cost, when every model of the session has a price (0.1.130)
+        ...((c) => c && c.cost !== null ? [T("md_cost", { c: c.text })] : [])(sessionCost(s)),
         r.spec && r.spec.n ? T("md_spec", {
           n: r.spec.n,
           unc: s.coverage ? T("md_unc", { list: s.coverage.uncovered.length ? s.coverage.uncovered.join(", ") : T("md_none") }) : ""
@@ -2002,8 +2004,22 @@ ${en.raw}`).join("\n\n\n");
       u.cacheWrite ? T("m_tokens_write", { n: u.cacheWrite.toLocaleString("en-US") }) : "",
       T("m_tokens_out", { n: (u.output || 0).toLocaleString("en-US") }),
       Number.isInteger(u.requests) ? T("m_tokens_req", { n: u.requests }) : "",
-      u.models && u.models.length ? T("m_tokens_models", { m: u.models.join(", ") }) : ""
+      u.models && u.models.length ? T("m_tokens_models", { m: u.models.join(", ") }) : "",
+      // no prices yet: where to put them (0.1.130)
+      Object.keys(prices()).length ? "" : T("m_cost_hint")
     ].filter(Boolean).join("\n");
+  }
+  var prices = () => state.settings && state.settings.tokenPrices || {};
+  function money(v) {
+    if (v < 0.01) return "<0.01";
+    return v >= 1e3 ? Math.round(v).toLocaleString("en-US") : v.toFixed(2);
+  }
+  function sessionCost(s) {
+    if (!s.usage || !Object.keys(prices()).length) return null;
+    const c = Lens.usageCost(s.usage, prices());
+    if (!c) return null;
+    if (c.cost === null) return { text: "—", tip: T("m_cost_missing", { m: c.missing.map((m) => m || T("m_cost_nomodel")).join(", ") }), cost: null };
+    return { text: "≈ " + money(c.cost), tip: T("m_cost_tip"), cost: c.cost };
   }
   function renderReview() {
     const s = curS();
@@ -2022,7 +2038,9 @@ ${en.raw}`).join("\n\n\n");
       `${T("m_runs")} <b>${esc(m.runs)}</b>`,
       `${T("m_to_green")} <b>${esc(m.editsToGreen ?? "—")}</b>`,
       // the session's tokens (0.1.130), when its transcript had them
-      s.usage ? `<span title="${esc(usageTip(s.usage))}">${T("m_tokens")} <b>${esc(T("m_tokens_val", { in: compact(s.usage.input), out: compact(s.usage.output) }))}</b></span>` : ""
+      s.usage ? `<span title="${esc(usageTip(s.usage))}">${T("m_tokens")} <b>${esc(T("m_tokens_val", { in: compact(s.usage.input), out: compact(s.usage.output) }))}</b></span>` : "",
+      // and their cost, with the person's prices (0.1.130)
+      ((c) => c ? `<span title="${esc(c.tip)}">${T("m_cost")} <b>${esc(c.text)}</b></span>` : "")(sessionCost(s))
     ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
     $("#reimport").hidden = !Lens.needsReimport(s);
     const toolCode = s.events.some((e) => e.file && e.new_content);

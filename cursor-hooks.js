@@ -257,6 +257,16 @@ function readLog({ home, id, platform = process.platform }) {
         output: stops.reduce((a, r) => a + n(r.output_tokens), 0),
         requests: stops.length,
         models: [...new Set(stops.map((r) => r.model).filter((m) => typeof m === "string" && m))],
+        // per model, for the cost (Lens.usageCost)
+        byModel: stops.reduce((o, r) => {
+          const k = typeof r.model === "string" ? r.model : "";
+          const b = o[k] || (o[k] = { input: 0, cached: 0, cacheWrite: 0, output: 0 });
+          b.input += n(r.input_tokens);
+          b.cached += n(r.cache_read_tokens);
+          b.cacheWrite += n(r.cache_write_tokens);
+          b.output += n(r.output_tokens);
+          return o;
+        }, {}),
       }
     : null;
   return { outputs, edits, usage };

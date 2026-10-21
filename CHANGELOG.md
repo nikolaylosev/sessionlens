@@ -20,6 +20,11 @@
   and the models; the Markdown report has a line with them. Claude Code transcripts have them (each reply counted once,
   though its usage is on every one of its lines), Codex transcripts too (their running total), a Cursor Agent transcript
   with **Record Cursor agent runs** on. A session imported before shows them after **Import again**.
+- **A session's cost, with your own prices.** SessionLens has no prices of its own: what a token costs depends on the
+  model, your plan and the API. Put yours in the new setting `sessionlens.tokenPrices` (in `settings.json`, per million
+  tokens, by model name or its start with `*`, with the cache's own prices if you like), and the metrics show
+  `cost ≈ 12.40` and the Markdown report a line with it. Only when every model of the session has a price; otherwise
+  `cost —` says which have none.
 
 ### Fixed
 - **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D

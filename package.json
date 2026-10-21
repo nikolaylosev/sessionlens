@@ -243,6 +243,42 @@
           "scope": "application",
           "markdownDescription": "%config.sessionsGroupBy%",
           "order": 6
+        },
+        "sessionlens.tokenPrices": {
+          "type": "object",
+          "default": {},
+          "scope": "application",
+          "markdownDescription": "%config.tokenPrices%",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "input",
+              "output"
+            ],
+            "properties": {
+              "input": {
+                "type": "number",
+                "minimum": 0,
+                "description": "%config.tokenPrices.input%"
+              },
+              "output": {
+                "type": "number",
+                "minimum": 0,
+                "description": "%config.tokenPrices.output%"
+              },
+              "cacheRead": {
+                "type": "number",
+                "minimum": 0,
+                "description": "%config.tokenPrices.cacheRead%"
+              },
+              "cacheWrite": {
+                "type": "number",
+                "minimum": 0,
+                "description": "%config.tokenPrices.cacheWrite%"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       }
     },

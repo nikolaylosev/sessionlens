@@ -88,7 +88,16 @@ A loaded session appears in the **Sessions** list below the panel — click it t
 
 Everything about one session. It opens in its own editor tab when you click a session in the Sessions list, rather than being a tab inside Calibration & Settings, so several sessions can stay open side by side, next to the code the agent touched. Any session tabs still open reopen on their own the next time you start VS Code.
 
-- **Header:** the verdict (Red, Yellow or Green), the profile, the number of events and the last test result. Below it are metrics: reads, edits, test runs and edits before the first green run. A shell command that only reads, such as `cat`, `sed -n` or `rg`, counts as a read: Codex reads files that way. Since 0.1.130 also the session's tokens, when its transcript has them: input and output, and on hover how much of the input the cache gave, how much was written to it, the requests to the model and the models. Claude Code and Codex transcripts have them; a Cursor Agent transcript only with **Record Cursor agent runs** on. The Markdown report has them in a line of their own. There is no cost: what a token costs depends on the model and on your plan.
+- **Header:** the verdict (Red, Yellow or Green), the profile, the number of events and the last test result. Below it are metrics: reads, edits, test runs and edits before the first green run. A shell command that only reads, such as `cat`, `sed -n` or `rg`, counts as a read: Codex reads files that way. Since 0.1.130 also the session's tokens, when its transcript has them: input and output, and on hover how much of the input the cache gave, how much was written to it, the requests to the model and the models. Claude Code and Codex transcripts have them; a Cursor Agent transcript only with **Record Cursor agent runs** on. The Markdown report has them in a line of their own. **Cost** is shown only with your own prices: SessionLens has none of its own, since what a token costs depends on the model, your plan and the API. Put them in `sessionlens.tokenPrices` in `settings.json`, per million tokens, by model name or its start with `*`:
+
+  ```json
+  "sessionlens.tokenPrices": {
+    "my-model": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 },
+    "my-model-family-*": { "input": 1, "output": 5 }
+  }
+  ```
+
+  (made-up numbers). The tooltip of a session's tokens lists its models. The cost (`cost ≈ 12.40`, in the money your prices are in) is shown only when every model of the session has a price; otherwise `cost —` says which have none. A token read from the cache costs `cacheRead`, one written to it `cacheWrite`, each the input price when not set.
 - **Specification:** requirements with IDs, plus an optional "Out of scope" section. **Save and recompute** matches requirements to tests and adds coverage findings. Without a specification the first finding is "no specification". Requirements without IDs are numbered automatically, but no test can name them, so their coverage is not checked; the tab says so above the table.
 - **Segment with model:** asks the model to label the transcript as prose, specification, plan, code or output. It helps most for chat text where the code lives inside messages. A specification is what the product under test must do; a review of the tests or code themselves is prose, so it is not offered as the specification. **Back to regex parsing** undoes it.
 - **Semantic review (model):** the model looks for what patterns cannot: what a test really checks, coverage, fragility, missing cases. If **Verification call** is on in Settings, a second request drops every finding the model cannot back with a quote from the materials. Dropped ones are listed under **Dropped by verification**. The review and the verification are two separate requests — routed to different models, per **Model per request** in Settings, they can succeed or fail independently. If the review succeeds but verification does not (rate-limited, briefly overloaded, …), a **Verify again** button appears next to the status: it retries just that step on the findings already there, instead of re-running the whole review.
@@ -550,9 +559,10 @@ SessionLens finds `agent` in `~/.local/bin`, where the installer puts it. Set a 
 | `sessionlens.lint` | ⚙ Static analysis | on |
 | `sessionlens.rulesTarget` | Calibration → Target file | `claude` |
 | `sessionlens.sessionsGroupBy` | the button in the Sessions list's title | `date` |
+| `sessionlens.tokenPrices` | your prices per million tokens, for a session's cost (only in `settings.json`) | none |
 | `sessionlens.claudeCliPath`, `sessionlens.codexCliPath`, `sessionlens.cursorCliPath` | path to the `claude` / `codex` / `agent` command | found automatically |
 
-The first six are user settings: Settings Sync carries them to your other machines, and a project's
+The first seven are user settings: Settings Sync carries them to your other machines, and a project's
 `.vscode/settings.json` cannot change them. The CLI paths are machine settings and are not synced. Values you had set
 in the panel before 0.1.103 are moved into these settings on the first start.
 
