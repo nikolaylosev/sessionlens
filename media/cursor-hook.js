@@ -202,6 +202,14 @@ var require_i18n = __commonJS({
           m_reads: "reads",
           m_edits: "edits",
           m_runs: "runs",
+          m_tokens: "tokens",
+          m_tokens_val: "{in} in · {out} out",
+          m_tokens_in: "{n} input tokens, {p}% of them read from the cache",
+          m_tokens_write: "{n} written to the cache",
+          m_tokens_out: "{n} output tokens",
+          m_tokens_req: "{n} {n|request|requests} to the model",
+          m_tokens_models: "model: {m}",
+          md_tokens: "Tokens: {in} in ({p}% from the cache), {out} out{req}.",
           m_to_green: "edits to green",
           spec_none: "(none)",
           spec_auto: " · numbered automatically, coverage not checked",
@@ -2823,6 +2831,66 @@ var require_lens = __commonJS({
         if (isCodexJsonl(t)) return { agent: "codex", project: firstCwd(t, (r) => r && r.type === "session_meta" && r.payload && r.payload.cwd) };
         return { agent: "claude-code", project: firstCwd(t, (r) => r && r.cwd) };
       }
+      function usageOf(text, opts) {
+        const t = typeof text === "string" ? text.trimStart() : "";
+        if (!t.startsWith("{")) return null;
+        const num2 = (v) => typeof v === "number" && isFinite(v) && v >= 0 ? v : 0;
+        const out = (o) => o.input || o.output ? o : null;
+        if (isCursorStreamJson(t)) return null;
+        if (isCursorJsonl(t)) {
+          const u = opts && opts.cursorUsage;
+          if (!u || typeof u !== "object") return null;
+          return out({
+            input: num2(u.input),
+            cached: num2(u.cached),
+            cacheWrite: num2(u.cacheWrite),
+            output: num2(u.output),
+            requests: Number.isInteger(u.requests) ? u.requests : null,
+            models: Array.isArray(u.models) ? u.models.filter((m) => typeof m === "string").slice(0, 10) : []
+          });
+        }
+        const codex = isCodexJsonl(t);
+        const seen = /* @__PURE__ */ new Set(), models = /* @__PURE__ */ new Set();
+        const sum = { input: 0, cached: 0, cacheWrite: 0, output: 0, requests: 0 };
+        let total = null;
+        for (const line of t.split("\n")) {
+          if (!line.includes(codex ? '"token_count"' : '"usage"') && !(codex && line.includes('"turn_context"'))) continue;
+          let r;
+          try {
+            r = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (codex) {
+            const p = r && r.payload;
+            if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add(p.model);
+            if (p && p.type === "token_count" && p.info && p.info.total_token_usage) total = p.info.total_token_usage;
+            continue;
+          }
+          const m = r && r.type === "assistant" && r.message;
+          if (!m || !m.usage || typeof m.usage !== "object") continue;
+          const key = m.id || r.requestId || r.uuid;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          const u = m.usage;
+          sum.cached += num2(u.cache_read_input_tokens);
+          sum.cacheWrite += num2(u.cache_creation_input_tokens);
+          sum.input += num2(u.input_tokens) + num2(u.cache_read_input_tokens) + num2(u.cache_creation_input_tokens);
+          sum.output += num2(u.output_tokens);
+          sum.requests++;
+          if (typeof m.model === "string" && m.model && !m.model.startsWith("<")) models.add(m.model);
+        }
+        if (codex)
+          return total ? out({
+            input: num2(total.input_tokens),
+            cached: num2(total.cached_input_tokens),
+            cacheWrite: num2(total.cache_write_input_tokens),
+            output: num2(total.output_tokens),
+            requests: null,
+            models: [...models]
+          }) : null;
+        return out(Object.assign(sum, { models: [...models] }));
+      }
       function unreadToolCalls(text, events) {
         const t = text.trimStart();
         if (!t.startsWith("{") || /"chat_messages"/.test(t.slice(0, 5e3))) return false;
@@ -4229,6 +4297,7 @@ var require_lens = __commonJS({
         homeless,
         clip,
         transcriptOrigin,
+        usageOf,
         AGENTS,
         cleanGroup,
         projectOf,

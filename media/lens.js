@@ -2057,6 +2057,77 @@
     return { agent: "claude-code", project: firstCwd(t, (r) => r && r.cwd) };
   }
 
+  /* The tokens of a session (0.1.130), from the whole text at import (a long transcript is not kept), or null when its
+     format has none. One shape for every agent: input (all of it, the cached part too), cached (read from the cache),
+     cacheWrite, output, requests (null when not known), models.
+     - Claude Code: each reply's message.usage, once per message id (the same usage is on every block of a reply,
+       written up to a dozen times); its input_tokens leave out what the cache gave, so input adds both back.
+     - Codex: the last token_count's total_token_usage (a running total; input_tokens has the cached part in it).
+     - Cursor Agent: the transcript has none; opts.cursorUsage is the Cursor hook's log of its replies (readLog). */
+  function usageOf(text, opts) {
+    const t = typeof text === "string" ? text.trimStart() : "";
+    if (!t.startsWith("{")) return null;
+    const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? v : 0);
+    const out = (o) => (o.input || o.output ? o : null);
+    if (isCursorStreamJson(t)) return null;
+    if (isCursorJsonl(t)) {
+      const u = opts && opts.cursorUsage;
+      if (!u || typeof u !== "object") return null;
+      return out({
+        input: num(u.input),
+        cached: num(u.cached),
+        cacheWrite: num(u.cacheWrite),
+        output: num(u.output),
+        requests: Number.isInteger(u.requests) ? u.requests : null,
+        models: Array.isArray(u.models) ? u.models.filter((m) => typeof m === "string").slice(0, 10) : [],
+      });
+    }
+    const codex = isCodexJsonl(t);
+    const seen = new Set(),
+      models = new Set();
+    const sum = { input: 0, cached: 0, cacheWrite: 0, output: 0, requests: 0 };
+    let total = null;
+    for (const line of t.split("\n")) {
+      if (!line.includes(codex ? '"token_count"' : '"usage"') && !(codex && line.includes('"turn_context"'))) continue;
+      let r;
+      try {
+        r = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (codex) {
+        const p = r && r.payload;
+        if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add(p.model);
+        if (p && p.type === "token_count" && p.info && p.info.total_token_usage) total = p.info.total_token_usage;
+        continue;
+      }
+      const m = r && r.type === "assistant" && r.message;
+      if (!m || !m.usage || typeof m.usage !== "object") continue;
+      const key = m.id || r.requestId || r.uuid;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      const u = m.usage;
+      sum.cached += num(u.cache_read_input_tokens);
+      sum.cacheWrite += num(u.cache_creation_input_tokens);
+      sum.input += num(u.input_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens);
+      sum.output += num(u.output_tokens);
+      sum.requests++;
+      if (typeof m.model === "string" && m.model && !m.model.startsWith("<")) models.add(m.model);
+    }
+    if (codex)
+      return total
+        ? out({
+            input: num(total.input_tokens),
+            cached: num(total.cached_input_tokens),
+            cacheWrite: num(total.cache_write_input_tokens),
+            output: num(total.output_tokens),
+            requests: null,
+            models: [...models],
+          })
+        : null;
+    return out(Object.assign(sum, { models: [...models] }));
+  }
+
   /* A JSONL file with tool calls of which the import read none: only the conversation text was found, so there is
      nothing to review (no files, edits or test runs). The panel asks before it keeps such a session (0.1.121): before,
      a Cursor CLI log became a silent session of messages. A claude.ai export is left out: its tool blocks are the
@@ -3898,6 +3969,7 @@
     homeless,
     clip,
     transcriptOrigin,
+    usageOf,
     AGENTS,
     cleanGroup,
     projectOf,

@@ -289,6 +289,7 @@ test("an older Cursor session, with no text and no chat id: Import again picks t
     await st2.open();
     const got = (await st2.get(s.id)).session;
     assert.equal(got.source_cursor_id, id, "the next Import again asks the log by itself");
+    assert.deepEqual([got.usage.input, got.usage.output, got.usage.models], [121087, 1154, ["grok-4.7"]], "the tokens from the log's stop line (0.1.130)");
     assert.deepEqual(
       runs(got.events)
         .filter((r) => /pytest -q/.test(r[0]))

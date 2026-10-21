@@ -812,6 +812,7 @@ function wireMessages(
             cursorEdits: r.edits || undefined,
             cursorProject: at > 0 ? parts[at - 1] : undefined,
             cursorId: transcriptId(uri.fsPath) || undefined,
+            cursorUsage: r.usage || undefined,
           });
         } else {
           // a Claude Code session's subagents are in <session>/subagents/ next to its file (0.1.127)
@@ -834,7 +835,7 @@ function wireMessages(
         reply(await logCli("cursor", "check", () => checkCursor({ cliPath: cliPathFor("cursor") })));
       } else if (msg.type === "cursor:log") {
         const log = CursorHooks.readLog({ home: cursorHome(), id: msg.payload.id });
-        reply(log && (log.outputs.length || log.edits.length) ? log : {});
+        reply(log && (log.outputs.length || log.edits.length || log.usage) ? log : {});
       } else if (msg.type === "settings:open") {
         await vscode.commands.executeCommand("workbench.action.openSettings", "sessionlens.");
         reply(true);
@@ -1815,6 +1816,7 @@ function withHookLog(db, id) {
   if (db.edits) out.editSource = db.source + " database";
   if (log && log.outputs.length) Object.assign(out, { outputs: log.outputs, source: "hook log" });
   if (log && log.edits.length) Object.assign(out, { edits: log.edits, editSource: "hook log" });
+  if (log && log.usage) out.usage = log.usage;
   return out;
 }
 

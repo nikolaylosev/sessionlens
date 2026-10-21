@@ -15,6 +15,12 @@
   imported before the log was there gets the results. The Output channel says where they came from ("from the hook
   log", "from the cli database").
 
+- **A session's tokens.** The metrics under a session's header show its tokens, input and output (`tokens 3.4M in ·
+  18k out`), and on hover how much of the input the cache gave, how much was written to it, the requests to the model
+  and the models; the Markdown report has a line with them. Claude Code transcripts have them (each reply counted once,
+  though its usage is on every one of its lines), Codex transcripts too (their running total), a Cursor Agent transcript
+  with **Record Cursor agent runs** on. A session imported before shows them after **Import again**.
+
 ### Fixed
 - **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D
   jest`, `yarn add vitest`, `uv add pytest` and the like counted as runs of the tests, because the runner's name is in
