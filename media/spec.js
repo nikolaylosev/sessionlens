@@ -28,6 +28,14 @@
     for (const raw of text.split("\n")) {
       const line = raw.replace(/\s+$/, "");
       if (/^\s*#{1,4}\s/.test(line) || /^[A-ZА-ЯЁ][^:]{2,40}:\s*$/.test(line)) {
+        /* a heading that starts with an ID is a requirement, not a section (0.1.130: "### NAV-01. The menu opens", the
+           way an agent writes a document of test cases, was taken for a heading, and the text under it for requirements) */
+        const h = /^\s*#/.test(line) && line.match(ID_RE);
+        if (h) {
+          if (section === "oos") spec.outOfScope.push(line.replace(/^\s*#+\s*/, ""));
+          else spec.requirements.push({ id: h[1] || h[2], text: h[3].trim() });
+          continue;
+        }
         section = OOS_HEAD.test(line) ? "oos" : /открыт|open question|вопрос/i.test(line) ? "open" : REQ_HEAD.test(line) ? "req" : "";
         continue;
       }

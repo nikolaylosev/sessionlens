@@ -101,3 +101,30 @@ test("a spec with the ticket's prefix (TASK-1/R1): a test that names R1, or TASK
   assert.deepEqual(covered(spec, "tests/test_site.py", py, "python"), { "TASK-1/R1": ["test_home"], "TASK-1/R2": ["test_login"] });
   assert.deepEqual(uncovered(spec, "tests/test_site.py", py, "python"), []);
 });
+
+test("a heading that starts with an ID is a requirement: a document of test cases as an agent writes it", () => {
+  const doc = [
+    "# Test cases",
+    "Site: https://example.com/",
+    "## Navigation",
+    "### NAV-01. The main menu is visible",
+    "The user sees every item of the top menu.",
+    "Steps. Open the home page.",
+    "### NAV-02: The About item",
+    "## R3. The old style in a heading",
+    "## Out of scope",
+    "### NAV-09. Payments",
+    "## Search",
+    "### SRCH-01. A query finds a page",
+    "- the result list is not empty",
+  ].join("\n");
+  assert.deepEqual(ids(doc), [
+    "NAV-01 | The main menu is visible",
+    "NAV-02 | The About item",
+    "R3 | The old style in a heading",
+    "SRCH-01 | A query finds a page",
+  ]);
+  assert.deepEqual(LensSpec.parse(doc).outOfScope, ["NAV-09. Payments"]);
+  // a heading with no ID is still a section: the requirements under it count
+  assert.deepEqual(ids("## Requirements\n- NAV-01: The menu opens\n### Notes\n- just a note\n"), ["NAV-01 | The menu opens"]);
+});
