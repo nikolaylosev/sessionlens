@@ -30,7 +30,15 @@
   while it ran), the plan on hover, and the report a line with it. A price can have a `label`: with `"label": "API
   equivalent"` the cost reads `cost ≈ 12.40 (API equivalent)`, what the session would have cost through the API.
 
+- **Requirement IDs from your test management tool.** A spec can name its requirements `NAV-01`, `REQ-12` or
+  `CIP-T123` (Zephyr), not only `R1`: such a key needs a mark after it (`NAV-01.`, `NAV-01:`, `NAV-01 —`) so that
+  `UTF-8 encoding is used` stays text, and under a requirements heading a space is enough. A test names it as written
+  or as a name has to write it (`test_nav_01_home`), in any case, never inside a word or a longer number.
+
 ### Fixed
+- **A spec that writes R IDs with the ticket's prefix.** With `TASK-1/R1. …` in the spec every requirement had "no test",
+  even when a test named it: the spec kept `TASK-1/R1`, a test's reference was read as `R1`. Now a test that names `R1`
+  (or `TASK-1/R1`) covers it.
 - **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D
   jest`, `yarn add vitest`, `uv add pytest` and the like counted as runs of the tests, because the runner's name is in
   them: a session that only set up a venv had "runs" with no result. Now a command that installs, removes or shows a
