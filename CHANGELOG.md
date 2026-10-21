@@ -48,6 +48,9 @@
   on the page (`toHaveCount(0)`) and a new object's first state are not results.
 
 ### Fixed
+- **A spec written as a document of test cases.** A heading that starts with an ID (`### NAV-01. The main menu is
+  visible`) was taken for a section heading, so a document of 26 cases gave 99 requirements without IDs, one per line
+  of their text. Now such a heading is the requirement and the text under it is its description.
 - **`expect(await x.isVisible()).toBeTruthy()` where ESLint does not run.** The pattern stopped at the first `)` inside
   `expect(`, so a call in the argument was never seen: with static analysis off nothing caught this one-time read of the
   page. Now it is a medium finding ("reads the page once"), the same ESLint gives, and only one of the two where ESLint
