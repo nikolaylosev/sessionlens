@@ -31,7 +31,7 @@ const THEIRS = {
 
 test("into an empty home: hooks.json with one entry of ours on each of the five events, the script and its wrapper", () => {
   const h = home(),
-    p = P(h);
+    p = H.paths(h, "darwin"); // installed as on macOS below, wherever the test runs
   const r = H.install({ home: h, hookSource: SOURCE, exe: "/Applications/Cursor.app/Contents/MacOS/Cursor", platform: "darwin" });
   assert.deepEqual([r.ok, r.created, r.backup], [true, true, false]);
   const j = json(p.hooksFile);
@@ -195,7 +195,7 @@ test("Record asks first: Record installs, Escape writes nothing; Reload Window r
   await no.run("sessionlens.recordCursorRuns");
   assert.equal(no.calls.warning.length, 1);
   assert.equal(no.calls.warning[0][1].modal, true);
-  assert.match(no.calls.warning[0][1].detail, /hooks\.json.*hook\.sh.*log.*30 days/s);
+  assert.match(no.calls.warning[0][1].detail, /hooks\.json.*hook\.(?:sh|cmd).*log.*30 days/s);
   assert.equal(fs.existsSync(no.p.hooksFile), false);
   assert.equal(fs.existsSync(no.p.dir), false);
 
