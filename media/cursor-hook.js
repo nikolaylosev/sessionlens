@@ -2435,6 +2435,7 @@ var require_lens = __commonJS({
         if (!input || typeof input !== "object") return "";
         return input.namespace === "cursor" ? toolPart(input.toolName) : mcpName(input.namespace, input.toolName);
       }
+      const cursorArgs = (a) => a && typeof a === "object" && !Array.isArray(a) ? a : null;
       function cursorInput(name, input) {
         const o = Object.assign({}, input);
         if (o.path != null && o.file_path == null) o.file_path = o.path;
@@ -2493,7 +2494,7 @@ var require_lens = __commonJS({
               if (u.text) content.push({ type: "text", text: u.text });
             } else if (b.type === "text") content.push({ type: "text", text: b.text || "" });
             else if (b.type === "tool_use" && rec.role === "assistant") {
-              const raw = String(b.name || ""), name = raw === "CallDynamicTool" && cursorDynamicName(b.input) || raw, input = cursorInput(name, b.input || {});
+              const raw = String(b.name || ""), name = raw === "CallDynamicTool" && cursorDynamicName(b.input) || raw, input = cursorInput(name, raw === "CallDynamicTool" && playwrightTestTool(name) && cursorArgs(b.input && b.input.arguments) || b.input || {});
               const as = name === "StrReplace" && !input.file_path ? name : CURSOR_TOOLS[name] || name;
               const id = "cursor-" + names.length;
               content.push({ type: "tool_use", id, name: as, input });
@@ -2583,7 +2584,7 @@ var require_lens = __commonJS({
           const name = String(args.toolName || args.name || "mcp");
           const own = typeof args.name === "string" && args.name.endsWith("-" + name) ? args.name.slice(0, -name.length - 1) : "";
           const full = mcpName(args.serverIdentifier || args.providerIdentifier || own, name);
-          return [full || "mcp:" + name, {}, text(ok && ok.content), null, false, full || name];
+          return [full || "mcp:" + name, full && playwrightTestTool(full) && cursorArgs(args.args) || {}, text(ok && ok.content), null, false, full || name];
         }
         const as = CURSOR_STREAM_TOOLS[kind];
         if (!as) return [kind.replace(/ToolCall$/, ""), {}, text(ok), null, false, kind.replace(/ToolCall$/, "")];
@@ -3056,7 +3057,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 9;
+      const IMPORT_GEN = 10;
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
@@ -3103,6 +3104,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
+        if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
         if ((s.importGen || 0) < 9 && s.events.some(
           (e) => e.kind === "message" && e.new_content && [...String(e.text || "").matchAll(/```(\w+)?\n([\s\S]*?)```/g)].some((m) => diffAfter(m[1], m[2]) !== m[2])
