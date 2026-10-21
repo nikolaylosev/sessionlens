@@ -8,7 +8,14 @@
   const T = (k, v) => (typeof I18N !== "undefined" ? I18N : require("./i18n.js")).t(k, v);
   // a quoted text cut at a word break with "…" (0.1.124; it was cut mid-word): Lens.clip, loaded before this file
   const clip = (t, n) => (typeof Lens !== "undefined" ? Lens : require("./lens.js")).clip(t, n);
-  const ID_RE = /^\s*(?:[-*]\s*|\d+[.)]\s*|#{1,4}\s*)?((?:[A-Z]{2,10}-\d+\/)?[RS]\d{1,3})[.:)\s]\s*(.+)$/;
+  /* A requirement's ID: R1 / S1 (TASK-1/R1), or since 0.1.130 a key as a test management tool gives it: NAV-01, REQ-12,
+     CIP-T123 (Zephyr), US-45. A key needs a mark after it (. : ) or a dash), not only a space: "UTF-8 encoding is used"
+     and "ISO-8601 dates" are text, not requirements; in a section headed as requirements a space is enough (KEY_IN_REQ). */
+  const KEY = "[A-Z][A-Z0-9]{1,9}-[A-Z]{0,3}\\d{1,6}";
+  const ID_RE = new RegExp(
+    String.raw`^\s*(?:[-*]\s*|\d+[.)]\s*|#{1,4}\s*)?(?:((?:[A-Z]{2,10}-\d+\/)?[RS]\d{1,3})[.:)\s]|(` + KEY + String.raw`)(?:[.:)]|\s+[—–-]\s))\s*(.+)$`,
+  );
+  const KEY_IN_REQ = new RegExp(String.raw`^\s*(?:[-*]\s*|\d+[.)]\s*)?()(` + KEY + String.raw`)\s+(.+)$`);
   const OOS_HEAD = /вне\s+scope|out of scope|не\s+входит|исключ/i;
   const REQ_HEAD = /требован|requirement|сценари|scenario|критери|acceptance/i;
   const GWT_RE = /^\s*(?:Scenario|Сценарий)\s*[:\-]\s*(.+)$/i;
@@ -24,9 +31,9 @@
         section = OOS_HEAD.test(line) ? "oos" : /открыт|open question|вопрос/i.test(line) ? "open" : REQ_HEAD.test(line) ? "req" : "";
         continue;
       }
-      let m = line.match(ID_RE);
+      let m = line.match(ID_RE) || (section === "req" && line.match(KEY_IN_REQ));
       if (m && section !== "oos") {
-        spec.requirements.push({ id: m[1], text: m[2].trim() });
+        spec.requirements.push({ id: m[1] || m[2], text: m[3].trim() });
         continue;
       }
       m = line.match(GWT_RE);
@@ -216,6 +223,15 @@
     return s;
   }
 
+  /* Whether a test's title or comment names a key (0.1.130): NAV-01 as written, or the way a name has to write it,
+     nav_01 or NAV01, in any case; not inside a word or a longer number (NAV-010, XNAV-01) */
+  const KEY_ID = new RegExp("^" + KEY + "$");
+  function namesKey(id, text) {
+    const m = /^([A-Z][A-Z0-9]*)-([A-Z]*)(\d+)$/.exec(id);
+    if (!m) return false;
+    return new RegExp(`(?<![A-Za-z0-9])${m[1]}[-_ ]?${m[2]}${m[2] ? "[-_]?" : ""}${m[3]}(?!\\d)`, "i").test(text || "");
+  }
+
   function coverage(spec, events, language) {
     const byFile = {};
     for (const e of events) if (e.new_content) byFile[e.file || T("in_msg")] = e.new_content;
@@ -230,7 +246,10 @@
     ids.forEach((id) => (covered[id] = []));
     const unlinked = [];
     for (const t of all) {
-      const r = [...refs(t.header)].filter((id) => covered[id]);
+      const named = refs(t.header);
+      /* an R ID by its R part: a test names R1 for TASK-1/R1 as for R1 (0.1.130: a spec written with the ticket's
+         prefix had every requirement "with no test"); a key as namesKey reads it */
+      const r = ids.filter((id) => named.has(id.replace(/^.*\//, "")) || (KEY_ID.test(id) && namesKey(id, t.header)));
       if (!r.length) unlinked.push(t);
       r.forEach((id) => covered[id].push(t.name));
     }
