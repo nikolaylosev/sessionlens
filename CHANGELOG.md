@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.130
+
+### Added
+- **Record Cursor agent runs.** A Cursor Agent transcript keeps the agent's commands but not their output, so a red
+  test run looked like any other step unless Cursor's database still had it. Two new commands, in Cursor only:
+  **SessionLens: Record Cursor agent runs** adds a hook to your `~/.cursor/hooks.json` (it asks first, keeps your own
+  hooks and saves the file as it was); after each command and file edit of the agent, the hook writes the command's
+  output and the edit to `~/.cursor/sessionlens/log/` on your machine. **Stop recording Cursor agent runs** takes it
+  out. The logs are removed after 30 days. On Windows the hook is not yet tried on a real Cursor.
+
 ## 0.1.129
 
 ### Added

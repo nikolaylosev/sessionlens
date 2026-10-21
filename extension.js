@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, cursorProjectSlug, PATH_RX } = require("./cli.js");
 const { cursorOutputs } = require("./cursor-db.js");
+const CursorHooks = require("./cursor-hooks.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
 const I18N = require("./media/i18n.js");
@@ -1722,6 +1723,87 @@ async function deleteSession(context, arg, selected) {
   if (sessionsTreeProvider) sessionsTreeProvider.refresh();
 }
 
+/* 0.1.130: Record Cursor agent runs / Stop recording (the palette, in Cursor only). A Cursor transcript keeps the agent's
+   commands but not their output; the hook (media/cursor-hook.js, set up by cursor-hooks.js) writes it to a log the
+   import of a Cursor session reads. Only in a local window: the hook runs where the agent runs. */
+let cursorHome = () => os.homedir(); // tests set it (_test.setHome)
+const inCursor = () => /cursor/i.test((vscode.env && vscode.env.appName) || "");
+const hookSource = (context) => fs.readFileSync(vscode.Uri.joinPath(context.extensionUri, "media", "cursor-hook.js").fsPath, "utf8");
+
+async function recordCursorRuns(context) {
+  if (vscode.env.remoteName) {
+    vscode.window.showWarningMessage(t("SessionLens: recording Cursor agent runs works in a local window only."));
+    return;
+  }
+  const home = cursorHome(),
+    p = CursorHooks.paths(home);
+  if (CursorHooks.isRecording({ home })) {
+    CursorHooks.refresh({ home, hookSource: hookSource(context), exe: process.execPath });
+    vscode.window.showInformationMessage(t("SessionLens: Cursor agent runs are already recorded."));
+    return;
+  }
+  const yes = t("Record");
+  const pick = await vscode.window.showWarningMessage(
+    t("SessionLens: record what the Cursor agent runs?"),
+    {
+      modal: true,
+      detail: t(
+        "A Cursor transcript keeps the agent's commands but not their output, so SessionLens cannot tell a red test run from a green one. SessionLens adds a hook to {0}: after each command and file edit of the agent, Cursor runs {1}, which writes the command's output and the edit to {2}. A Cursor session you import then gets them. Your own hooks are kept. The logs are removed after {3} days. Stop recording removes the hook.",
+        p.hooksFile,
+        p.wrapper,
+        p.logDir,
+        CursorHooks.LOG_DAYS,
+      ),
+    },
+    yes,
+  );
+  if (pick !== yes) return;
+  const r = CursorHooks.install({ home, hookSource: hookSource(context), exe: process.execPath });
+  if (!r.ok) {
+    host.log("cursor hook: could not turn recording on: " + r.error);
+    vscode.window.showErrorMessage(t("SessionLens: could not turn recording on: {0}", r.error));
+    return;
+  }
+  host.log(`cursor hook: on, ${p.hooksFile}` + (r.created ? " (new file)" : "") + (r.backup ? `; the file before it: ${p.backup}` : ""));
+  const reload = t("Reload Window");
+  const next = await vscode.window.showInformationMessage(
+    t("SessionLens: Cursor agent runs are recorded from now on. Reload the window so that Cursor picks up the hook."),
+    reload,
+  );
+  if (next === reload) await vscode.commands.executeCommand("workbench.action.reloadWindow");
+}
+
+async function stopRecordingCursorRuns() {
+  const home = cursorHome();
+  const r = CursorHooks.uninstall({ home });
+  if (!r.ok) {
+    host.log("cursor hook: could not turn recording off: " + r.error);
+    vscode.window.showErrorMessage(t("SessionLens: could not turn recording off: {0}", r.error));
+    return;
+  }
+  if (!r.was) {
+    vscode.window.showInformationMessage(t("SessionLens: Cursor agent runs are not recorded."));
+    return;
+  }
+  host.log("cursor hook: off" + (r.removedFile ? ", hooks.json removed (nothing else was in it)" : ""));
+  vscode.window.showInformationMessage(
+    t("SessionLens: recording stopped. The logs in {0} are kept for import and removed after {1} days.", CursorHooks.paths(home).logDir, CursorHooks.LOG_DAYS),
+  );
+}
+
+/* At each start in Cursor: while recording is on, the copy of the hook becomes this version's; old logs go */
+function maintainCursorHook(context) {
+  if (!inCursor() || vscode.env.remoteName) return;
+  try {
+    const home = cursorHome();
+    if (CursorHooks.refresh({ home, hookSource: hookSource(context), exe: process.execPath })) host.log("cursor hook: updated to this version");
+    const gone = CursorHooks.cleanLogs({ home });
+    if (gone) host.log(`cursor hook: ${gone} log(s) older than ${CursorHooks.LOG_DAYS} days removed`);
+  } catch (e) {
+    host.log("cursor hook: " + String((e && e.message) || e));
+  }
+}
+
 /* The migrations, in order, then the session store (phase 7: one function, so the integration tests can run it
    again on data they wrote in the old formats). Each step logs its own failure and the next one still runs. */
 function runMigrations(context) {
@@ -1804,7 +1886,12 @@ function activate(context) {
     vscode.commands.registerCommand("sessionlens.deleteGroup", (arg) => deleteGroup(arg)),
     vscode.commands.registerCommand("sessionlens.filterSessions", () => pickSessionFilter()),
     vscode.commands.registerCommand("sessionlens.clearSessionFilter", () => setSessionFilter({ text: "", red: false, open: false })),
+    vscode.commands.registerCommand("sessionlens.recordCursorRuns", () => recordCursorRuns(context)),
+    vscode.commands.registerCommand("sessionlens.stopRecordingCursorRuns", () => stopRecordingCursorRuns()),
   );
+  // the two commands are in the palette in Cursor only (an unset key is false: nothing is set in VS Code)
+  if (inCursor()) setContextKey("sessionlens.inCursor", true);
+  maintainCursorHook(context);
   // phase 6: a change in Settings (by hand, from another window, Settings Sync) reaches every page like a panel save
   if (vscode.workspace.onDidChangeConfiguration) {
     context.subscriptions.push(
@@ -1866,6 +1953,10 @@ module.exports = {
     // the clock the date groups of the Sessions tree are counted from
     setNow(fn) {
       nowMs = fn;
+    },
+    // the home folder whose ~/.cursor the Cursor hook commands change
+    setHome(fn) {
+      cursorHome = fn;
     },
   },
 };

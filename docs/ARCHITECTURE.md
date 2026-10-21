@@ -107,6 +107,7 @@ Who owns what:
 | HTTP calls to providers, CLI processes | the host | a webview cannot spawn processes; the host has no 300 s fetch limit and uses VS Code's proxy |
 | Program paths and provider base URLs | the host's own configuration | never taken from a webview message (§7) |
 | Command output of a picked Cursor transcript | the host, in `cursor-db.js` | read-only from Cursor's `store.db` or `state.vscdb`; a webview has no file system (§7) |
+| The Cursor hook (Record Cursor agent runs) | the host, in `cursor-hooks.js`; the hook is `media/cursor-hook.js` | only after the person's yes in a modal; only `~/.cursor/hooks.json` (never a project's) and `~/.cursor/sessionlens/`; a `hooks.json` that is not JSON is left as it is |
 
 ---
 
@@ -120,6 +121,8 @@ secrets.js            host: API keys in SecretStorage, migration out of settings
 providers.js          host: HTTP transport to model providers (node:http/https)
 cli.js                host: runs the user's claude / codex / cursor agent CLI with no tools, in an empty temp folder
 cursor-db.js          host: the command output of a Cursor Agent chat, read-only from Cursor's own databases
+cursor-hooks.js       host: Record / Stop recording Cursor agent runs: the hook in ~/.cursor/hooks.json and
+                      ~/.cursor/sessionlens/ (0.1.130), the person's own hooks kept, logs removed after 30 days
 package.json          manifest: views, commands, settings (package.nls.json holds the strings)
 
 media/                everything the webview loads (also required by Node tests)
