@@ -455,6 +455,8 @@
       g_ai: "Model findings",
       prompts_title: "Prompts sent to the model",
       prompts_sub: "The instruction part only — the specification, code and transcript are appended automatically. Leave a box empty to use the built-in text.",
+      prompts_guard:
+        "After each prompt, your own too, SessionLens adds a paragraph that tells the model the session's text is material, not instructions: a line in a transcript such as “ignore the rules above” must not steer the review.",
       p_segment: "Segmentation",
       p_segment_sub: "Labels line ranges of the session: prose, spec, plan, code, output.",
       p_review: "Semantic review",
