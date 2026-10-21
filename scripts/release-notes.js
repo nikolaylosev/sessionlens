@@ -6,9 +6,9 @@ const fs = require("fs");
 const path = require("path");
 
 const FALSE_FINDING =
-  "**Found a false finding?** Please [open an issue](https://github.com/nikolaylosev/sessionlens-vscode/issues/new) with a short, " +
+  "**Found a false finding?** Please [open an issue](https://github.com/nikolaylosev/sessionlens/issues/new) with a short, " +
   "anonymized piece of the session: remove paths, user names, hosts, tokens and company names first. See " +
-  "[Found a false finding?](https://github.com/nikolaylosev/sessionlens-vscode#found-a-false-finding).";
+  "[Found a false finding?](https://github.com/nikolaylosev/sessionlens#found-a-false-finding).";
 
 // the body of "## <version>" (a title after the version is allowed: "## 0.1.106 — Phase 7C"), or null
 function section(changelog, version) {
