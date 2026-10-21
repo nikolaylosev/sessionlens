@@ -898,8 +898,15 @@
      Playwright's --list, Jest's --listTests, pytest's --collect-only / --co, dotnet test --list-tests, vitest list.
      Until 0.1.122 such a command was a run with no result, so "tests never run" stayed silent after it. */
   const LIST_ONLY = /(?:^|\s)(?:--list|--listTests|--list-tests|--collect-only|--co)(?=[\s=]|$)|\bvitest\s+list\b/;
+  /* 0.1.130: a part that installs, removes or shows a package runs no test either, though the runner's name is in it:
+     `pip install pytest`, `python -m pip install -U pytest`, `npm install -D jest`, `yarn add vitest`, `uv add pytest`;
+     nor does asking a runner for its version or help, or where it is (a test session on birdhospital.ru: its first
+     two steps, a venv with pytest, were two "runs" with no result). No word boundary on either side: micromamba
+     installs, and `npm init jest@latest` (npm i…) makes a config */
+  const NOT_A_RUN =
+    /(?:pip3?|pipx|uv(?:\s+pip)?|poetry|pdm|conda|mamba|npm|pnpm|yarn|bun|brew|apt(?:-get)?|gem|cargo)\s+(?:install|i|add|ci|uninstall|remove|rm|show|list|info|outdated)|^\s*(?:which|where|type|command\s+-v)\s|(?:^|\s)--(?:version|help)(?=\s|$)/;
   function isTestRun(cmd, cfg) {
-    return cmd.split(/&&|\|\|?|;|\n/).some((part) => cfg.test_runner_patterns.some((p) => part.includes(p)) && !LIST_ONLY.test(part));
+    return cmd.split(/&&|\|\|?|;|\n/).some((part) => cfg.test_runner_patterns.some((p) => part.includes(p)) && !LIST_ONLY.test(part) && !NOT_A_RUN.test(part));
   }
   /* Playwright's test agents (npx playwright init-agents: planner, generator, healer) work through Playwright's MCP
      server, "playwright-test" (0.1.127). The generator writes a test with generator_write_test {fileName, code}, the

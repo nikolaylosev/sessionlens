@@ -120,3 +120,31 @@ test("a command that only lists the tests is not a run (0.1.122; before, a run w
     assert.deepEqual(ts(cmd), [], cmd);
   assert.deepEqual(py("pytest --cov=src -q"), [], "--cov is not --co");
 });
+
+test("installing, removing or showing a package, or asking a runner for its version, is not a run (0.1.130)", () => {
+  const cfg = (p) => Lens.profile(p);
+  const runs = (p, cmd) => Lens.importAny(transcript([["bash", cmd, ""]]), cfg(p)).filter((e) => e.kind === "run_tests").length;
+  for (const cmd of [
+    "pip install pytest",
+    "pip3 install -U pytest pytest-cov",
+    "python -m pip install pytest",
+    ".venv/bin/python -m pip install pytest",
+    "python3 -m venv .venv && .venv/bin/python -m pip install pytest",
+    "uv add --dev pytest",
+    "uv pip install pytest",
+    "poetry add --group dev pytest",
+    "pip show pytest",
+    "pip uninstall -y pytest",
+    "which pytest",
+    "pytest --version",
+    "python -m pytest --help",
+    "micromamba install -y pytest",
+  ])
+    assert.equal(runs("qa-python", cmd), 0, cmd);
+  for (const cmd of ["npm install -D jest", "npm i -D vitest", "yarn add --dev jest", "pnpm add -D vitest", "npx jest --version", "npm init jest@latest"])
+    assert.equal(runs("qa-ts", cmd), 0, cmd);
+  // still runs: an install and then the tests, a test file named after a tool, an option that only looks alike
+  for (const cmd of ["pip install -r requirements.txt && pytest -q", "pytest tests/test_install.py", "pytest -k install", "pytest --verbose"])
+    assert.equal(runs("qa-python", cmd), 1, cmd);
+  for (const cmd of ["npm ci && npm test", "npx jest src/install.test.ts", "yarn test"]) assert.equal(runs("qa-ts", cmd), 1, cmd);
+});

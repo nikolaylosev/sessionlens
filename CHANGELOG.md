@@ -16,6 +16,11 @@
   log", "from the cli database").
 
 ### Fixed
+- **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D
+  jest`, `yarn add vitest`, `uv add pytest` and the like counted as runs of the tests, because the runner's name is in
+  them: a session that only set up a venv had "runs" with no result. Now a command that installs, removes or shows a
+  package, `npm init jest@latest`, `which pytest` and a runner's `--version` or `--help` run nothing. An install
+  followed by the tests (`pip install -r requirements.txt && pytest`) is still a run.
 - **Import again no longer asks whether the file is this session when only command output is new.** It compared each
   step's text, and a command's text is its output: the same Cursor transcript with output from the log looked like
   "45% of its steps". Now only what the person and the agent said is compared word for word; a tool step by its kind,
