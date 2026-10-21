@@ -249,6 +249,8 @@ var require_i18n = __commonJS({
           src_gherkin: "gherkin",
           src_external: "imported",
           demoted: "demoted for precision",
+          trial: "new check, on trial",
+          trial_hint: "A new check: its findings are shown as low until it has 10 verdicts. Mark them True or False: with 10, it gets its own severity, or calibration demotes it or switches it off.",
           btn_ok: "Confirm",
           btn_fp: "False",
           ph_note: "comment",
@@ -310,6 +312,7 @@ var require_i18n = __commonJS({
           st_off: "disabled",
           st_demoted: "demoted",
           st_need: "need {n} more",
+          st_trial: "on trial, low: need {n} more",
           st_ok: "ok",
           st_not_calibrated: "not calibrated",
           st_why_ai: "The model's precision depends on the model and the prompt, not on the check, so calibration never switches it off. Untick the category on the Rules tab if you need to.",
@@ -1014,7 +1017,8 @@ var require_checks = __commonJS({
           severity: "medium",
           ruleKey: "r_empty_result",
           good: "assert len(search(status='paid')) > 0  # the same filter returns something, next to the test that expects []",
-          sources: ["regex"]
+          sources: ["regex"],
+          trial: true
         },
         // ---- api ----
         status_only_assert: {
@@ -4266,6 +4270,7 @@ var require_lens = __commonJS({
         return sortFindings(dedupe(out).map((f) => Object.assign(f, { source: "formal" })));
       }
       const CALIBRATED_SPEC = /* @__PURE__ */ new Set(["test_without_requirement", "out_of_scope_tested"]);
+      const isTrial = (check) => (C().CHECKS[check] || {}).trial === true;
       function calibrated(f) {
         if ((C().CHECKS[f.check] || {}).calibrate === false) return false;
         const src = f.source || "formal";
@@ -4284,6 +4289,7 @@ var require_lens = __commonJS({
             hidden.push(f);
             off.set(f.check + "|" + src, { check: f.check, source: src, precision: cl.p, n: cl.n });
           } else if (cl.level === "demoted") shown.push({ ...f, severity: "low", demoted: true });
+          else if (cl.level === "need" && isTrial(f.check)) shown.push({ ...f, severity: "low", trial: true });
           else shown.push(f);
         }
         return { findings: shown, hidden, suppressed: [...off.values()] };
@@ -4553,6 +4559,7 @@ var require_lens = __commonJS({
         runChecks,
         calibrate,
         isCalibrated: (check, source) => calibrated({ check, source }),
+        isTrial,
         gherkinChecks,
         sortFindings,
         metrics,

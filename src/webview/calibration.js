@@ -401,8 +401,8 @@ export function renderCalib() {
       .sort((a, b) => b[2].total - a[2].total)
       .map(([k, src, st]) => {
         const { n, p, level } = Lens.calibLevel(st);
-        let status = level === "need" ? T("st_need", { n: 10 - n }) : T("st_" + level),
-          why = "";
+        let status = level === "need" ? T(Lens.isTrial(k) ? "st_trial" : "st_need", { n: 10 - n }) : T("st_" + level),
+          why = level === "need" && Lens.isTrial(k) ? T("trial_hint") : "";
         if (!Lens.isCalibrated(k, src)) {
           status = T("st_not_calibrated");
           // a source calibrate() otherwise applies to: the registry keeps this check out (calibrate: false)

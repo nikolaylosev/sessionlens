@@ -39,7 +39,8 @@ GROUPS_ORDER = ["method", "process", "code", "api", "mobile", "gherkin", "robot"
 **Derived** from the registry: `GROUPS`, `DEFAULT_SEVERITY` and `GOOD` in `rules.js`,
 `RULE_KEYS` in `lens.js`, the list and order of groups in the Rules panel in `app.js`,
 the sort priority (`sortPriority`), whether calibration may touch the check (`calibrate: false` keeps it out,
-§5.2; since v0.1.116 only `hardcoded_secret`) and every check of an allowed severity
+§5.2; since v0.1.116 only `hardcoded_secret`), whether it is a new check on trial (`trial: true`, §5.2; since
+v0.1.130 `empty_result_unverified`) and every check of an allowed severity
 (`SEVERITIES`). The order of keys in `CHECKS` = the order of rows in the Rules panel.
 
 The detectors themselves still write the name as a string literal — this is unavoidable:
@@ -392,6 +393,14 @@ Walk-through:
   verdicts must not hide a leaked token; unticking it on the Rules tab still switches it off). `hardcoded_base_url`
   is calibrated as before. The thresholds are the same for every source. Imported findings count under their own
   source and are not calibrated.
+- **A new check on trial** (since v0.1.130, decided 21.10.2026, option A of the "shadow mode"): the registry marks
+  it `trial: true` when it is added. While its source has fewer than 10 verdicts (`calibLevel` "need"),
+  `calibrate()` shows its findings as low with `trial: true`, so a check nobody has judged yet makes no session red;
+  the finding carries the mark "new check, on trial" and the Calibration table "on trial, low: need N more". With 10
+  verdicts it has its own severity, or is demoted or switched off as any other. A severity set by hand on the
+  Rules tab still applies (`LensRules.apply` restates every finding but a demoted one). The other ideas of that
+  review (Wilson interval, decay of old verdicts, a team's shared `calibration.json`, a noise budget, showing part
+  of an off check's findings) wait for data from several reviewers.
 - **A check ticked on by hand** on the Rules tab (`ruleOverrides[check].enabled === true`, which the
   checkbox writes) is never hidden by calibration. A check merely left at its default is.
 - **What the UI shows** (since v0.1.112): the Calibration table has one row per check and source, with the

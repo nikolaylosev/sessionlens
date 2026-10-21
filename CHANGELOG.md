@@ -46,6 +46,10 @@
   wrong filter or an empty test database pass it too. Python (`== []`, `len(…) == 0`), TypeScript (`toHaveLength(0)`,
   `toEqual([])`), Java (`isEmpty()`, `hasSize(0)`) and C# (`Assert.Empty`, `BeEmpty()`); medium. A UI element that is not
   on the page (`toHaveCount(0)`) and a new object's first state are not results.
+- **New checks start on trial.** A new check has no record yet, so its findings are now low, marked "new check, on
+  trial", until it has 10 verdicts: it makes no session red before reviewers have judged it. With 10 it gets its own
+  severity, or calibration demotes it or switches it off as any other check; the Calibration table shows "on trial".
+  The first such check is `empty_result_unverified`. A severity you set on the Rules tab still applies.
 - **The agent's own test plan or test cases as the specification.** When the agent saved a plan with Playwright's
   planner agent, or wrote a document of test cases with IDs (`docs/test-cases.md` with `### NAV-01. …`), and the
   session has no specification, the **Specification** section offers it: **Use as specification**. Nothing is taken

@@ -17,6 +17,10 @@
      calibrate     optional; false: calibration never hides or demotes its findings, whatever their precision
                    (Lens.calibrate). A missed one costs more than a false alarm. Unticking it on the Rules tab still
                    switches it off. Default true.
+     trial         optional; true: a new check on trial (0.1.130). Until its source has 10 verdicts, calibration shows
+                   its findings as low, marked "new check, on trial", so a check nobody has judged yet makes no session
+                   red; with 10 it has its own severity, or calibration demotes it or switches it off as any other.
+                   A severity set by hand on the Rules tab still applies. Set it on a check when it is added.
 
    Order matters: the Rules panel lists checks in key order within each group. Append new checks to the end of
    their group.
@@ -315,6 +319,7 @@
       ruleKey: "r_empty_result",
       good: "assert len(search(status='paid')) > 0  # the same filter returns something, next to the test that expects []",
       sources: ["regex"],
+      trial: true,
     },
     // ---- api ----
     status_only_assert: {

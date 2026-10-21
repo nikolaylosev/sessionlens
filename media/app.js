@@ -620,7 +620,7 @@
     $("#precision").innerHTML = `<tr>${T("prec_hdr").map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` + // phase 8: one row per check AND source, with the status calibrate() really applies to it
     Object.entries(stats).flatMap(([k, per]) => Object.entries(per).map(([src, st]) => [k, src, st])).sort((a, b) => b[2].total - a[2].total).map(([k, src, st]) => {
       const { n, p, level } = Lens.calibLevel(st);
-      let status = level === "need" ? T("st_need", { n: 10 - n }) : T("st_" + level), why = "";
+      let status = level === "need" ? T(Lens.isTrial(k) ? "st_trial" : "st_need", { n: 10 - n }) : T("st_" + level), why = level === "need" && Lens.isTrial(k) ? T("trial_hint") : "";
       if (!Lens.isCalibrated(k, src)) {
         status = T("st_not_calibrated");
         why = T(src === "ai" ? "st_why_ai" : src === "spec" ? "st_why_fact" : src === "external" ? "st_why_external" : "st_why_kept");
@@ -2145,7 +2145,7 @@ ${en.raw}`).join("\n\n\n");
     fl.innerHTML = visible.length ? visible.map((f) => {
       const k = fkey(f), vd = s.verdicts[k] || {};
       const ai = f.source === "ai", sp = f.source === "spec", src = f.source || "formal";
-      return `<div class="f ${esc(f.severity)} ${vd.v ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
+      return `<div class="f ${esc(f.severity)} ${vd.v ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}${f.trial ? ` <span class="demoted" title="${esc(T("trial_hint"))}">${T("trial")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
         <div class="vb"><button class="btn tiny ghost v-ok ${vd.v === "ok" ? "on" : ""}">${T("btn_ok")}</button><button class="btn tiny ghost v-fp ${vd.v === "fp" ? "on fp" : ""}">${T("btn_fp")}</button><input class="note" placeholder="${T("ph_note")}" value="${esc(vd.note || "")}"></div></div>`;
     }).join("") : `<div class="empty">${s.findings.length ? T("empty_filter") : T("empty_findings")}</div>`;
     fl.querySelectorAll(".f").forEach((d) => {
