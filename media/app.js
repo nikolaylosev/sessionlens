@@ -1766,6 +1766,22 @@ ${en.raw}`).join("\n\n\n");
         });
       ev.target.value = "";
     });
+    $("#spec-offer").addEventListener("click", async (ev) => {
+      const btn = (
+        /** @type {HTMLElement} */
+        ev.target.closest("[data-offer]")
+      );
+      if (!btn) return;
+      const o = LensSpec.offers(curS().events)[Number(btn.getAttribute("data-offer"))];
+      if (!o) return;
+      await needEngine(curS().profile);
+      await updateSession(state.current, (s) => {
+        s.spec = o.text;
+        analyze(s);
+      });
+      renderReview();
+      $("#spec-d").open = true;
+    });
     $("#spec-save").addEventListener("click", async () => {
       const spec = $("#spec").value;
       await needEngine(curS().profile);
@@ -2067,6 +2083,11 @@ ${en.raw}`).join("\n\n\n");
     $("#seg-spec").hidden = !(s.seg && s.seg.spec_suggested);
     $("#seg-reset").hidden = !s.source_text;
     $("#spec").value = s.spec || "";
+    const offers = (s.spec || "").trim() ? [] : LensSpec.offers(s.events).slice(0, 3);
+    $("#spec-offer").hidden = !offers.length;
+    $("#spec-offer").innerHTML = offers.map(
+      (o, i) => `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : "spec_offer_cases", { f: o.file, n: o.n }))}</span><button class="btn tiny" data-offer="${i}">${esc(T("spec_offer_use"))}</button></div>`
+    ).join("");
     $("#spec-count").textContent = s.specParsed && s.specParsed.n ? T("spec_count", { n: s.specParsed.n, oos: s.specParsed.oos ? T("spec_oos", { n: s.specParsed.oos }) : "" }) + (s.specParsed.hasIds ? "" : T("spec_auto")) : (s.spec || "").trim() ? T("spec_unparsed") : T("spec_none");
     $("#spec-d").open = !s.spec;
     renderCoverage(s);
