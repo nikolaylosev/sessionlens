@@ -3682,7 +3682,8 @@
     },
     stop_markers_missing(ev, cfg) {
       const p = planSeq(ev, cfg);
-      const fe = ev.find((x) => ["edit", "write"].includes(x.kind));
+      // a document the agent wrote (a plan, test cases, a README) is no code written without a plan (0.1.130)
+      const fe = ev.find((x) => ["edit", "write"].includes(x.kind) && !DOC_RX.test(x.file || ""));
       if (!fe) return [];
       if (p == null) return [F("stop_markers_missing", "medium", fe.seq, T("no_plan"))];
       if (approvalSeq(ev, p) == null) return [F("stop_markers_missing", "medium", fe.seq, T("no_approval"))];
