@@ -129,6 +129,7 @@ export async function pickAndImport() {
       cursorOutputs: r.cursorOutputs,
       cursorEdits: r.cursorEdits,
       cursorProject: r.cursorProject,
+      cursorId: r.cursorId,
     });
 }
 
@@ -224,6 +225,8 @@ export async function importText(text, name, from = {}) {
       source_outputs: text.length < 400000 ? keptOutputs(from.cursorOutputs) : undefined,
       source_edits: text.length < 400000 ? keptEdits(from.cursorEdits) : undefined,
       source_project: text.length < 400000 ? from.cursorProject : undefined,
+      // the chat's id: Import again asks the Cursor hook's log for it (0.1.130)
+      source_cursor_id: from.cursorId || undefined,
       agent: origin.agent,
       project: origin.project,
       seg: null,

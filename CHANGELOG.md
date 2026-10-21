@@ -9,6 +9,17 @@
   hooks and saves the file as it was); after each command and file edit of the agent, the hook writes the command's
   output and the edit to `~/.cursor/sessionlens/log/` on your machine. **Stop recording Cursor agent runs** takes it
   out. The logs are removed after 30 days. On Windows the hook is not yet tried on a real Cursor.
+- **A Cursor session gets the log.** When you pick a Cursor Agent transcript, the output of its commands and the
+  versions of its files come from that log, so its test runs have their results (red, green), and a weakened assertion
+  is seen in the file before and after the edit. **Import again** in a session's tab reads the log too, so a session
+  imported before the log was there gets the results. The Output channel says where they came from ("from the hook
+  log", "from the cli database").
+
+### Fixed
+- **Import again no longer asks whether the file is this session when only command output is new.** It compared each
+  step's text, and a command's text is its output: the same Cursor transcript with output from the log looked like
+  "45% of its steps". Now only what the person and the agent said is compared word for word; a tool step by its kind,
+  file and command.
 
 ## 0.1.129
 

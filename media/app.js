@@ -1558,7 +1558,8 @@ ${en.raw}`).join("\n\n\n");
       askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
         cursorOutputs: r.cursorOutputs,
         cursorEdits: r.cursorEdits,
-        cursorProject: r.cursorProject
+        cursorProject: r.cursorProject,
+        cursorId: r.cursorId
       });
   }
   async function pickTranscript(source) {
@@ -1635,6 +1636,8 @@ ${en.raw}`).join("\n\n\n");
         source_outputs: text.length < 4e5 ? keptOutputs(from.cursorOutputs) : void 0,
         source_edits: text.length < 4e5 ? keptEdits(from.cursorEdits) : void 0,
         source_project: text.length < 4e5 ? from.cursorProject : void 0,
+        // the chat's id: Import again asks the Cursor hook's log for it (0.1.130)
+        source_cursor_id: from.cursorId || void 0,
         agent: origin.agent,
         project: origin.project,
         seg: null,
@@ -1907,7 +1910,7 @@ ${en.raw}`).join("\n\n\n");
     const sid = state.current, s = curS();
     if (!s) return;
     const fromFile = (s.importGen || 0) < 9 && (Lens.subagentsMissing(s) || Lens.cursorEditsMissing(s));
-    let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project;
+    let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project, cursorId = s.source_cursor_id, fromLog = false;
     if (!text) {
       const source = await chooseDialog(T("reimport_pick"), [
         { label: T("pick_source_claude"), value: "claude", primary: true },
@@ -1922,6 +1925,12 @@ ${en.raw}`).join("\n\n\n");
       cursorOutputs = r.cursorOutputs;
       cursorEdits = r.cursorEdits;
       cursorProject = r.cursorProject;
+      cursorId = r.cursorId || cursorId;
+    }
+    if (cursorId && window.__slCursorLog) {
+      const log = await window.__slCursorLog(cursorId);
+      if (log && Array.isArray(log.outputs) && log.outputs.length) [cursorOutputs, fromLog] = [log.outputs, true];
+      if (log && Array.isArray(log.edits) && log.edits.length) [cursorEdits, fromLog] = [log.edits, true];
     }
     const cfg = Lens.profile(s.profile);
     const events = Lens.pickConversation(s.events, Lens.importAny(text, cfg, { cursorOutputs, cursorEdits, cursorProject }));
@@ -1952,6 +1961,11 @@ ${en.raw}`).join("\n\n\n");
         x.source_edits = keptEdits(cursorEdits);
         x.source_project = cursorProject;
       }
+      if (fromLog && x.source_text) {
+        x.source_outputs = keptOutputs(cursorOutputs);
+        x.source_edits = keptEdits(cursorEdits);
+      }
+      if (cursorId) x.source_cursor_id = cursorId;
       Object.assign(x, Lens.transcriptOrigin(text, { cursorProject }));
       x.importGen = Lens.IMPORT_GEN;
       analyze(x, "import");

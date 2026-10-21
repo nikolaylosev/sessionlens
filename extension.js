@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, cursorProjectSlug, PATH_RX } = require("./cli.js");
-const { cursorOutputs } = require("./cursor-db.js");
+const { cursorOutputs, transcriptId } = require("./cursor-db.js");
 const CursorHooks = require("./cursor-hooks.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
@@ -797,13 +797,11 @@ function wireMessages(
         const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
         // a Cursor transcript keeps no command output; Cursor's own database may (cursor-db.js, 0.1.121)
         if (uri.scheme === "file" && Lens.isCursorJsonl(text.trimStart())) {
-          const r = cursorOutputs(uri.fsPath);
+          const r = withHookLog(cursorOutputs(uri.fsPath), transcriptId(uri.fsPath));
           host.log(
-            r.outputs
-              ? `cursor: the output of ${r.outputs.length} commands from the ${r.source} database`
-              : `cursor: no command output (${r.reason || "none kept"})`,
+            r.outputs ? `cursor: the output of ${r.outputs.length} commands from the ${r.source}` : `cursor: no command output (${r.reason || "none kept"})`,
           );
-          if (r.edits) host.log(`cursor: the file before and after ${r.edits.length} edits from the ${r.source} database`);
+          if (r.edits) host.log(`cursor: the file before and after ${r.edits.length} edits from the ${r.editSource || r.source}`);
           // ~/.cursor/projects/<workspace>/agent-transcripts/…: the folder's name gives the workspace's path (0.1.122)
           const parts = uri.fsPath.split(/[\\/]/),
             at = parts.lastIndexOf("agent-transcripts");
@@ -813,6 +811,7 @@ function wireMessages(
             cursorOutputs: r.outputs || undefined,
             cursorEdits: r.edits || undefined,
             cursorProject: at > 0 ? parts[at - 1] : undefined,
+            cursorId: transcriptId(uri.fsPath) || undefined,
           });
         } else {
           // a Claude Code session's subagents are in <session>/subagents/ next to its file (0.1.127)
@@ -833,6 +832,9 @@ function wireMessages(
         reply(await logCli("cursor", "run", () => runCursor(Object.assign({}, msg.payload, { cliPath: cliPathFor("cursor") })))); // the user's own Cursor Agent CLI
       } else if (msg.type === "cursor:check") {
         reply(await logCli("cursor", "check", () => checkCursor({ cliPath: cliPathFor("cursor") })));
+      } else if (msg.type === "cursor:log") {
+        const log = CursorHooks.readLog({ home: cursorHome(), id: msg.payload.id });
+        reply(log && (log.outputs.length || log.edits.length) ? log : {});
       } else if (msg.type === "settings:open") {
         await vscode.commands.executeCommand("workbench.action.openSettings", "sessionlens.");
         reply(true);
@@ -1802,6 +1804,18 @@ function maintainCursorHook(context) {
   } catch (e) {
     host.log("cursor hook: " + String((e && e.message) || e));
   }
+}
+
+/* What a picked Cursor transcript gets (0.1.130): the hook's log of its chat over Cursor's database (cursor-db.js), each
+   part for itself: the log has every command's output and every edit while recording was on; the database what it
+   kept. db: cursorOutputs()'s result; → the same shape, source/editSource naming where each part comes from. */
+function withHookLog(db, id) {
+  const log = id ? CursorHooks.readLog({ home: cursorHome(), id }) : null;
+  const out = Object.assign({}, db, { source: db.outputs ? db.source + " database" : db.source });
+  if (db.edits) out.editSource = db.source + " database";
+  if (log && log.outputs.length) Object.assign(out, { outputs: log.outputs, source: "hook log" });
+  if (log && log.edits.length) Object.assign(out, { edits: log.edits, editSource: "hook log" });
+  return out;
 }
 
 /* The migrations, in order, then the session store (phase 7: one function, so the integration tests can run it

@@ -2888,7 +2888,8 @@ var require_lens = __commonJS({
         return s.events.some((e) => (e.kind === "write" || e.kind === "edit") && (isRunnerConfig(e.file) || isTestFile(e.file, cfg)));
       }
       function transcriptMatch(stored, fresh) {
-        const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), String(e.text || "").slice(0, 60)].join("|");
+        const said = (e) => e.kind === "user" || e.kind === "message" ? String(e.text || "").slice(0, 60) : "";
+        const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), said(e)].join("|");
         const same = (x, y) => sig(x) === sig(y) || x.kind === "tool" && x.tool === "exec" && y.tool === "exec";
         const a = stored || [], b = fresh || [];
         if (!a.length) return b.length ? 0 : 1;

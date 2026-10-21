@@ -214,7 +214,9 @@ export async function reimport() {
   let text = fromFile ? null : s.source_text,
     cursorOutputs = s.source_outputs,
     cursorEdits = s.source_edits,
-    cursorProject = s.source_project;
+    cursorProject = s.source_project,
+    cursorId = s.source_cursor_id,
+    fromLog = false;
   if (!text) {
     const source = await chooseDialog(T("reimport_pick"), [
       { label: T("pick_source_claude"), value: "claude", primary: true },
@@ -229,6 +231,13 @@ export async function reimport() {
     cursorOutputs = r.cursorOutputs;
     cursorEdits = r.cursorEdits;
     cursorProject = r.cursorProject;
+    cursorId = r.cursorId || cursorId;
+  }
+  // a Cursor session: what the Cursor hook logged of its chat meanwhile (0.1.130), over what was kept at import
+  if (cursorId && window.__slCursorLog) {
+    const log = await window.__slCursorLog(cursorId);
+    if (log && Array.isArray(log.outputs) && log.outputs.length) [cursorOutputs, fromLog] = [log.outputs, true];
+    if (log && Array.isArray(log.edits) && log.edits.length) [cursorEdits, fromLog] = [log.edits, true];
   }
   const cfg = Lens.profile(s.profile);
   // a file with several conversations: the one closest to this session
@@ -264,6 +273,12 @@ export async function reimport() {
       x.source_edits = keptEdits(cursorEdits);
       x.source_project = cursorProject;
     }
+    // what the hook logged is kept with the text, so Back to regex parsing reads it too (0.1.130)
+    if (fromLog && x.source_text) {
+      x.source_outputs = keptOutputs(cursorOutputs);
+      x.source_edits = keptEdits(cursorEdits);
+    }
+    if (cursorId) x.source_cursor_id = cursorId;
     Object.assign(x, Lens.transcriptOrigin(text, { cursorProject })); // a session imported before 0.1.124 has neither
     x.importGen = Lens.IMPORT_GEN;
     analyze(x, "import");
