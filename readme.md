@@ -207,7 +207,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | Check | Default | Raised when |
 |---|---|---|
 | `peeked_at_src_before_plan` | High | The agent read product code before the plan was approved. A file it wrote or edited itself earlier in the session does not count |
-| `stop_markers_missing` | Medium | Code was written without a plan, or a plan was produced without stopping for approval |
+| `stop_markers_missing` | Medium | Code was written without a plan, or a plan was produced without stopping for approval. A document the agent writes (`.md`, `.txt`, `.rst`, `.adoc`: a plan, test cases, a README) is not code |
 
 #### Process
 

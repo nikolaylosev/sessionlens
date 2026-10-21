@@ -58,6 +58,10 @@
   plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
+- **A document is no code written without a plan.** "Code written without a plan" was reported at the first file the
+  agent wrote, a document too: a session that only wrote test cases or a README had it, and one that wrote a
+  document first had it at the document. Now a document (`.md`, `.txt`, `.rst`, `.adoc`) does not count; the finding
+  is at the first code, and a verdict you gave it moves there with it.
 - **Tests made in a loop over the cases cover their IDs.** `for (const item of links) test(\`${item.id}: …\`)` names
   no ID in its title, so every case in `links` had "no test" (a real session: 19 of 26). Now such a test covers the
   IDs written as strings in the array it loops over (`{ id: 'NAV-02', … }`), with `for … of` or `forEach`.
