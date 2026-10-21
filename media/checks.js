@@ -308,6 +308,14 @@
       good: "def test_create_order_rejects_empty_body(client): …  — a name of its own for every test",
       sources: ["lint"],
     },
+    // an empty result with no test of the same file that expects one that is not empty (0.1.130)
+    empty_result_unverified: {
+      group: "code",
+      severity: "medium",
+      ruleKey: "r_empty_result",
+      good: "assert len(search(status='paid')) > 0  # the same filter returns something, next to the test that expects []",
+      sources: ["regex"],
+    },
     // ---- api ----
     status_only_assert: {
       group: "api",

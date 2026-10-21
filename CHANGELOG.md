@@ -35,6 +35,12 @@
   `UTF-8 encoding is used` stays text, and under a requirements heading a space is enough. A test names it as written
   or as a name has to write it (`test_nav_01_home`), in any case, never inside a word or a longer number.
 
+- **New check `empty_result_unverified`.** A test that asks something (an HTTP call, a query, a search) and expects an
+  empty result proves little when no test of the same file shows the same call returning something: a broken query, a
+  wrong filter or an empty test database pass it too. Python (`== []`, `len(…) == 0`), TypeScript (`toHaveLength(0)`,
+  `toEqual([])`), Java (`isEmpty()`, `hasSize(0)`) and C# (`Assert.Empty`, `BeEmpty()`); medium. A UI element that is not
+  on the page (`toHaveCount(0)`) and a new object's first state are not results.
+
 ### Fixed
 - **A spec that writes R IDs with the ticket's prefix.** With `TASK-1/R1. …` in the spec every requirement had "no test",
   even when a test named it: the spec kept `TASK-1/R1`, a test's reference was read as `R1`. Now a test that names `R1`
