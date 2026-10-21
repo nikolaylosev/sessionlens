@@ -510,8 +510,11 @@ flowchart TD
   SHA-256). `fromCursorJsonl` gives the `Write` or `StrReplace` of the same file whose text after matches a
   `toolUseResult` (`originalFile`, `content`), so a file written over in one go has its earlier version and
   `test_deleted` / `assert_weakened` see the rewrite; the session keeps them as `source_edits` while all of them are
-  under 400 000 characters. The CLI's `store.db` has no file before an edit. The host also returns the name of the
-  transcript's folder in `~/.cursor/projects`
+  under 400 000 characters. The CLI's `store.db` has no file before an edit, but it has what the agent read: since
+  0.1.130 the host takes the last version the session saw of the file (a whole `Read`, whose result marks every tenth
+  line `    10|`, a `Write`'s text, a `StrReplace` applied to it) as the file before, and drops it after a failed call,
+  an old text not found once, a command that may write files, or another tool that names the file. The host also
+  returns the name of the transcript's folder in `~/.cursor/projects`
   (`cursorProject`, since 0.1.122; kept as `source_project`): the transcript's paths are absolute, and
   `fromCursorJsonl` makes them relative to the folder above them whose name, made by the same rule
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps

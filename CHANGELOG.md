@@ -14,6 +14,12 @@
   is seen in the file before and after the edit. **Import again** in a session's tab reads the log too, so a session
   imported before the log was there gets the results. The Output channel says where they came from ("from the hook
   log", "from the cli database").
+- **A Cursor CLI session: the file before an edit, from what the agent read.** The Cursor CLI keeps no file before an
+  edit, so a test file the agent read and then wrote over in one go had no earlier version, and a test it lost was not
+  seen. Its database keeps what the agent read, though: now the last version the session saw of the file (a whole
+  read, a write, an edit applied to it) is the file before. A version is dropped when it may be out of date: after a
+  failed call, a command that may write files (`sed -i`, `git checkout`, a formatter, a redirect) or another tool that
+  names the file.
 
 - **A session's tokens.** The metrics under a session's header show its tokens, input and output (`tokens 3.4M in ·
   18k out`), and on hover how much of the input the cache gave, how much was written to it, the requests to the model

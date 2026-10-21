@@ -15,8 +15,15 @@
      `toolFormerData` with `name` (`run_terminal_command_v2`), `params` (JSON, `command`) and `result` (JSON, `output`,
      `exitCode` only when it is not 0). An edit (`edit_file_v2`, since 0.1.127) has `params.relativeWorkspacePath` (an
      absolute path in practice) and `result.beforeContentId` / `afterContentId`: keys of the same table whose value is
-     the whole file before and after, named by its SHA-256 (the hash of "" for a file that did not exist). The CLI keeps
-     no file before an edit, only "Wrote contents to …".
+     the whole file before and after, named by its SHA-256 (the hash of "" for a file that did not exist).
+   - the CLI keeps no file before an edit, only "Wrote contents to …", but it keeps what the agent read: a Read's
+     result is the file with every tenth line marked by its number ("    10|"). The file before an edit is the last
+     version the session saw of it (0.1.130): a whole Read (no offset or limit, not cut with "... N lines not shown
+     ...", 10 lines or more with every mark in place, so a message such as "File not found" is never taken for a
+     file), a Write's text, or a StrReplace applied to the version before it.
+     A StrReplace whose old text is not there once, a failed call, a command that may write files (sed -i, git
+     checkout, a formatter, a redirect) or a call of another tool that names the file make the version unknown, and
+     an edit after that has none.
 
    Both are opened read-only through Node's built-in node:sqlite and closed at once. Without node:sqlite (VS Code
    before Node 22.13), with no database, or with a format this code does not know, there is no output, and the
@@ -30,6 +37,10 @@ const ID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_OUTPUT = 200000; // per command; a runner's summary is at the end, so the end is kept
 const MAX_FILE = 400000; // a file before or after an edit; a longer one is left out
 const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+// a shell command that may change files the session read: after it, every version known is dropped
+const MAY_WRITE =
+  /(?:^|[\s;&|(])(?:sed\s+(?:-\w+\s+)*-\w*i|perl\s+-\w*i|git\s+(?:checkout|restore|stash|reset|apply|am|pull|merge|rebase|cherry-pick|revert|switch)|mv|cp|rm|patch|tee|truncate|prettier|black|isort|autopep8|gofmt|rustfmt|(?<![-\w])format)\b|--fix\b|--write\b/;
+const REDIRECT = (cmd) => />/.test(cmd.replace(/\d*>&\d+|\d*>>?\s*\/dev\/null/g, ""));
 
 function sqlite() {
   try {
@@ -79,7 +90,68 @@ function cliDatabase(home, id) {
   return null;
 }
 
-/* The CLI's store.db → [{command, output, exitCode}] for its Shell calls, in order; null when the format is not known */
+// a Read's result → the file, or null when it is not a whole file with its line marks
+function readText(result, args) {
+  if (typeof result !== "string" || !args || args.offset != null || args.limit != null) return null;
+  const lines = result.split("\n");
+  // a long file is cut: "... 153 lines not shown ..."
+  if (lines.length < 10 || lines.some((l) => /^\.\.\. \d+ lines not shown \.\.\.$/.test(l))) return null;
+  for (let n = 10; n <= lines.length; n += 10) {
+    const mark = String(n).padStart(6) + "|";
+    if (!lines[n - 1].startsWith(mark)) return null;
+    lines[n - 1] = lines[n - 1].slice(mark.length);
+  }
+  return lines.join("\n");
+}
+
+/* The CLI's calls in order → each Write's and StrReplace's file before and after ({ path, before, after }), where the
+   version before is known (see the top of the file) */
+function cliEdits(calls, results) {
+  const known = new Map(),
+    edits = [];
+  const forget = (p) => known.delete(p);
+  for (const c of calls) {
+    const a = c.args || {},
+      r = results.get(c.id),
+      p = typeof a.path === "string" ? a.path : "";
+    if (c.name === "Read") {
+      const text = p ? readText(r, a) : null;
+      if (text != null && text.length <= MAX_FILE) known.set(p, text);
+    } else if (c.name === "Write" && p && typeof a.contents === "string") {
+      const before = known.get(p);
+      if (typeof r !== "string" || !r.startsWith("Wrote contents to")) forget(p);
+      else {
+        if (before != null && a.contents.length <= MAX_FILE) edits.push({ path: p, before, after: a.contents });
+        if (a.contents.length <= MAX_FILE) known.set(p, a.contents);
+        else forget(p);
+      }
+    } else if (c.name === "StrReplace" && p) {
+      const before = known.get(p),
+        from = a.old_string,
+        to = a.new_string;
+      forget(p);
+      if (before == null || typeof from !== "string" || !from || typeof to !== "string") continue;
+      if (typeof r !== "string" || !/has been updated/.test(r)) continue;
+      const n = before.split(from).length - 1;
+      if (!n || (n > 1 && !a.replace_all)) continue;
+      const after = before.split(from).join(to);
+      if (after.length > MAX_FILE) continue;
+      edits.push({ path: p, before, after });
+      known.set(p, after);
+    } else if (c.name === "Shell") {
+      const cmd = typeof a.command === "string" ? a.command : "";
+      if (MAY_WRITE.test(cmd) || REDIRECT(cmd)) known.clear();
+      else for (const k of [...known.keys()]) if (cmd.includes(path.posix.basename(k))) forget(k);
+    } else {
+      const text = JSON.stringify(a);
+      for (const k of [...known.keys()]) if (text.includes(path.posix.basename(k))) forget(k);
+    }
+  }
+  return edits;
+}
+
+/* The CLI's store.db → { outputs: [{command, output, exitCode}] for its Shell calls, in order, edits }; null when the
+   format is not known */
 function fromCli(db) {
   const meta = db.prepare("SELECT value FROM meta WHERE key = '0'").get();
   const info = meta ? parse(Buffer.from(asText(meta.value), "hex")) : null;
@@ -107,19 +179,21 @@ function fromCli(db) {
   for (const [, m] of ordered) {
     for (const p of Array.isArray(m.content) ? m.content : []) {
       if (!p || typeof p !== "object") continue;
-      if (m.role === "assistant" && p.type === "tool-call" && p.toolName === "Shell") {
+      if (m.role === "assistant" && p.type === "tool-call" && typeof p.toolName === "string") {
         const args = typeof p.args === "string" ? parse(p.args) : p.args || p.input;
-        if (args && typeof args.command === "string") calls.push({ id: p.toolCallId, command: args.command });
+        if (args && typeof args === "object") calls.push({ id: p.toolCallId, name: p.toolName, args });
       } else if (m.role === "tool" && p.type === "tool-result") results.set(p.toolCallId, p.result);
     }
   }
-  if (!calls.length) return null;
-  return calls.map((c) => {
+  const shells = calls.filter((c) => c.name === "Shell" && typeof c.args.command === "string");
+  const outputs = shells.map((c) => {
     const r = results.get(c.id);
     const text = typeof r === "string" ? r : r == null ? "" : JSON.stringify(r);
     const code = /^Exit code:\s*(-?\d+)/.exec(text);
-    return { command: c.command, output: tail(text), exitCode: code ? Number(code[1]) : null };
+    return { command: c.args.command, output: tail(text), exitCode: code ? Number(code[1]) : null };
   });
+  const edits = cliEdits(calls, results);
+  return outputs.length || edits.length ? { outputs: outputs.length ? outputs : null, edits: edits.length ? edits : null } : null;
 }
 
 /* The IDE's state.vscdb → { outputs, edits } for the chat with this id: the same list of commands, and each edit's
@@ -161,8 +235,8 @@ function fromIde(db, id) {
   return out.length || edits.length ? { outputs: out.length ? out : null, edits: edits.length ? edits : null } : null;
 }
 
-/* For a transcript file picked by the person: the commands Cursor kept for it, and from the IDE the files before and
-   after each edit (0.1.127), or why there is nothing.
+/* For a transcript file picked by the person: the commands Cursor kept for it, and the files before and after each
+   edit (the IDE's since 0.1.127, the CLI's since 0.1.130), or why there is nothing.
    → { outputs: [{command, output, exitCode}] | null, edits?: [{path, before, after}], source: "cli" | "ide" } | { outputs: null, reason }
    The options are for tests: another home, platform or environment, and a stand-in for node:sqlite (null: none). */
 /** @param {string} file @param {{ home?: string, platform?: string, env?: Record<string, string | undefined>, sqliteModule?: any }} [opts] */
@@ -181,7 +255,7 @@ function cursorOutputs(file, { home = os.homedir(), platform = process.platform,
     let db = null;
     try {
       db = new S.DatabaseSync(file, { readOnly: true });
-      const got = source === "cli" ? { outputs: fromCli(db), edits: null } : fromIde(db, id);
+      const got = source === "cli" ? fromCli(db) : fromIde(db, id);
       if (got && got.outputs && !got.edits) return { outputs: got.outputs, source };
       if (got && (got.outputs || got.edits)) return { outputs: got.outputs, edits: got.edits, source };
     } catch (e) {
