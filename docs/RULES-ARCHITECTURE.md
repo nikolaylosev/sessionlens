@@ -1547,7 +1547,9 @@ What the import keeps for them:
   none of their steps (`Lens.subagentsMissing`, 0.1.127). The kept text has no subagents, so `reimport()` asks for the
   file again, and replaces the kept text with the new one, or drops it when the new one is too long to keep. It is
   also true below generation 9 for a session with a step of Playwright's test agents stored as a plain tool step
-  (`generator_write_test`, `planner_save_plan`, `test_run`, `test_debug` of a server whose name says playwright), and
+  (`generator_write_test`, `planner_save_plan`, `test_run`, `test_debug` of a server whose name says playwright)
+  (below generation 10, since 0.1.130: a Cursor session's write of these tools with no file, whose arguments the
+  import did not read), and
   for a session with a shell command that writes a file from a here-document (`heredocWrites`), stored as the command
   alone, for a session with a user message that has Claude Code's or the editor's text in it (`personText`), and for
   one with a diff in an agent's message whose code was taken with its removed lines (`diffAfter`), and for a Cursor

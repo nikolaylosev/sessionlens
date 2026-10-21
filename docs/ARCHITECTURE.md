@@ -446,7 +446,10 @@ flowchart TD
   a `write` of the plan's file (no code; since 0.1.130 the step keeps the plan as Playwright writes it, `plan`, from
   `planMarkdown()`, which `LensSpec.offers` offers as the specification), `test_run {locations}` and `test_debug` as `run_tests` (`npx playwright test …`, the
   list reporter's output parsed as usual); a path from the project folder is made absolute with the session's `cwd`
-  (`toolInput()` / `playwrightTestTool()` in `lens.js`). The server's `browser_*` tools are a look at the page
+  (`toolInput()` / `playwrightTestTool()` in `lens.js`). In a Cursor session their arguments are one level down
+  (`CallDynamicTool.arguments` in a transcript, `mcpToolCall.args.args` in an Agent CLI log) and are read from there
+  since 0.1.130 (`cursorArgs`; only for these tools); a Cursor session imported before with such a write and no file
+  asks to be imported again (`IMPORT_GEN` 10). The server's `browser_*` tools are a look at the page
   (`browserLook`); its setup, log, list and test tools are housekeeping.
   **The person's messages** (since 0.1.127, `personText()` in `lens.js`): what Claude Code or the editor puts into the
   person's turn is taken out of a user's text, and a text with nothing else is no `user` event: `<command-name>` and

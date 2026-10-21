@@ -58,6 +58,10 @@
   plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
+- **Playwright's test agents in a Cursor session.** Cursor keeps an MCP call's arguments one level down, and the
+  import did not read them: a test the generator wrote had no file and no code, so no check saw it; a run had no file
+  list, and the planner's plan was lost. Now they are read as in a Claude Code session. A Cursor session imported
+  before asks to be imported again.
 - **A spec written as a document of test cases.** A heading that starts with an ID (`### NAV-01. The main menu is
   visible`) was taken for a section heading, so a document of 26 cases gave 99 requirements without IDs, one per line
   of their text. Now such a heading is the requirement and the text under it is its description.
