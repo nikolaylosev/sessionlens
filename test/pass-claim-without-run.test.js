@@ -191,3 +191,21 @@ test("after a red run, a message that says a test fails reports it; a failure de
   for (const text of ["Все тесты проходят, ничего не падает.", "19 passed, 0 failed — all pass.", "All tests pass; no failures.", "Tests pass, nothing fails."])
     assert.deepEqual(found([SPEC, RED, ["say", text]]), [RED_RUN], text);
 });
+
+/* 0.1.130: a sentence about a build, the types, a compiler, a linter or a formatter that "passes" is no claim about the
+   tests (the owner's sessions: "Сборка проходит. Посмотрю предупреждение", "Сборка типов проходит. Пишу тесты…"). A
+   sentence that names the tests too, or another sentence of the message that claims them, still counts. */
+test("a build, the types or a linter passing is no claim about the tests", () => {
+  for (const text of [
+    "Сборка проходит. Посмотрю предупреждение в начале вывода.",
+    "Сборка типов проходит. Пишу тесты форматирования.",
+    "The build is passing now.",
+    "tsc проходит без ошибок.",
+    "Проверка типов проходит.",
+    "Линтер проходит без замечаний.",
+    "Prettier is passing.",
+  ])
+    assert.deepEqual(findings([["say", text]]), [], text);
+  for (const text of ["Сборка и тесты проходят.", "Сборка проходит. Все тесты проходят.", "The build is fine and all tests pass.", "Тесты проходят."])
+    assert.equal(findings([["say", text]]).length, 1, text);
+});

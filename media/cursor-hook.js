@@ -1820,6 +1820,11 @@ var require_lens = __commonJS({
       }
       const FAILURE_WORD = /(?<![\p{L}\p{N}_])(?:пада(?:ет|ют)|упал[аио]?|не проход(?:ит|ят)|fails|failed|failing|failures?)(?![\p{L}\p{N}_])/gu;
       const DENIED = /(?:(?<![\p{L}])(?:не|ни|no|not|none|nothing|without|zero)|(?<![\p{N}])0)\s+$/u;
+      const BUILD_SUBJECT = /(?<![\p{L}])(?:сборк|компил|build|compil|type ?check|tsc(?![\p{L}])|типы|типов|lint|линт|prettier|форматир|format)/iu;
+      const TEST_WORD = /тест|test|spec|suite|сьют|pytest|jest|vitest|playwright|cypress/i;
+      function claimsTests(t, pats) {
+        return t.split(/(?<=[.!?;])\s+|\n+/).some((sentence) => pats.some((rx) => rx.test(sentence)) && !(BUILD_SUBJECT.test(sentence) && !TEST_WORD.test(sentence)));
+      }
       const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
       const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
       const PO_ASSERT_CALLS = /\.expect[A-Z]\w*\s*\(/g;
@@ -3351,7 +3356,7 @@ var require_lens = __commonJS({
           for (const e of ev) {
             if (e.kind !== "message") continue;
             const t = e.text.toLowerCase();
-            if (!pats.some((rx) => rx.test(t))) continue;
+            if (!claimsTests(t, pats)) continue;
             const near = ev.filter((x) => x.seq < e.seq && !QUIET_STEPS.has(x.kind)).slice(-cfg.pass_claim_lookback).filter((x) => x.kind === "run_tests");
             if (near.length && near[near.length - 1].output_missing) continue;
             const runs = near.filter((x) => x.tests);
