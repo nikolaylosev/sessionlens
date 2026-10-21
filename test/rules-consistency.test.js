@@ -82,7 +82,6 @@ test("every registry entry is named in another test file", () => {
 /* Checks that both a regex and an engine emit, where the regex findings stay even when the engine ran: the two find
    different things under one name, so dropping the regex ones would lose findings (RULES-ARCHITECTURE.md §6.3). */
 const KEEP_BOTH = {
-  weak_assert: "regex: toBeDefined()/toBeTruthy()/expect(true).toBe(true); engines: no expect at all, a useless .not, a malformed expect",
   cypress_async_test: "regex: an untitled before/beforeEach and any after/afterEach; engine: an async it() and a titled before/beforeEach",
   assertion_roulette: "regex: many assertions without a message in one test; Ruff (PT018): one `assert a and b` (0.1.129)",
 };

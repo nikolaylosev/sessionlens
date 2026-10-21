@@ -17,6 +17,7 @@
       weakened: "{file}: {test} — assertion weakened ({reason})",
       removed: "{file}: {test} — fewer assertions ({before} → {after})",
       weak_assert: "{file}: weak assertion “{line}” — checks “didn't crash”, not a value",
+      weak_assert_once: "{file}: “{line}” reads the page once — it never waits or retries; use a web-first assertion, await expect(locator).toBeVisible()",
       fix_no_triage: "Edited {file} right after a failure (seq {seq}) with no triage: product bug / test bug / spec defect",
       fix_cause_only: "Edited {file} right after a failure (seq {seq}): the cause is named, but not whose error it is — product bug / test bug / spec defect",
       scope: "Edited {file}, which is not in the plan",

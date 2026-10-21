@@ -792,7 +792,7 @@ The reference is `media/checks.js`; this table is a readable copy of it, generat
 | snapshot_overwritten | process | high | regex (lens.js) |
 | config_weakened | process | high | regex (lens.js) |
 | assert_weakened | code | high | regex (lens.js) |
-| weak_assert | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, Ruff: B015, PT011, B017), both kept (§6.3) |
+| weak_assert | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, Ruff: B015, PT011, B017), both kept (§6.3), except the regex's `awaited` kind (a page's state read once, medium, 0.1.130), which `prefer-web-first-assertions` replaces where it ran |
 | sleep_or_skip_added | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox, Robot), an engine replaces the kinds it finds itself (§6.3) |
 | hardcoded_date | code | medium | regex (lens.js) |
 | fragile_wait | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox), an engine replaces the kinds it finds itself (§6.3) |

@@ -135,7 +135,8 @@
   // regex checks an engine can do better — dropped when it ran, so nothing is reported twice. Only where the engine of
   // the profile's language looks for the same thing itself (SAME_AS_REGEX): Java, C# and Python have no rule for sleeps
   // or skips, so their regex findings must stay (until 0.1.113 any engine that parsed the file dropped them all).
-  const SUPERSEDES = new Set(["sleep_or_skip_added", "fragile_wait", "conditional_logic", "focused_test", "debug_leftover"]);
+  // weak_assert since 0.1.130: only its "awaited" kind, a page's state read once (prefer-web-first-assertions finds it too)
+  const SUPERSEDES = new Set(["sleep_or_skip_added", "fragile_wait", "conditional_logic", "focused_test", "debug_leftover", "weak_assert"]);
   /* engine rule → the kinds of regex finding ("check|kind", Lens sets kind on these four checks) it finds just as well.
      An engine rule reported under one of these names but looking for something else (playwright/no-force-option,
      detox/waitfor-requires-timeout…) replaces nothing: [] — listed, so that a new rule has to be decided
@@ -153,6 +154,7 @@
     "detox/no-hardcoded-wait": ["sleep_or_skip_added|sleep"],
     "robot/sleep-or-skip": ["sleep_or_skip_added|sleep", "sleep_or_skip_added|skip"],
     "ruff/T100": ["debug_leftover|breakpoint"],
+    "playwright/prefer-web-first-assertions": ["weak_assert|awaited"],
     // reported under these names, but looking for something else: they replace no regex finding
     "playwright/no-conditional-expect": [],
     "playwright/no-element-handle": [],
@@ -165,6 +167,14 @@
     "cypress/unsafe-to-chain-command": [],
     "detox/waitfor-requires-timeout": [],
     "ruff/T201": [], // print(): no regex check looks for it
+    // reported as weak_assert, but each looks for something else than the regex's toBeTruthy()/toBeDefined()
+    "playwright/no-useless-not": [],
+    "playwright/valid-expect": [],
+    "playwright/no-standalone-expect": [],
+    "cypress/assertion-before-screenshot": [],
+    "ruff/B015": [],
+    "ruff/PT011": [],
+    "ruff/B017": [],
     "ruff/T203": [],
   };
   // → Set of "check|kind" the engine of `language` finds itself: what merge() may drop

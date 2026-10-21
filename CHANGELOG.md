@@ -42,6 +42,10 @@
   on the page (`toHaveCount(0)`) and a new object's first state are not results.
 
 ### Fixed
+- **`expect(await x.isVisible()).toBeTruthy()` where ESLint does not run.** The pattern stopped at the first `)` inside
+  `expect(`, so a call in the argument was never seen: with static analysis off nothing caught this one-time read of the
+  page. Now it is a medium finding ("reads the page once"), the same ESLint gives, and only one of the two where ESLint
+  ran; `expect(isValid(cart())).toBeTruthy()` is a weak assertion like `expect(x).toBeTruthy()`.
 - **A spec that writes R IDs with the ticket's prefix.** With `TASK-1/R1. …` in the spec every requirement had "no test",
   even when a test named it: the spec kept `TASK-1/R1`, a test's reference was read as `R1`. Now a test that names `R1`
   (or `TASK-1/R1`) covers it.
