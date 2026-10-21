@@ -596,6 +596,10 @@
         "Do not mock the API under test. Call the real service (or a real test instance); mock only its downstream dependencies, and say so in the test.",
       r_test_shadowed:
         "Give every test a name of its own. In Python a second def with the same name replaces the first: pytest collects only the last one, so the first test never runs, and nothing says so.",
+      r_empty_result:
+        "An empty result proves something only when the same call can return something. Next to a test that expects nothing, keep one where the same query, filter or endpoint returns at least one item: else a broken query, a wrong filter or an empty test database passes too.",
+      empty_result:
+        "{file}: {test} — expects an empty result ({line}), and no test of the file expects one that is not: a broken query or filter would pass it too",
       r_secret: "No tokens, keys or passwords in test code. Read them from environment variables or a secrets store: a repository is not a safe.",
       r_base_url:
         "No hard-coded hosts. Take the base URL from configuration or an environment variable, so the same test runs on local and staging and never lands on production by accident.",

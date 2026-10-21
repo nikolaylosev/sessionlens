@@ -91,6 +91,7 @@
     "test_deleted",
     "product_code_edited",
     "snapshot_overwritten",
+    "empty_result_unverified", // 0.1.130
   ];
   const API = [
     "status_only_assert",
@@ -3214,6 +3215,76 @@
       return out;
     },
     // ---- API tests: what an agent gets wrong when the thing under test is an HTTP API ----
+    /* 0.1.130: a test expects an empty result (len(rows) == 0, == [], toHaveLength(0), isEmpty(), Assert.Empty), and no
+       test of the same file expects a non-empty one. A broken query, a wrong filter or endpoint, an empty test database
+       pass it too: an empty result proves something only next to one that is not empty (an idea from the owner's
+       colleague's reviewers, ORACLE-001). Only in a test that asks something (QUERY): a new object's first state
+       (new Cart().items == []) is no result. The last version of each file; a UI element that is not there
+       (toHaveCount(0), should('not.exist')) is no result either. */
+    empty_result_unverified(ev, cfg) {
+      const EMPTY = new RegExp(
+        [
+          String.raw`\blen\((?:[^()]|\([^()]*\))*\)\s*==\s*0\b`, // Python
+          String.raw`(?:==|assertEqual\([^,]+,)\s*(?:\[\s*\]|\{\s*\}|\(\s*\))`,
+          String.raw`assertEqual\(\s*len\([^)]*\)\s*,\s*0\s*\)`,
+          String.raw`\.toHaveLength\(\s*0\s*\)`, // JS
+          String.raw`\.length\s*\)\s*\.(?:toBe|toEqual|toStrictEqual)\(\s*0\s*\)`,
+          String.raw`\.(?:toEqual|toStrictEqual)\(\s*(?:\[\s*\]|\{\s*\})\s*\)`,
+          String.raw`\.to\.(?:be\.empty|have\.lengthOf\(\s*0\s*\))`,
+          String.raw`\)\s*\.isEmpty\(\)`, // Java: AssertJ, assertTrue(x.isEmpty())
+          String.raw`assertTrue\([^;]*\.isEmpty\(\)`,
+          String.raw`assertEquals\(\s*0L?\s*,[^;]*\.(?:size|length)\(\)`,
+          String.raw`\.hasSize\(\s*0\s*\)`,
+          String.raw`\bAssert\.Empty\(`, // C#
+          String.raw`\bIs\.Empty\b`,
+          String.raw`\.Should\(\)\.BeEmpty\(\)`,
+          String.raw`Assert\.(?:AreEqual|Equal)\(\s*0\s*,[^;]*\.Count\b`,
+        ].join("|"),
+      );
+      const NON_EMPTY = new RegExp(
+        [
+          String.raw`\blen\((?:[^()]|\([^()]*\))*\)\s*(?:>|>=\s*[1-9]|==\s*[1-9]|!=\s*0)`,
+          String.raw`assert(?:Greater(?:Equal)?|Equal)\(\s*len\(`,
+          String.raw`==\s*\[\s*[^\]\s]`,
+          String.raw`\bassert\s+(?!.*\bnot\s+in\b).+\s+in\s+\S`,
+          String.raw`\.toHaveLength\(\s*(?:[1-9]|[a-zA-Z_$])`,
+          String.raw`\.length\s*\)\s*\.(?:toBeGreaterThan\(\s*\d|(?:toBeGreaterThanOrEqual|toBe|toEqual)\(\s*(?:[1-9]|[a-zA-Z_$]))`,
+          String.raw`\.not\.(?:toHaveLength\(\s*0|toEqual\(\s*\[\s*\])`,
+          String.raw`\.(?:toEqual|toStrictEqual)\(\s*\[\s*[^\]\s]`,
+          String.raw`\.toContain(?:Equal)?\(`,
+          String.raw`\.(?:isNotEmpty|contains|containsExactly)\(`,
+          String.raw`\.hasSize\(\s*[1-9]`,
+          String.raw`assertFalse\([^;]*\.isEmpty\(\)`,
+          String.raw`assertEquals\(\s*[1-9]\d*L?\s*,[^;]*\.(?:size|length)\(\)`,
+          String.raw`\b(?:Assert\.NotEmpty|Assert\.Contains|Assert\.Single)\(`,
+          String.raw`\bIs\.Not\.Empty\b`,
+          String.raw`\.Should\(\)\.(?:NotBeEmpty|HaveCount|Contain|ContainSingle)\(`,
+          String.raw`Assert\.(?:AreEqual|Equal)\(\s*[1-9]\d*\s*,[^;]*\.Count\b`,
+        ].join("|"),
+      );
+      // a test that asks something: an HTTP call, a query, a search; not a new object's first state (new Cart().items)
+      const QUERY =
+        /\b(?:get|post|put|patch|delete|fetch|request|query|execute|select|find\w*|search\w*|filter\w*|list\w*|Get\w*Async(?:<[^>\n]*>+)?)\s*\(|\.json\(\)|\b(?:response|resp|res)\b|\.(?:body|data|rows|results?)\b/i;
+      const last = {};
+      for (const e of ev) if (e.new_content && e.file && !e.fragment_only) last[e.file] = e;
+      const out = [];
+      for (const e of Object.values(last)) {
+        if (!cfg.test_fn_pattern) continue;
+        const blocks = blocksByTest(linesOf(e), cfg.test_fn_pattern);
+        const empty = [];
+        let nonEmpty = false;
+        for (const [name, body] of Object.entries(blocks)) {
+          const lines = body.split("\n"); // comments are blank already (linesOf)
+          if (lines.some((l) => NON_EMPTY.test(l))) nonEmpty = true;
+          const hit = lines.find((l) => EMPTY.test(l));
+          if (hit && lines.some((l) => QUERY.test(l))) empty.push([name, hit.trim()]);
+        }
+        if (nonEmpty) continue;
+        for (const [name, line] of empty)
+          out.push(F("empty_result_unverified", "medium", e.seq, T("empty_result", { file: e.file, test: name, line: clip(line, 80) })));
+      }
+      return out;
+    },
     status_only_assert(ev, cfg) {
       const out = [];
       for (const e of ev) {

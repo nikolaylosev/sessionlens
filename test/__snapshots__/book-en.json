@@ -342,6 +342,15 @@
   "edited": false
  },
  {
+  "check": "empty_result_unverified",
+  "group": "code",
+  "rule": "An empty result proves something only when the same call can return something. Next to a test that expects nothing, keep one where the same query, filter or endpoint returns at least one item: else a broken query, a wrong filter or an empty test database passes too.",
+  "severity": "medium",
+  "enabled": true,
+  "good": "assert len(search(status='paid')) > 0  # the same filter returns something, next to the test that expects []",
+  "edited": false
+ },
+ {
   "check": "status_only_assert",
   "group": "api",
   "rule": "Assert the body, not just the status. A test that checks only “200” also passes on an empty response or an error page. Check the fields, their types and the headers that matter.",

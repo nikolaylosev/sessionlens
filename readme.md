@@ -251,6 +251,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `hardcoded_secret` | High | A token, key or credential is written in the code. The report shows only its first four characters (TypeScript, Cypress, Detox, Python, API and mobile profiles) |
 | `hardcoded_base_url` | Medium | A real host is written in a test instead of coming from configuration. A runner's config file, where the base URL belongs, does not count (same profiles) |
 | `test_shadowed` | High | Python: a second test with the same name (`def test_create_order` twice, in a file or a class). Python keeps only the last one, so pytest never runs the first, and nothing says so. Found by Ruff (`F811`), in `qa-python` and `qa-api`'s `.py` files; a helper or an import defined twice does not count |
+| `empty_result_unverified` | Medium | A test asks something (an HTTP call, a query, a search) and expects an empty result (`== []`, `len(…) == 0`, `toHaveLength(0)`, `isEmpty()`, `Assert.Empty`), and no test of the same file expects a result that is not empty. A broken query, a wrong filter or an empty test database pass it too. A UI element that is not on the page (`toHaveCount(0)`) and a new object's first state are not results (0.1.130) |
 
 #### API
 
