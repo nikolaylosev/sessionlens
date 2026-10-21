@@ -115,6 +115,7 @@ function fakeVscode(opts = {}) {
     env: {
       language,
       remoteName: opts.remoteName,
+      appName: opts.appName || "Visual Studio Code", // "Cursor" in Cursor (0.1.130: the hook commands)
       clipboard: {
         writeText: async (t) => {
           calls.clipboard.push(t);
@@ -141,8 +142,10 @@ function fakeVscode(opts = {}) {
         registered.serializers[id] = s;
         return { dispose() {} };
       },
+      // opts.infoAnswer: the button the person clicks in it (undefined: none)
       showInformationMessage: (m) => {
         calls.info.push(m);
+        return opts.infoAnswer;
       },
       showErrorMessage: async (...a) => {
         calls.error.push(a);

@@ -538,6 +538,7 @@ SessionLens finds `agent` in `~/.local/bin`, where the installer puts it. Set a 
 - **Group sessions by…** — date, profile, verdict, agent, project or your own groups; the same as the button in the Sessions list's title. A session's project is the folder the agent worked in: where the files it wrote are, else where it started, so a session started in a skill's folder that wrote tests in your project is in your project, and its Claude Code and Cursor sessions are one group.
 - **New group…** — a name, then the sessions to put into it; the same as the **+ New group** button there.
 - **Filter sessions…** — by a part of the name, task, profile or group, **Only Red**, **With findings without a verdict**; the same as the search button there. **Clear filter** shows every session again.
+- **Record Cursor agent runs** / **Stop recording Cursor agent runs** (in Cursor only, 0.1.130) — a Cursor Agent transcript keeps the agent's commands but not their output, so SessionLens cannot always tell a red test run from a green one. Record adds a hook to your `~/.cursor/hooks.json` (it asks first; your own hooks are kept, and the file as it was is saved as `hooks.json.sessionlens-backup`). After each command and file edit of the agent, Cursor then runs `~/.cursor/sessionlens/hook.sh` (`hook.cmd` on Windows, not yet tried on a real Cursor there), which writes the command's output and the edit to `~/.cursor/sessionlens/log/`. Reload the window after Record. Stop takes out only SessionLens's hook. The logs stay on your machine and are removed after 30 days. A project's `.cursor/hooks.json` is never touched.
 
 **Settings** (Settings → Extensions → SessionLens, or `sessionlens.*` in `settings.json`):
 
@@ -593,6 +594,10 @@ Everything stays on your machine, in VS Code's storage for this extension (ID `n
   your machine read-only, takes the output of that chat's commands, and keeps its end in the session. From Cursor's
   editor database it also takes each file the agent edited, as it was before and after the edit, and keeps them in the
   session while they are not too long. It never writes to them and sends nothing from them anywhere.
+- **Cursor agent runs** (only after **Record Cursor agent runs**). The hook writes, for each command of a Cursor agent,
+  the command and the end of its output (tokens in them are masked), and for each file edit the old and new text and
+  the whole file, to `~/.cursor/sessionlens/log/<chat id>.jsonl` on your machine. No prompt, reply or file read is
+  written. The logs are removed after 30 days; nothing from them is sent anywhere.
 - **Model requests** go from the extension straight to the provider you choose, on your account. With Claude Code,
   Codex or Cursor as the provider they go through the `claude`, `codex` or `agent` command on your machine. Cursor
   keeps a copy of each request in `~/.cursor`, which SessionLens deletes after the answer (see

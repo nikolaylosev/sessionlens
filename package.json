@@ -2,7 +2,7 @@
   "name": "sessionlens-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.1.129",
+  "version": "0.1.130",
   "license": "MIT",
   "publisher": "nikolaylosev",
   "engines": {
@@ -134,6 +134,16 @@
         "title": "%cmd.newGroup%",
         "category": "SessionLens",
         "icon": "$(new-folder)"
+      },
+      {
+        "command": "sessionlens.recordCursorRuns",
+        "title": "%cmd.recordCursorRuns%",
+        "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.stopRecordingCursorRuns",
+        "title": "%cmd.stopRecordingCursorRuns%",
+        "category": "SessionLens"
       }
     ],
     "configuration": {
@@ -271,6 +281,14 @@
         {
           "command": "sessionlens.deleteGroup",
           "when": "false"
+        },
+        {
+          "command": "sessionlens.recordCursorRuns",
+          "when": "sessionlens.inCursor"
+        },
+        {
+          "command": "sessionlens.stopRecordingCursorRuns",
+          "when": "sessionlens.inCursor"
         }
       ],
       "view/item/context": [
