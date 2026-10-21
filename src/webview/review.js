@@ -329,7 +329,27 @@ export function sessionCost(s) {
   const c = Lens.usageCost(s.usage, prices());
   if (!c) return null;
   if (c.cost === null) return { text: "—", tip: T("m_cost_missing", { m: c.missing.map((m) => m || T("m_cost_nomodel")).join(", ") }), cost: null };
-  return { text: "≈ " + money(c.cost), tip: T("m_cost_tip"), cost: c.cost };
+  // what the person called their prices ("API equivalent" on a subscription) goes with the number
+  const label = (c.labels || []).join(", ");
+  return { text: "≈ " + money(c.cost) + (label ? ` (${label})` : ""), tip: T("m_cost_tip"), cost: c.cost, label };
+}
+// a window of a subscription's limit by its length: 300 → "5 h", 10080 → "week"
+const windowName = (min) => (min === 10080 ? T("m_limit_week") : min % 60 === 0 ? T("m_limit_hours", { n: min / 60 }) : T("m_limit_minutes", { n: min }));
+/* What the session used of its subscription's limits (Codex writes them, 0.1.130), or null: { text, tip } for the
+   metrics, md for the report */
+export function sessionLimits(s) {
+  const l = s.usage && s.usage.limits;
+  if (!l || !Array.isArray(l.windows) || !l.windows.length) return null;
+  const part = (w) => `+${w.used}% ${windowName(w.minutes)}` + (w.spans > 1 ? " " + T("m_limit_spans", { n: w.spans }) : "");
+  const tipOf = (w) =>
+    w.spans > 1
+      ? T("m_limit_tip_spans", { w: windowName(w.minutes), u: w.used, n: w.spans })
+      : T("m_limit_tip_one", { w: windowName(w.minutes), u: w.used, a: w.from, b: w.to });
+  return {
+    text: l.windows.map(part).join(" · "),
+    tip: [T("m_limit_head", { p: l.plan || "?" }), ...l.windows.map(tipOf), T("m_limit_others")].join("\n"),
+    md: T("md_limits", { list: l.windows.map(part).join(", "), p: l.plan || "?" }),
+  };
 }
 
 export function renderReview() {
@@ -357,6 +377,8 @@ export function renderReview() {
       : "",
     // and their cost, with the person's prices (0.1.130)
     ((c) => (c ? `<span title="${esc(c.tip)}">${T("m_cost")} <b>${esc(c.text)}</b></span>` : ""))(sessionCost(s)),
+    // the share of a subscription's limits the session used (Codex, 0.1.130)
+    ((l) => (l ? `<span title="${esc(l.tip)}">${T("m_limits")} <b>${esc(l.text)}</b></span>` : ""))(sessionLimits(s)),
   ]
     .filter(Boolean)
     .map((x) => `<span>${x}</span>`)

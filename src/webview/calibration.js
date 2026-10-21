@@ -4,7 +4,7 @@
 import { $, SEV, T, VLABEL, esc, fkey, genId, rulesFileText, rulesTargetLabel, save, srcLabel, state } from "./common.js";
 import { calibStatsBySource, curS, fetchSessions, isDemo, metas, onGenChanged, sessionStore, updateSession } from "./store.js";
 import { readFile, renderList, show } from "./sessions.js";
-import { compact, renderReview, sessionCost } from "./review.js";
+import { compact, renderReview, sessionCost, sessionLimits } from "./review.js";
 import { profileChecks } from "./rules.js";
 
 // set in initCalibration(), in the order the single app.js ran its statements
@@ -42,6 +42,7 @@ export function initCalibration() {
         : []),
       // the cost, when every model of the session has a price (0.1.130)
       ...((c) => (c && c.cost !== null ? [T("md_cost", { c: c.text })] : []))(sessionCost(s)),
+      ...((l) => (l ? [l.md] : []))(sessionLimits(s)),
       r.spec && r.spec.n
         ? T("md_spec", {
             n: r.spec.n,

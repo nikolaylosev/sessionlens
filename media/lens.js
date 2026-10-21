@@ -2102,6 +2102,7 @@
     const sum = { input: 0, cached: 0, cacheWrite: 0, output: 0, requests: 0 };
     let total = null,
       current = "";
+    const limitsSeen = []; // Codex: each token_count's rate_limits, in order (a subscription's share, 0.1.130)
     for (const line of t.split("\n")) {
       if (!line.includes(codex ? '"token_count"' : '"usage"') && !(codex && line.includes('"turn_context"'))) continue;
       let r;
@@ -2113,6 +2114,7 @@
       if (codex) {
         const p = r && r.payload;
         if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add((current = p.model));
+        if (p && p.type === "token_count" && p.rate_limits && typeof p.rate_limits === "object") limitsSeen.push(p.rate_limits);
         if (p && p.type === "token_count" && p.info && p.info.total_token_usage) {
           // each request's own tokens go to the model of the turn it is in; Codex repeats a token_count with the same
           // running total (a new rate limit), so only one that moved the total is a request
@@ -2151,9 +2153,45 @@
             requests: null,
             models: [...models],
             byModel,
+            limits: codexLimits(limitsSeen),
           })
         : null;
     return out(Object.assign(sum, { models: [...models], byModel }));
+  }
+
+  /* Codex on a subscription writes the share of its limits used next to the tokens (rate_limits: plan_type, a primary
+     and a secondary window — 5 hours and a week — each with used_percent and resets_at). What the session used of each
+     (0.1.130), in points of a window: in the window it started in, from its first record to the last; in each window
+     that began while it ran, all of it (a window that began during the session was used by it from 0; another session
+     at the same time counts too). resets_at moves a second or so between records: a new window is one that resets more
+     than two minutes later. → { plan, windows: [{ minutes, used, spans, from, to }] } or null. */
+  function codexLimits(seen) {
+    if (!seen.length) return null;
+    const pct = (v) => (typeof v === "number" && isFinite(v) ? Math.max(0, Math.min(100, v)) : null);
+    const windows = [];
+    for (const slot of ["primary", "secondary"]) {
+      const recs = seen.map((r) => r[slot]).filter((w) => w && pct(w.used_percent) !== null && Number.isFinite(w.window_minutes));
+      if (!recs.length) continue;
+      let used = 0,
+        spans = 1,
+        start = pct(recs[0].used_percent),
+        last = start,
+        reset = recs[0].resets_at;
+      for (const w of recs.slice(1)) {
+        if (Number.isFinite(w.resets_at) && Number.isFinite(reset) && w.resets_at - reset > 120) {
+          used += Math.max(0, last - start); // the window ended: what the session used of it
+          spans++;
+          start = 0; // the next one began while the session ran
+        }
+        reset = w.resets_at;
+        last = pct(w.used_percent);
+      }
+      used += Math.max(0, last - start);
+      windows.push({ minutes: recs[0].window_minutes, used: +used.toFixed(1), spans, from: pct(recs[0].used_percent), to: last });
+    }
+    if (!windows.length) return null;
+    const plan = seen.map((r) => r.plan_type).filter((p) => typeof p === "string" && p)[0] || "";
+    return { plan: plan.slice(0, 40), windows };
   }
 
   /* The prices of the person's own setting sessionlens.tokenPrices (0.1.130), cleaned: { "<model>" or "<prefix>*":
@@ -2170,6 +2208,8 @@
       if (p.input === undefined || p.output === undefined) continue;
       if (price(v.cacheRead) !== undefined) p.cacheRead = price(v.cacheRead);
       if (price(v.cacheWrite) !== undefined) p.cacheWrite = price(v.cacheWrite);
+      // what the cost is, said next to it: "API equivalent" on a subscription (0.1.130)
+      if (typeof v.label === "string" && v.label.trim() && v.label.length <= 40 && !/[\u0000-\u001f]/.test(v.label)) p.label = v.label.trim();
       out[k.trim()] = p;
     }
     return out;
@@ -2198,19 +2238,21 @@
     if (!used.length) return null;
     const P = normPrices(prices);
     let cost = 0;
-    const missing = [];
+    const missing = [],
+      labels = [];
     for (const [m, b] of used) {
       const p = priceFor(m, P);
       if (!p) {
         missing.push(m);
         continue;
       }
+      if (p.label && !labels.includes(p.label)) labels.push(p.label);
       const cached = b.cached || 0,
         written = b.cacheWrite || 0,
         fresh = Math.max(0, (b.input || 0) - cached - written);
       cost += (fresh * p.input + cached * (p.cacheRead ?? p.input) + written * (p.cacheWrite ?? p.input) + (b.output || 0) * p.output) / 1e6;
     }
-    return { cost: missing.length ? null : cost, missing };
+    return { cost: missing.length ? null : cost, missing, labels };
   }
 
   /* A JSONL file with tool calls of which the import read none: only the conversation text was found, so there is

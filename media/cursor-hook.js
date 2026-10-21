@@ -215,7 +215,17 @@ var require_i18n = __commonJS({
           m_cost_missing: "No price for: {m}. Add it to sessionlens.tokenPrices in settings.json",
           m_cost_nomodel: "replies that name no model",
           m_cost_hint: "Cost: put your prices per million tokens in sessionlens.tokenPrices (settings.json)",
-          md_cost: "Cost: {c} (your prices per million tokens).",
+          md_cost: "Cost: {c}, with your prices per million tokens.",
+          m_limits: "limits",
+          m_limit_week: "week",
+          m_limit_hours: "{n} h",
+          m_limit_minutes: "{n} min",
+          m_limit_spans: "({n} windows)",
+          m_limit_head: "The share of the subscription's limits used while this session ran (Codex, {p} plan):",
+          m_limit_tip_one: "{w} window: +{u}% ({a}% → {b}%)",
+          m_limit_tip_spans: "{w} windows: {u}% of a window in all, over {n} windows that reset while it ran",
+          m_limit_others: "Other sessions running at the same time count too.",
+          md_limits: "Subscription limits used: {list} (Codex, {p} plan).",
           m_to_green: "edits to green",
           spec_none: "(none)",
           spec_auto: " · numbered automatically, coverage not checked",
@@ -2872,6 +2882,7 @@ var require_lens = __commonJS({
         const seen = /* @__PURE__ */ new Set(), models = /* @__PURE__ */ new Set();
         const sum = { input: 0, cached: 0, cacheWrite: 0, output: 0, requests: 0 };
         let total = null, current = "";
+        const limitsSeen = [];
         for (const line of t.split("\n")) {
           if (!line.includes(codex ? '"token_count"' : '"usage"') && !(codex && line.includes('"turn_context"'))) continue;
           let r;
@@ -2883,6 +2894,7 @@ var require_lens = __commonJS({
           if (codex) {
             const p = r && r.payload;
             if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add(current = p.model);
+            if (p && p.type === "token_count" && p.rate_limits && typeof p.rate_limits === "object") limitsSeen.push(p.rate_limits);
             if (p && p.type === "token_count" && p.info && p.info.total_token_usage) {
               const tt = (u2) => num2(u2.total_tokens) || num2(u2.input_tokens) + num2(u2.output_tokens);
               const grew = !total || tt(p.info.total_token_usage) > tt(total);
@@ -2917,9 +2929,34 @@ var require_lens = __commonJS({
             output: num2(total.output_tokens),
             requests: null,
             models: [...models],
-            byModel
+            byModel,
+            limits: codexLimits(limitsSeen)
           }) : null;
         return out(Object.assign(sum, { models: [...models], byModel }));
+      }
+      function codexLimits(seen) {
+        if (!seen.length) return null;
+        const pct = (v) => typeof v === "number" && isFinite(v) ? Math.max(0, Math.min(100, v)) : null;
+        const windows = [];
+        for (const slot of ["primary", "secondary"]) {
+          const recs = seen.map((r) => r[slot]).filter((w) => w && pct(w.used_percent) !== null && Number.isFinite(w.window_minutes));
+          if (!recs.length) continue;
+          let used = 0, spans = 1, start = pct(recs[0].used_percent), last = start, reset = recs[0].resets_at;
+          for (const w of recs.slice(1)) {
+            if (Number.isFinite(w.resets_at) && Number.isFinite(reset) && w.resets_at - reset > 120) {
+              used += Math.max(0, last - start);
+              spans++;
+              start = 0;
+            }
+            reset = w.resets_at;
+            last = pct(w.used_percent);
+          }
+          used += Math.max(0, last - start);
+          windows.push({ minutes: recs[0].window_minutes, used: +used.toFixed(1), spans, from: pct(recs[0].used_percent), to: last });
+        }
+        if (!windows.length) return null;
+        const plan = seen.map((r) => r.plan_type).filter((p) => typeof p === "string" && p)[0] || "";
+        return { plan: plan.slice(0, 40), windows };
       }
       function normPrices(o) {
         const out = {};
@@ -2931,6 +2968,7 @@ var require_lens = __commonJS({
           if (p.input === void 0 || p.output === void 0) continue;
           if (price(v.cacheRead) !== void 0) p.cacheRead = price(v.cacheRead);
           if (price(v.cacheWrite) !== void 0) p.cacheWrite = price(v.cacheWrite);
+          if (typeof v.label === "string" && v.label.trim() && v.label.length <= 40 && !/[\u0000-\u001f]/.test(v.label)) p.label = v.label.trim();
           out[k.trim()] = p;
         }
         return out;
@@ -2952,17 +2990,18 @@ var require_lens = __commonJS({
         if (!used.length) return null;
         const P = normPrices(prices);
         let cost = 0;
-        const missing = [];
+        const missing = [], labels = [];
         for (const [m, b] of used) {
           const p = priceFor(m, P);
           if (!p) {
             missing.push(m);
             continue;
           }
+          if (p.label && !labels.includes(p.label)) labels.push(p.label);
           const cached = b.cached || 0, written = b.cacheWrite || 0, fresh = Math.max(0, (b.input || 0) - cached - written);
           cost += (fresh * p.input + cached * (p.cacheRead ?? p.input) + written * (p.cacheWrite ?? p.input) + (b.output || 0) * p.output) / 1e6;
         }
-        return { cost: missing.length ? null : cost, missing };
+        return { cost: missing.length ? null : cost, missing, labels };
       }
       function unreadToolCalls(text, events) {
         const t = text.trimStart();
