@@ -216,6 +216,7 @@ export async function reimport() {
     cursorEdits = s.source_edits,
     cursorProject = s.source_project,
     cursorId = s.source_cursor_id,
+    cursorUsage = null,
     fromLog = false;
   if (!text) {
     const source = await chooseDialog(T("reimport_pick"), [
@@ -232,12 +233,14 @@ export async function reimport() {
     cursorEdits = r.cursorEdits;
     cursorProject = r.cursorProject;
     cursorId = r.cursorId || cursorId;
+    cursorUsage = r.cursorUsage || null;
   }
   // a Cursor session: what the Cursor hook logged of its chat meanwhile (0.1.130), over what was kept at import
   if (cursorId && window.__slCursorLog) {
     const log = await window.__slCursorLog(cursorId);
     if (log && Array.isArray(log.outputs) && log.outputs.length) [cursorOutputs, fromLog] = [log.outputs, true];
     if (log && Array.isArray(log.edits) && log.edits.length) [cursorEdits, fromLog] = [log.edits, true];
+    if (log && log.usage) cursorUsage = log.usage;
   }
   const cfg = Lens.profile(s.profile);
   // a file with several conversations: the one closest to this session
@@ -279,6 +282,8 @@ export async function reimport() {
       x.source_edits = keptEdits(cursorEdits);
     }
     if (cursorId) x.source_cursor_id = cursorId;
+    const usage = Lens.usageOf(text, { cursorUsage }); // the text kept, or the file picked again
+    if (usage) x.usage = usage;
     Object.assign(x, Lens.transcriptOrigin(text, { cursorProject })); // a session imported before 0.1.124 has neither
     x.importGen = Lens.IMPORT_GEN;
     analyze(x, "import");
@@ -287,6 +292,28 @@ export async function reimport() {
 }
 
 // ---------- review ----------
+// 3462455 → "3.5M", 18404 → "18k", 950 → "950"
+export function compact(n) {
+  const v = Number(n) || 0;
+  if (v >= 1e9) return +(v / 1e9).toFixed(1) + "B";
+  if (v >= 1e6) return +(v / 1e6).toFixed(1) + "M";
+  if (v >= 1e3) return Math.round(v / 1e3) + "k";
+  return String(Math.round(v));
+}
+// the tokens in full, on hover: how much the cache gave, how much was written to it, the requests, the models
+export function usageTip(u) {
+  const pct = u.input ? Math.round((100 * (u.cached || 0)) / u.input) : 0;
+  return [
+    T("m_tokens_in", { n: (u.input || 0).toLocaleString("en-US"), p: pct }),
+    u.cacheWrite ? T("m_tokens_write", { n: u.cacheWrite.toLocaleString("en-US") }) : "",
+    T("m_tokens_out", { n: (u.output || 0).toLocaleString("en-US") }),
+    Number.isInteger(u.requests) ? T("m_tokens_req", { n: u.requests }) : "",
+    u.models && u.models.length ? T("m_tokens_models", { m: u.models.join(", ") }) : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function renderReview() {
   const s = curS();
   $("#review-empty").hidden = !!s;
@@ -306,7 +333,12 @@ export function renderReview() {
     `Read:Edit <b>${esc(m.readEdit ?? "—")}</b>${m.readEdit !== null && m.readEdit < 1 ? " ⚠" : ""}`,
     `${T("m_runs")} <b>${esc(m.runs)}</b>`,
     `${T("m_to_green")} <b>${esc(m.editsToGreen ?? "—")}</b>`,
+    // the session's tokens (0.1.130), when its transcript had them
+    s.usage
+      ? `<span title="${esc(usageTip(s.usage))}">${T("m_tokens")} <b>${esc(T("m_tokens_val", { in: compact(s.usage.input), out: compact(s.usage.output) }))}</b></span>`
+      : "",
   ]
+    .filter(Boolean)
     .map((x) => `<span>${x}</span>`)
     .join("");
   $("#reimport").hidden = !Lens.needsReimport(s);

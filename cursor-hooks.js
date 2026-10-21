@@ -205,7 +205,8 @@ function cleanLogs({ home, now = Date.now(), days = LOG_DAYS, platform = process
 }
 
 /* The log of one chat as the import of a Cursor transcript takes Cursor's database (cursor-db.js), or null when there
-   is none: { outputs: [{ command, output, exitCode }], edits: [{ path, before, after }] }, in the order they came.
+   is none: { outputs: [{ command, output, exitCode }], edits: [{ path, before, after }], usage }, in the order they
+   came; usage: the tokens of its replies, as Lens.usageOf gives them (null without a stop line).
    An output's exit code is the one postToolUse gave for the same call (a red run has none: Cursor sent no postToolUse
    after it, only postToolUseFailure). An edit is a file line (the whole file after it) with the file before: the last
    version of it in the log, or for its first edit, the file after with the edit undone (afterFileEdit's old and new
@@ -245,7 +246,20 @@ function readLog({ home, id, platform = process.platform }) {
       if (typeof before === "string") edits.push({ path: r.file_path, before, after: r.content });
     }
   }
-  return { outputs, edits };
+  // the tokens of each reply Cursor ended (stop), for the session's metrics (0.1.130); its input_tokens has the cached part in it
+  const stops = lines.filter((r) => r.event === "stop" && (r.input_tokens || r.output_tokens));
+  const n = (v) => (Number.isFinite(v) && v > 0 ? v : 0);
+  const usage = stops.length
+    ? {
+        input: stops.reduce((a, r) => a + n(r.input_tokens), 0),
+        cached: stops.reduce((a, r) => a + n(r.cache_read_tokens), 0),
+        cacheWrite: stops.reduce((a, r) => a + n(r.cache_write_tokens), 0),
+        output: stops.reduce((a, r) => a + n(r.output_tokens), 0),
+        requests: stops.length,
+        models: [...new Set(stops.map((r) => r.model).filter((m) => typeof m === "string" && m))],
+      }
+    : null;
+  return { outputs, edits, usage };
 }
 // the file before its edits: each new text put back to the old one, from the last edit; null when that is not certain
 function undone(after, eds) {

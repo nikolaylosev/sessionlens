@@ -4,7 +4,7 @@
 import { $, SEV, T, VLABEL, esc, fkey, genId, rulesFileText, rulesTargetLabel, save, srcLabel, state } from "./common.js";
 import { calibStatsBySource, curS, fetchSessions, isDemo, metas, onGenChanged, sessionStore, updateSession } from "./store.js";
 import { readFile, renderList, show } from "./sessions.js";
-import { renderReview } from "./review.js";
+import { compact, renderReview } from "./review.js";
 import { profileChecks } from "./rules.js";
 
 // set in initCalibration(), in the order the single app.js ran its statements
@@ -29,6 +29,17 @@ export function initCalibration() {
       T("md_title", { t: r.task || r.session }),
       ``,
       T("md_verdict", { v: VLABEL[r.verdict], p: r.profile, r: m.reads, e: m.edits, re: m.readEdit ?? "—", runs: m.runs, g: m.editsToGreen ?? "—" }),
+      // the session's tokens, when its transcript had them (0.1.130)
+      ...(s.usage
+        ? [
+            T("md_tokens", {
+              in: compact(s.usage.input),
+              p: s.usage.input ? Math.round((100 * (s.usage.cached || 0)) / s.usage.input) : 0,
+              out: compact(s.usage.output),
+              req: Number.isInteger(s.usage.requests) ? ", " + T("m_tokens_req", { n: s.usage.requests }) : "",
+            }),
+          ]
+        : []),
       r.spec && r.spec.n
         ? T("md_spec", {
             n: r.spec.n,

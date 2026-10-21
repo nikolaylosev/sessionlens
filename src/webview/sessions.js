@@ -130,6 +130,7 @@ export async function pickAndImport() {
       cursorEdits: r.cursorEdits,
       cursorProject: r.cursorProject,
       cursorId: r.cursorId,
+      cursorUsage: r.cursorUsage,
     });
 }
 
@@ -229,6 +230,8 @@ export async function importText(text, name, from = {}) {
       source_cursor_id: from.cursorId || undefined,
       agent: origin.agent,
       project: origin.project,
+      // the tokens of the whole session, from the whole text (0.1.130)
+      usage: Lens.usageOf(text, from) || undefined,
       seg: null,
       importGen: Lens.IMPORT_GEN,
     };
