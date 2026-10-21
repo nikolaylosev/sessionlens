@@ -58,6 +58,12 @@
   plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
+- **"User frustration" on text you did not write.** On real sessions about half of these findings were not the
+  person's words: Codex's editor extension wraps each message (`# Files mentioned by the user: … ## My request: …`),
+  so every message started the same and was "the same request repeated"; Claude Code's summary of a compacted
+  conversation and Cursor's own "Briefly inform the user about the task result…" counted as messages; and the first
+  message ("…and run the tests again") was a signal although it is the task. Now only your request is the message,
+  and the first one is no signal. A session imported before asks to be imported again.
 - **A document is no code written without a plan.** "Code written without a plan" was reported at the first file the
   agent wrote, a document too: a session that only wrote test cases or a README had it, and one that wrote a
   document first had it at the document. Now a document (`.md`, `.txt`, `.rst`, `.adoc`) does not count; the finding

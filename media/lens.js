@@ -1185,7 +1185,8 @@
         if (b.type === "text" && (b.text || "").trim()) {
           if (agent && role === "user") continue;
           // the person's words only: not what the harness or the editor put into their turn
-          const text = role === "user" ? (rec.isMeta === true ? "" : personText(b.text)) : b.text;
+          // a compacted conversation's summary (isCompactSummary) is Claude Code's text too (0.1.130)
+          const text = role === "user" ? (rec.isMeta === true || rec.isCompactSummary === true ? "" : personText(b.text)) : b.text;
           if (!text) continue;
           const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text });
           if (r.kind === "message") attachCodeFromText(r);
@@ -1345,6 +1346,18 @@
     }
     return out.join("\n");
   }
+  /* Codex's editor extension wraps the person's words: "# Context from my IDE setup:" (the active file, the open tabs),
+     "# Files mentioned by the user:" or "# Files pasted by the user:", then "## My request:" (or "## My request for
+     Codex:") and the request. The request is the person's message (0.1.130): the wrapper, the same at the start of
+     every message, was "the same request repeated". A text without the request's heading stays as it is. */
+  const CODEX_WRAP = /^#\s+(?:Context from my IDE setup|Files mentioned by the user|Files pasted by the user):/;
+  function codexRequest(t) {
+    if (!CODEX_WRAP.test(t)) return t;
+    const m = /\n##\s+My request(?: for Codex)?:[ \t]*\n([\s\S]*)$/.exec(t);
+    return m ? m[1].trim() : t;
+  }
+  const COMPACT_SUMMARY = /^This session is being continued from a previous conversation that ran out of context\./;
+  const harnessUserText = (t) => codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim());
   function fromCodexJsonl(text, cfg) {
     const out = [],
       files = {},
@@ -1421,10 +1434,11 @@
           const kinds = (p.internal_chat_message_metadata_passthrough || {}).content_item_kinds;
           if (Array.isArray(kinds) && kinds.length && !kinds.includes("user.text")) continue;
         }
-        const t = (Array.isArray(p.content) ? p.content : [])
+        const joined = (Array.isArray(p.content) ? p.content : [])
           .map((b) => (b && b.text) || "")
           .join("\n")
           .trim();
+        const t = role === "user" ? codexRequest(joined) : joined;
         if (t) {
           const r = { seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: t };
           if (r.kind === "message") attachCodeFromText(r);
@@ -1546,13 +1560,13 @@
     const ms = Date.UTC(Number(m[3]), mon, Number(m[2]), h, Number(m[5]), Number(m[6] || 0)) - offset * 60000;
     return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
   }
+  // what Cursor itself puts in a user query when a background task ends (0.1.130): no message of the person
+  const CURSOR_OWN_QUERY = /^Briefly inform the user about the task result and perform any follow-up actions \(if needed\)\.$/;
   function cursorUserText(t) {
     const when = /<timestamp>([\s\S]*?)<\/timestamp>/.exec(t);
     const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(t);
-    return {
-      text: (query ? query[1] : t.replace(/<timestamp>[\s\S]*?<\/timestamp>/g, "")).trim(),
-      ts: when ? cursorTime(when[1]) : "",
-    };
+    const text = (query ? query[1] : t.replace(/<timestamp>[\s\S]*?<\/timestamp>/g, "")).trim();
+    return { text: CURSOR_OWN_QUERY.test(text) ? "" : text, ts: when ? cursorTime(when[1]) : "" };
   }
   /* Rewrites the lines in the Claude Code shape and lets fromClaudeJsonl rebuild the files, then puts Cursor's own tool
      names back on the events. A StrReplace without a path has no file to apply it to: it stays a plain tool call.
@@ -2323,8 +2337,10 @@
      9: Claude Code's subagents, Playwright's test agents, files written from a here-document, Claude Code's own text
         in a user message, a diff in a message, a Cursor session's files before and after an edit (0.1.127).
      10: a Cursor session's calls of Playwright's test agents with their arguments: the generator's file and code, the
-        planner's plan (0.1.130). */
-  const IMPORT_GEN = 10;
+        planner's plan (0.1.130).
+     11: a user message without the text Codex's editor extension wraps it in, Claude Code's summary of a compacted
+        conversation or Cursor's own query after a background task (0.1.130). */
+  const IMPORT_GEN = 11;
   /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
@@ -2418,6 +2434,8 @@
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
     if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
+    // a user message that is Codex's, Claude Code's or Cursor's own text, or wrapped in it (0.1.130)
+    if ((s.importGen || 0) < 11 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
     // a message with a diff, whose removed lines were read as code (0.1.127)
@@ -3675,7 +3693,8 @@
       users.forEach((u, i) => {
         const t = u.text.toLowerCase(),
           said = t.trim(); // the phrases from its first word; the repeat compares the text as it was, as before
-        if ((RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
+        // the first message is the task, no reaction to the agent: "…and run the tests again" (0.1.130)
+        if (i > 0 && (RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
           out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
         else if (i > 0 && t.length > 15 && users[i - 1].text.toLowerCase().slice(0, 40) === t.slice(0, 40))
           out.push(F("user_frustration", "medium", u.seq, T("repeat", { text: clip(u.text.trim(), 80) })));
