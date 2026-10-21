@@ -269,6 +269,16 @@ function withoutConfigSettings(settings, keep = []) {
   for (const k of Object.keys(CONFIG_SETTINGS)) if (!keep.includes(k)) delete out[k];
   return out;
 }
+/* 0.1.130: the person's prices per million tokens, for a session's cost (Lens.usageCost). Only in settings.json (an
+   object the Settings page cannot edit as a field); the page reads them with its settings and never writes them. */
+function tokenPrices() {
+  try {
+    return Lens.normPrices(vscode.workspace.getConfiguration(CONFIG).get("tokenPrices"));
+  } catch {
+    return {};
+  }
+}
+
 // ESLint on or off as the next analysis will see it (migrateSessions computes the gen with it)
 function lintEnabled(stored) {
   const c = configuredSettings(false);
@@ -622,12 +632,19 @@ function wireMessages(
           const conf = configuredSettings(false);
           knownConfig = Object.assign({}, conf);
           if (Object.keys(conf).length) out.settings = Object.assign({}, out.settings || {}, conf);
+          // the person's prices, read only (0.1.130); none set: nothing added, as for the settings above
+          const prices = tokenPrices();
+          if (Object.keys(prices).length) out.settings = Object.assign({}, out.settings || {}, { tokenPrices: prices });
         }
         reply(out);
       } else if (msg.type === "storage:set") {
         await host.ready;
         const values = Object.assign({}, msg.payload.values);
         if (values.settings) values.settings = stripHostOwned(values.settings); // CLI paths and addresses: never from a webview
+        if (values.settings && typeof values.settings === "object") {
+          values.settings = Object.assign({}, values.settings);
+          delete values.settings.tokenPrices; // the setting's, read only (0.1.130)
+        }
         // the five VS Code settings (phase 6) go to the configuration; only what could not be written stays here
         if (values.settings) values.settings = withoutConfigSettings(values.settings, await writeConfigSettings(values.settings, knownConfig));
         // A settings object that still carries a key (old data from before phase 2) has it moved to SecretStorage
@@ -1916,6 +1933,8 @@ function activate(context) {
           groupByPicked = null; // the setting holds the choice now (this window's write, or one from elsewhere)
           if (sessionsTreeProvider) sessionsTreeProvider.refresh();
         }
+        // the prices per million tokens: every page reads them again with its settings (0.1.130)
+        if (e.affectsConfiguration(CONFIG + ".tokenPrices")) broadcastRefresh(null, { scope: "keys" });
         const which = Object.keys(CONFIG_SETTINGS).filter((k) => e.affectsConfiguration(CONFIG + "." + k));
         if (!which.length) return; // the CLI paths are read when a CLI starts
         host.log("settings changed: " + which.map((k) => "sessionlens." + k).join(", "));

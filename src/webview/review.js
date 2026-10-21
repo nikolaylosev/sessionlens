@@ -309,9 +309,27 @@ export function usageTip(u) {
     T("m_tokens_out", { n: (u.output || 0).toLocaleString("en-US") }),
     Number.isInteger(u.requests) ? T("m_tokens_req", { n: u.requests }) : "",
     u.models && u.models.length ? T("m_tokens_models", { m: u.models.join(", ") }) : "",
+    // no prices yet: where to put them (0.1.130)
+    Object.keys(prices()).length ? "" : T("m_cost_hint"),
   ]
     .filter(Boolean)
     .join("\n");
+}
+// the person's prices per million tokens (sessionlens.tokenPrices, read only), 0.1.130
+const prices = () => (state.settings && state.settings.tokenPrices) || {};
+// 12.4 → "12.40", 0.004 → "<0.01", 1234.5 → "1,235": the money is the person's own, so no sign
+export function money(v) {
+  if (v < 0.01) return "<0.01";
+  return v >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toFixed(2);
+}
+/* The cost with the person's prices, or null when they have set none, or the session has no tokens per model (one
+   imported before 0.1.130): { text, tip } for the metrics and the report */
+export function sessionCost(s) {
+  if (!s.usage || !Object.keys(prices()).length) return null;
+  const c = Lens.usageCost(s.usage, prices());
+  if (!c) return null;
+  if (c.cost === null) return { text: "—", tip: T("m_cost_missing", { m: c.missing.map((m) => m || T("m_cost_nomodel")).join(", ") }), cost: null };
+  return { text: "≈ " + money(c.cost), tip: T("m_cost_tip"), cost: c.cost };
 }
 
 export function renderReview() {
@@ -337,6 +355,8 @@ export function renderReview() {
     s.usage
       ? `<span title="${esc(usageTip(s.usage))}">${T("m_tokens")} <b>${esc(T("m_tokens_val", { in: compact(s.usage.input), out: compact(s.usage.output) }))}</b></span>`
       : "",
+    // and their cost, with the person's prices (0.1.130)
+    ((c) => (c ? `<span title="${esc(c.tip)}">${T("m_cost")} <b>${esc(c.text)}</b></span>` : ""))(sessionCost(s)),
   ]
     .filter(Boolean)
     .map((x) => `<span>${x}</span>`)

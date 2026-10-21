@@ -1,8 +1,10 @@
 "use strict";
 /* The tokens of a session (0.1.130, Lens.usageOf): Claude Code's usage once per reply (the same usage is on every block
    of a reply), its cached input added back; Codex's last running total; a Cursor transcript's from the hook's log
-   (readLog: its stop lines); none for a format that has none. The import keeps them on the session (usage), the
-   session's tab shows them in its metrics with the details on hover, and an older session without them shows none. */
+   (readLog: its stop lines); none for a format that has none; and the same per model. The import keeps them on the
+   session (usage), the session's tab shows them in its metrics with the details on hover, and an older session
+   without them shows none. The cost (Lens.usageCost) with the person's own prices (sessionlens.tokenPrices, read only:
+   the page never writes them), only when every model of the session has one. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -49,6 +51,10 @@ test("Claude Code: each reply's usage once, the cached input added back; the mod
     output: 2000,
     requests: 3,
     models: ["claude-sonnet-5-5", "claude-opus-5-5"],
+    byModel: {
+      "claude-sonnet-5-5": { input: 10010, cached: 9000, cacheWrite: 1000, output: 300 },
+      "claude-opus-5-5": { input: 10000, cached: 9990, cacheWrite: 5, output: 1700 },
+    },
   });
   assert.equal(Lens.usageOf(J({ type: "user", message: { role: "user", content: "hi" } })), null, "no usage at all");
 });
@@ -59,14 +65,34 @@ test("Codex: the last running total and the models of its turns; the number of r
     J({ type: "turn_context", payload: { model: "gpt-6-luna" } }),
     J({
       type: "event_msg",
-      payload: { type: "token_count", info: { total_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50 } } },
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50 },
+          last_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50 },
+        },
+      },
+    }),
+    // the same total again (a new rate limit): no request
+    J({
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50 },
+          last_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50 },
+        },
+      },
     }),
     J({ type: "turn_context", payload: { model: "gpt-5.6-sol" } }),
     J({
       type: "event_msg",
       payload: {
         type: "token_count",
-        info: { total_token_usage: { input_tokens: 3444051, cached_input_tokens: 3105920, cache_write_input_tokens: 0, output_tokens: 18404 } },
+        info: {
+          total_token_usage: { input_tokens: 3444051, cached_input_tokens: 3105920, cache_write_input_tokens: 0, output_tokens: 18404 },
+          last_token_usage: { input_tokens: 3443051, cached_input_tokens: 3105120, cache_write_input_tokens: 0, output_tokens: 18354 },
+        },
       },
     }),
     J({ type: "event_msg", payload: { type: "token_count", info: null } }),
@@ -78,6 +104,10 @@ test("Codex: the last running total and the models of its turns; the number of r
     output: 18404,
     requests: null,
     models: ["gpt-6-luna", "gpt-5.6-sol"],
+    byModel: {
+      "gpt-6-luna": { input: 1000, cached: 800, cacheWrite: 0, output: 50 },
+      "gpt-5.6-sol": { input: 3443051, cached: 3105120, cacheWrite: 0, output: 18354 },
+    },
   });
 });
 
@@ -92,7 +122,15 @@ test("Cursor: none in the transcript; the hook's stop lines give them; other for
     .split("\n"))
     Hook.handle(e, { env: { SESSIONLENS_HOOK_LOG: H.paths(h).logDir } });
   const usage = H.readLog({ home: h, id }).usage;
-  assert.deepEqual(usage, { input: 121087, cached: 105984, cacheWrite: 0, output: 1154, requests: 1, models: ["grok-4.7"] });
+  assert.deepEqual(usage, {
+    input: 121087,
+    cached: 105984,
+    cacheWrite: 0,
+    output: 1154,
+    requests: 1,
+    models: ["grok-4.7"],
+    byModel: { "grok-4.7": { input: 121087, cached: 105984, cacheWrite: 0, output: 1154 } },
+  });
   assert.deepEqual(Lens.usageOf(cursor, { cursorUsage: usage }), usage);
   assert.equal(Lens.usageOf("User: write the tests\nAssistant: done"), null, "plain text");
   // a Cursor CLI log (stream-json): its replies look like Claude Code's; a usage on one is not read until its meaning is known
@@ -143,6 +181,7 @@ test("the import keeps them; the session's tab shows them, with the details on h
       "2,000 output tokens",
       "3 requests to the model",
       "model: claude-sonnet-5-5, claude-opus-5-5",
+      "Cost: put your prices per million tokens in sessionlens.tokenPrices (settings.json)",
     ].join("\n"),
   );
   assert.deepEqual(tab.errors, []);
@@ -165,6 +204,7 @@ test("the import keeps them; the session's tab shows them, with the details on h
   await t2.ready();
   assert.match(t2.document.querySelector("#metrics").textContent, /reads/, "the metrics are there");
   assert.equal(/tokens/.test(t2.document.querySelector("#metrics").textContent), false);
+  assert.equal(/cost/.test(t2.document.querySelector("#metrics").textContent), false, "no prices: no cost either");
   t2.close();
 });
 
@@ -205,4 +245,117 @@ test("the Markdown report has a line with the tokens; none for a session without
   // millions, and no number of requests (Codex)
   const codex = { input: 3444051, cached: 3105920, cacheWrite: 0, output: 18404, requests: null, models: ["gpt-6-luna"] };
   assert.match(await md(codex), /^Tokens: 3\.4M in \(90% from the cache\), 18k out\.$/m);
+});
+
+// ---- the cost ----
+const PRICES = {
+  "claude-sonnet-*": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  "claude-opus-5-5": { input: 5, output: 25 },
+};
+// sonnet: 10 fresh × 3 + 9000 cached × 0.3 + 1000 written × 3.75 + 300 out × 15 = 10 980; opus (no cache prices: the
+// input's): 10000 × 5 + 1700 × 25 = 92 500 → 103 480 per million
+const COST = 0.10348;
+
+test("usageCost: the cache's own prices or the input's, a prefix with * (the longest wins), no case; none without every model", () => {
+  const u = Lens.usageOf(CLAUDE);
+  assert.ok(Math.abs(Lens.usageCost(u, PRICES).cost - COST) < 1e-12);
+  assert.deepEqual(Lens.usageCost(u, PRICES).missing, []);
+  // the longest prefix, whatever the order; a name in any case, on either side
+  const longer = { "claude-sonnet-*": PRICES["claude-sonnet-*"], "claude-*": { input: 1000, output: 1000 }, "CLAUDE-OPUS-5-5": PRICES["claude-opus-5-5"] };
+  assert.ok(Math.abs(Lens.usageCost(u, longer).cost - COST) < 1e-12, "claude-sonnet-* over claude-*, the name in any case");
+  const mixed = { byModel: { "Claude-Opus-5-5": u.byModel["claude-opus-5-5"] } };
+  assert.ok(Math.abs(Lens.usageCost(mixed, PRICES).cost - 0.0925) < 1e-12, "the model's name in another case");
+  assert.deepEqual(Lens.usageCost(u, { "claude-sonnet-*": PRICES["claude-sonnet-*"] }), { cost: null, missing: ["claude-opus-5-5"] });
+  // a reply that names no model has no price
+  assert.deepEqual(Lens.usageCost({ byModel: { "": { input: 10, cached: 0, cacheWrite: 0, output: 5 } } }, PRICES), { cost: null, missing: [""] });
+  // "*" alone is every model, that one too
+  assert.deepEqual(Lens.usageCost({ byModel: { "": { input: 1e6, cached: 0, cacheWrite: 0, output: 0 } } }, { "*": { input: 2, output: 4 } }), {
+    cost: 2,
+    missing: [],
+  });
+  assert.equal(Lens.usageCost({ input: 10, output: 5 }, PRICES), null, "no tokens per model: a session imported before");
+});
+
+test("normPrices: what is no price, or no model name, is left out", () => {
+  assert.deepEqual(
+    Lens.normPrices({
+      "ok-model": { input: 1, output: 2, cacheRead: 0.1, extra: 5 },
+      "no-output": { input: 1 },
+      "text-price": { input: "1", output: 2 },
+      negative: { input: -1, output: 2 },
+      huge: { input: 1, output: 1e9 },
+      " ": { input: 1, output: 2 },
+      "bad\u0001name": { input: 1, output: 2 },
+      " spaced * ": { input: 1, output: 2, cacheWrite: "x" },
+    }),
+    { "ok-model": { input: 1, output: 2, cacheRead: 0.1 }, "spaced *": { input: 1, output: 2 } },
+  );
+  for (const x of [null, [], "x", 5]) assert.deepEqual(Lens.normPrices(x), {});
+});
+
+test("the host gives the page the setting's prices, cleaned, and never keeps them from the page", async () => {
+  const { fakeVscode, loadExtension, fakeContext, fakeWebviewView } = require("./fake-vscode");
+  const f = fakeVscode({ config: { global: { "sessionlens.tokenPrices": Object.assign({ broken: { input: "x" } }, PRICES) } } });
+  const ext = loadExtension(f.vscode);
+  const ctx = fakeContext();
+  ext.activate(ctx);
+  const wv = fakeWebviewView();
+  f.registered.views.sessionlensView.resolveWebviewView(wv.view);
+  const got = await wv.send("storage:get", { keys: ["settings"] });
+  assert.deepEqual(got.settings.tokenPrices, PRICES);
+  await wv.send("storage:set", { values: { settings: { profile: "qa-ts", tokenPrices: { "page-model": { input: 1, output: 1 } } } } });
+  assert.equal(ctx.globalState.get("settings").tokenPrices, undefined, "not kept in the extension's storage");
+  assert.equal(
+    f.calls.configUpdates.some((c) => c[0] === "sessionlens.tokenPrices"),
+    false,
+    "not written to the setting",
+  );
+});
+
+test("with the person's prices the tab and the report show the cost; a model without a price shows none and says which", async () => {
+  const at = new Date(2026, 9, 1, 12).toISOString();
+  const open = async (prices) => {
+    const s = {
+      id: "cost-1",
+      name: "cost",
+      task: "",
+      profile: "qa-ts",
+      created: at,
+      events: [],
+      findings: [],
+      verdicts: {},
+      spec: "",
+      usage: Lens.usageOf(CLAUDE),
+    };
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-usage-cost-"));
+    const st = createStore({ dir: path.join(dir, "sessions") });
+    await st.open();
+    await st.put(s, { analyzedGen: Lens.analysisGen({ ruleOverrides: {}, lint: false, epoch: 0 }) });
+    const h = bootHost({
+      storageDir: dir,
+      globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+      vscode: { config: { global: { "sessionlens.tokenPrices": prices } } },
+    });
+    const p = await openPage(h, { sessionId: s.id });
+    await p.ready();
+    const chip = [...p.document.querySelectorAll("#metrics span[title]")].find((x) => /^cost/.test(x.textContent));
+    click(p, "#export-md");
+    let m = null;
+    await until(() => (m = p.sent.find((x) => x.type === "save:file" && /\.md$/.test(x.payload.name))));
+    const tokens = [...p.document.querySelectorAll("#metrics span[title]")].find((x) => /^tokens/.test(x.textContent));
+    p.close();
+    return { chip, md: m.payload.content, tokensTip: tokens.getAttribute("title") };
+  };
+  const all = await open(PRICES);
+  assert.equal(all.chip.textContent, "cost ≈ 0.10");
+  assert.equal(all.chip.getAttribute("title"), "With your prices per million tokens (sessionlens.tokenPrices), in their money");
+  assert.match(all.md, /^Cost: ≈ 0\.10 \(your prices per million tokens\)\.$/m);
+  assert.equal(/sessionlens\.tokenPrices/.test(all.tokensTip), false, "prices set: no hint on the tokens");
+  const part = await open({ "claude-sonnet-*": PRICES["claude-sonnet-*"] });
+  assert.equal(part.chip.textContent, "cost —");
+  assert.equal(part.chip.getAttribute("title"), "No price for: claude-opus-5-5. Add it to sessionlens.tokenPrices in settings.json");
+  assert.equal(/^Cost:/m.test(part.md), false, "a part of the cost is not the cost");
+  // less than a hundredth
+  const tiny = await open({ "claude-*": { input: 0.001, output: 0.001 } });
+  assert.equal(tiny.chip.textContent, "cost ≈ <0.01");
 });

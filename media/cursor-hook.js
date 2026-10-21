@@ -210,6 +210,12 @@ var require_i18n = __commonJS({
           m_tokens_req: "{n} {n|request|requests} to the model",
           m_tokens_models: "model: {m}",
           md_tokens: "Tokens: {in} in ({p}% from the cache), {out} out{req}.",
+          m_cost: "cost",
+          m_cost_tip: "With your prices per million tokens (sessionlens.tokenPrices), in their money",
+          m_cost_missing: "No price for: {m}. Add it to sessionlens.tokenPrices in settings.json",
+          m_cost_nomodel: "replies that name no model",
+          m_cost_hint: "Cost: put your prices per million tokens in sessionlens.tokenPrices (settings.json)",
+          md_cost: "Cost: {c} (your prices per million tokens).",
           m_to_green: "edits to green",
           spec_none: "(none)",
           spec_auto: " · numbered automatically, coverage not checked",
@@ -2836,23 +2842,36 @@ var require_lens = __commonJS({
         if (!t.startsWith("{")) return null;
         const num2 = (v) => typeof v === "number" && isFinite(v) && v >= 0 ? v : 0;
         const out = (o) => o.input || o.output ? o : null;
+        const byModel = {};
+        const add = (model, input, cached, cacheWrite, output) => {
+          const k = typeof model === "string" ? model.slice(0, 100) : "";
+          const b = byModel[k] || (byModel[k] = { input: 0, cached: 0, cacheWrite: 0, output: 0 });
+          b.input += input;
+          b.cached += cached;
+          b.cacheWrite += cacheWrite;
+          b.output += output;
+        };
         if (isCursorStreamJson(t)) return null;
         if (isCursorJsonl(t)) {
           const u = opts && opts.cursorUsage;
           if (!u || typeof u !== "object") return null;
+          const bm = u.byModel && typeof u.byModel === "object" ? u.byModel : {};
+          for (const [m, b] of Object.entries(bm).slice(0, 20))
+            if (b && typeof b === "object") add(m, num2(b.input), num2(b.cached), num2(b.cacheWrite), num2(b.output));
           return out({
             input: num2(u.input),
             cached: num2(u.cached),
             cacheWrite: num2(u.cacheWrite),
             output: num2(u.output),
             requests: Number.isInteger(u.requests) ? u.requests : null,
-            models: Array.isArray(u.models) ? u.models.filter((m) => typeof m === "string").slice(0, 10) : []
+            models: Array.isArray(u.models) ? u.models.filter((m) => typeof m === "string").slice(0, 10) : [],
+            byModel
           });
         }
         const codex = isCodexJsonl(t);
         const seen = /* @__PURE__ */ new Set(), models = /* @__PURE__ */ new Set();
         const sum = { input: 0, cached: 0, cacheWrite: 0, output: 0, requests: 0 };
-        let total = null;
+        let total = null, current = "";
         for (const line of t.split("\n")) {
           if (!line.includes(codex ? '"token_count"' : '"usage"') && !(codex && line.includes('"turn_context"'))) continue;
           let r;
@@ -2863,8 +2882,15 @@ var require_lens = __commonJS({
           }
           if (codex) {
             const p = r && r.payload;
-            if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add(p.model);
-            if (p && p.type === "token_count" && p.info && p.info.total_token_usage) total = p.info.total_token_usage;
+            if (r && r.type === "turn_context" && p && typeof p.model === "string") models.add(current = p.model);
+            if (p && p.type === "token_count" && p.info && p.info.total_token_usage) {
+              const tt = (u2) => num2(u2.total_tokens) || num2(u2.input_tokens) + num2(u2.output_tokens);
+              const grew = !total || tt(p.info.total_token_usage) > tt(total);
+              total = p.info.total_token_usage;
+              const l = p.info.last_token_usage;
+              if (grew && l && typeof l === "object")
+                add(current, num2(l.input_tokens), num2(l.cached_input_tokens), num2(l.cache_write_input_tokens), num2(l.output_tokens));
+            }
             continue;
           }
           const m = r && r.type === "assistant" && r.message;
@@ -2873,12 +2899,15 @@ var require_lens = __commonJS({
           if (key && seen.has(key)) continue;
           if (key) seen.add(key);
           const u = m.usage;
+          const real = typeof m.model === "string" && m.model && !m.model.startsWith("<") ? m.model : "";
+          const inp = num2(u.input_tokens) + num2(u.cache_read_input_tokens) + num2(u.cache_creation_input_tokens);
           sum.cached += num2(u.cache_read_input_tokens);
           sum.cacheWrite += num2(u.cache_creation_input_tokens);
-          sum.input += num2(u.input_tokens) + num2(u.cache_read_input_tokens) + num2(u.cache_creation_input_tokens);
+          sum.input += inp;
           sum.output += num2(u.output_tokens);
           sum.requests++;
-          if (typeof m.model === "string" && m.model && !m.model.startsWith("<")) models.add(m.model);
+          if (real) models.add(real);
+          if (inp || num2(u.output_tokens)) add(real, inp, num2(u.cache_read_input_tokens), num2(u.cache_creation_input_tokens), num2(u.output_tokens));
         }
         if (codex)
           return total ? out({
@@ -2887,9 +2916,53 @@ var require_lens = __commonJS({
             cacheWrite: num2(total.cache_write_input_tokens),
             output: num2(total.output_tokens),
             requests: null,
-            models: [...models]
+            models: [...models],
+            byModel
           }) : null;
-        return out(Object.assign(sum, { models: [...models] }));
+        return out(Object.assign(sum, { models: [...models], byModel }));
+      }
+      function normPrices(o) {
+        const out = {};
+        if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+        const price = (v) => typeof v === "number" && isFinite(v) && v >= 0 && v <= 1e5 ? v : void 0;
+        for (const [k, v] of Object.entries(o).slice(0, 200)) {
+          if (typeof k !== "string" || !k.trim() || k.length > 100 || /[\u0000-\u001f]/.test(k) || !v || typeof v !== "object") continue;
+          const p = { input: price(v.input), output: price(v.output) };
+          if (p.input === void 0 || p.output === void 0) continue;
+          if (price(v.cacheRead) !== void 0) p.cacheRead = price(v.cacheRead);
+          if (price(v.cacheWrite) !== void 0) p.cacheWrite = price(v.cacheWrite);
+          out[k.trim()] = p;
+        }
+        return out;
+      }
+      function priceFor(model, prices) {
+        const m = String(model || "").toLowerCase();
+        let best = null, len = -1;
+        for (const [k, p] of Object.entries(prices)) {
+          const key = k.toLowerCase();
+          if (key === m) return p;
+          if (key.endsWith("*") && m.startsWith(key.slice(0, -1)) && key.length > len) [best, len] = [p, key.length];
+        }
+        return best;
+      }
+      function usageCost(usage, prices) {
+        const bm = usage && usage.byModel;
+        if (!bm || typeof bm !== "object") return null;
+        const used = Object.entries(bm).filter(([, b]) => b && (b.input || b.output));
+        if (!used.length) return null;
+        const P = normPrices(prices);
+        let cost = 0;
+        const missing = [];
+        for (const [m, b] of used) {
+          const p = priceFor(m, P);
+          if (!p) {
+            missing.push(m);
+            continue;
+          }
+          const cached = b.cached || 0, written = b.cacheWrite || 0, fresh = Math.max(0, (b.input || 0) - cached - written);
+          cost += (fresh * p.input + cached * (p.cacheRead ?? p.input) + written * (p.cacheWrite ?? p.input) + (b.output || 0) * p.output) / 1e6;
+        }
+        return { cost: missing.length ? null : cost, missing };
       }
       function unreadToolCalls(text, events) {
         const t = text.trimStart();
@@ -4298,6 +4371,8 @@ var require_lens = __commonJS({
         clip,
         transcriptOrigin,
         usageOf,
+        normPrices,
+        usageCost,
         AGENTS,
         cleanGroup,
         projectOf,
