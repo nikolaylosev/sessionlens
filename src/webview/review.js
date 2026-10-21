@@ -224,7 +224,8 @@ export async function reimport() {
   // the text kept at import has no subagents in it, nor Cursor's files before and after an edit: they are read when
   // the file is picked (0.1.127)
   // (only for an import before 0.1.127: a later one has read the file already, with what it had)
-  const fromFile = (s.importGen || 0) < 9 && (Lens.subagentsMissing(s) || Lens.cursorEditsMissing(s));
+  // (a Cursor session without the files: also an import of 0.1.127–0.1.129, before the CLI's database gave them)
+  const fromFile = ((s.importGen || 0) < 9 && Lens.subagentsMissing(s)) || ((s.importGen || 0) < 10 && Lens.cursorEditsMissing(s));
   let text = fromFile ? null : s.source_text,
     cursorOutputs = s.source_outputs,
     cursorEdits = s.source_edits,
