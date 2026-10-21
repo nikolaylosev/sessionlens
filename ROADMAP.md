@@ -1,6 +1,6 @@
 # SessionLens roadmap
 
-This is how we see SessionLens developing, as of version 0.1.124 (October 2026). There are no dates, and the order
+This is how we see SessionLens developing, as of version 0.1.130 (October 2026). There are no dates, and the order
 can change with feedback. To suggest something, please
 [open an issue](https://github.com/nikolaylosev/sessionlens-vscode/issues).
 
@@ -26,12 +26,23 @@ by name, task, profile or group, and has quick filters for red sessions and for 
 judged yet. Paths in your home folder start with `~`, so a review or a PR report no longer shows your user name, and
 a finding that quotes a long line cuts it at a word.
 
+0.1.125 to 0.1.127 read more of what an agent does: the steps of Claude Code's subagents and of Playwright's test
+agents (planner, generator, healer), a file written by a shell command, a check made in a browser instead of in a
+test, and assertions inside a page object. 0.1.129 adds Ruff to the Python engine and the Python checks to API tests
+on pytest.
+
+0.1.130 can record a Cursor agent's runs with a hook, so a Cursor session has the output of its commands and the
+files before and after each edit. A session shows its tokens, its cost with your own prices, and the share of a Codex
+subscription's limits it used. A specification can use the IDs of a test management tool (`NAV-01`, `CIP-T123`), and
+the agent's own test plan or document of test cases can become the specification with one click. New checks start
+on trial, as low findings, until reviewers have judged them.
+
 SessionLens looks at the agent's session, while pull request review tools look at the final diff. We plan new checks
 around process mistakes that only the session shows.
 
 ## Now
 
-- Test 0.1.124 by hand in real VS Code and Cursor and ship fixes as patch releases.
+- Test 0.1.130 by hand in real VS Code and Cursor, the Cursor hook on Windows too, and ship fixes as patch releases.
 - Tune checks based on [false finding reports](https://github.com/nikolaylosev/sessionlens-vscode/issues/new?template=false-finding.yml).
 
 ## Next: command line tool and CI
@@ -59,7 +70,7 @@ around process mistakes that only the session shows.
 ## Under consideration
 
 - A verdict key that survives rewording of a finding.
-- Calibration shared by a team, with the reviewer and date of each verdict.
+- Calibration shared by a team, with the reviewer and date of each verdict, once several reviewers give verdicts.
 
 ## Not planned
 
