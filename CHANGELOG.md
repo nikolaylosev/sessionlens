@@ -8,19 +8,17 @@
   **SessionLens: Record Cursor agent runs** adds a hook to your `~/.cursor/hooks.json` (it asks first, keeps your own
   hooks and saves the file as it was); after each command and file edit of the agent, the hook writes the command's
   output and the edit to `~/.cursor/sessionlens/log/` on your machine. **Stop recording Cursor agent runs** takes it
-  out. The logs are removed after 30 days. On Windows the hook is not yet tried on a real Cursor.
-- **A Cursor session gets the log.** When you pick a Cursor Agent transcript, the output of its commands and the
-  versions of its files come from that log, so its test runs have their results (red, green), and a weakened assertion
-  is seen in the file before and after the edit. **Import again** in a session's tab reads the log too, so a session
-  imported before the log was there gets the results. The Output channel says where they came from ("from the hook
-  log", "from the cli database").
+  out. The logs are removed after 30 days. When you pick a Cursor Agent transcript, the output of its commands and the
+  versions of its files come from that log, so its test runs have their results (red, green), and a weakened
+  assertion is seen in the file before and after the edit. **Import again** in a session's tab reads the log too. The
+  Output channel says where they came from ("from the hook log", "from the cli database"). On Windows the hook is not
+  yet tried on a real Cursor.
 - **A Cursor CLI session: the file before an edit, from what the agent read.** The Cursor CLI keeps no file before an
   edit, so a test file the agent read and then wrote over in one go had no earlier version, and a test it lost was not
   seen. Its database keeps what the agent read, though: now the last version the session saw of the file (a whole
   read, a write, an edit applied to it) is the file before. A version is dropped when it may be out of date: after a
   failed call, a command that may write files (`sed -i`, `git checkout`, a formatter, a redirect) or another tool that
   names the file. A Cursor session imported before without them asks once to be imported again, from the file.
-
 - **A session's tokens.** The metrics under a session's header show its tokens, input and output (`tokens 3.4M in ·
   18k out`), and on hover how much of the input the cache gave, how much was written to it, the requests to the model
   and the models; the Markdown report has a line with them. Claude Code transcripts have them (each reply counted once,
@@ -35,33 +33,65 @@
   subscription's limits: the metrics show `limits +12% 5 h · +2% week` (a long session adds up every window that reset
   while it ran), the plan on hover, and the report a line with it. A price can have a `label`: with `"label": "API
   equivalent"` the cost reads `cost ≈ 12.40 (API equivalent)`, what the session would have cost through the API.
-
 - **Requirement IDs from your test management tool.** A spec can name its requirements `NAV-01`, `REQ-12` or
   `CIP-T123` (Zephyr), not only `R1`: such a key needs a mark after it (`NAV-01.`, `NAV-01:`, `NAV-01 —`) so that
-  `UTF-8 encoding is used` stays text, and under a requirements heading a space is enough. A test names it as written
-  or as a name has to write it (`test_nav_01_home`), in any case, never inside a word or a longer number.
-
-- **New check `empty_result_unverified`.** A test that asks something (an HTTP call, a query, a search) and expects an
-  empty result proves little when no test of the same file shows the same call returning something: a broken query, a
-  wrong filter or an empty test database pass it too. Python (`== []`, `len(…) == 0`), TypeScript (`toHaveLength(0)`,
-  `toEqual([])`), Java (`isEmpty()`, `hasSize(0)`) and C# (`Assert.Empty`, `BeEmpty()`); medium. A UI element that is not
-  on the page (`toHaveCount(0)`) and a new object's first state are not results.
-- **New checks start on trial.** A new check has no record yet, so its findings are now low, marked "new check, on
-  trial", until it has 10 verdicts: it makes no session red before reviewers have judged it. With 10 it gets its own
-  severity, or calibration demotes it or switches it off as any other check; the Calibration table shows "on trial".
-  The first such check is `empty_result_unverified`. A severity you set on the Rules tab still applies.
+  `UTF-8 encoding is used` stays text, and under a requirements heading a space is enough. A heading can be the
+  requirement itself (`### NAV-01. The main menu is visible`), as a document of test cases is often written. A test
+  names it as written or as a name has to write it (`test_nav_01_home`), in any case, never inside a word or a longer
+  number. A test made in a loop over the cases (`for (const item of links) test(\`${item.id}: …\`)`, or `forEach`)
+  covers the IDs written as strings in that array (`{ id: 'NAV-02', … }`).
 - **The agent's own test plan or test cases as the specification.** When the agent saved a plan with Playwright's
   planner agent, or wrote a document of test cases with IDs (`docs/test-cases.md` with `### NAV-01. …`), and the
   session has no specification, the **Specification** section offers it: **Use as specification**. Nothing is taken
   without that click, and a specification you gave is never replaced. A planner's plan is read as one requirement per
   scenario (`1.1`), covered by a test named as the scenario, since the generator puts no number in a test's name; the
-  plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
+  plan's seed test needs no requirement. It is offered for a session imported from this version on.
+- **New check `empty_result_unverified`.** A test that asks something (an HTTP call, a query, a search) and expects an
+  empty result proves little when no test of the same file shows the same call returning something: a broken query, a
+  wrong filter or an empty test database pass it too. Python (`== []`, `len(…) == 0`), TypeScript (`toHaveLength(0)`,
+  `toEqual([])`), Java (`isEmpty()`, `hasSize(0)`) and C# (`Assert.Empty`, `BeEmpty()`). A UI element that is not on
+  the page (`toHaveCount(0)`) and a new object's first state are not results. Medium, and on trial at first (below).
+- **New checks start on trial.** A new check has no record yet, so its findings are low, marked "new check, on trial",
+  until it has 10 verdicts: it makes no session red before reviewers have judged it. With 10 it gets its own severity,
+  or calibration demotes it or switches it off as any other check; the Calibration table shows "on trial". The first
+  such check is `empty_result_unverified`. A severity you set on the Rules tab still applies.
 
 ### Fixed
+
+Cursor sessions:
+- **Playwright's test agents in a Cursor session.** Cursor keeps an MCP call's arguments one level down, and the
+  import did not read them: a test the generator wrote had no file and no code, so no check saw it; a run had no file
+  list, and the planner's plan was lost. Now they are read as in a Claude Code session. A Cursor session imported
+  before asks to be imported again.
+- **Import again no longer asks whether the file is this session when only command output is new.** It compared each
+  step's text, and a command's text is its output: the same Cursor transcript with output from the log looked like
+  "45% of its steps". Now only what the person and the agent said is compared word for word; a tool step by its kind,
+  file and command.
+
+Specifications:
+- **A spec written as a document of test cases.** A heading that starts with an ID (`### NAV-01. The main menu is
+  visible`) was taken for a section heading, so a document of 26 cases gave 99 requirements without IDs, one per line
+  of their text. Now such a heading is the requirement and the text under it is its description.
+- **A spec that writes R IDs with the ticket's prefix.** With `TASK-1/R1. …` in the spec every requirement had "no test",
+  even when a test named it: the spec kept `TASK-1/R1`, a test's reference was read as `R1`. Now a test that names `R1`
+  (or `TASK-1/R1`) covers it.
+- **Tests made in a loop over the cases cover their IDs.** A loop test names no ID in its title, so every case of the
+  array had "no test" (a real session: 19 of 26). See **Requirement IDs** above.
+
+Checks:
+- **`expect(await x.isVisible()).toBeTruthy()` where ESLint does not run.** The pattern stopped at the first `)` inside
+  `expect(`, so a call in the argument was never seen: with static analysis off nothing caught this one-time read of the
+  page. Now it is a medium finding ("reads the page once"), the same ESLint gives, and only one of the two where ESLint
+  ran; `expect(isValid(cart())).toBeTruthy()` is a weak assertion like `expect(x).toBeTruthy()`.
 - **"The build passes" is no claim that the tests pass.** "Сборка проходит", "tsc проходит", "Prettier is passing"
   counted as the agent saying the tests pass, so a session got a high "claims tests pass, but no test run". Now a
   sentence about a build, the types, a compiler, a linter or a formatter is no such claim, unless it names the tests
   too ("Сборка и тесты проходят").
+- **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D
+  jest`, `yarn add vitest`, `uv add pytest` and the like counted as runs of the tests, because the runner's name is in
+  them: a session that only set up a venv had "runs" with no result. Now a command that installs, removes or shows a
+  package, `npm init jest@latest`, `which pytest` and a runner's `--version` or `--help` run nothing. An install
+  followed by the tests (`pip install -r requirements.txt && pytest`) is still a run.
 - **"User frustration" on text you did not write.** On real sessions about half of these findings were not the
   person's words: Codex's editor extension wraps each message (`# Files mentioned by the user: … ## My request: …`),
   so every message started the same and was "the same request repeated"; Claude Code's summary of a compacted
@@ -72,32 +102,6 @@
   agent wrote, a document too: a session that only wrote test cases or a README had it, and one that wrote a
   document first had it at the document. Now a document (`.md`, `.txt`, `.rst`, `.adoc`) does not count; the finding
   is at the first code, and a verdict you gave it moves there with it.
-- **Tests made in a loop over the cases cover their IDs.** `for (const item of links) test(\`${item.id}: …\`)` names
-  no ID in its title, so every case in `links` had "no test" (a real session: 19 of 26). Now such a test covers the
-  IDs written as strings in the array it loops over (`{ id: 'NAV-02', … }`), with `for … of` or `forEach`.
-- **Playwright's test agents in a Cursor session.** Cursor keeps an MCP call's arguments one level down, and the
-  import did not read them: a test the generator wrote had no file and no code, so no check saw it; a run had no file
-  list, and the planner's plan was lost. Now they are read as in a Claude Code session. A Cursor session imported
-  before asks to be imported again.
-- **A spec written as a document of test cases.** A heading that starts with an ID (`### NAV-01. The main menu is
-  visible`) was taken for a section heading, so a document of 26 cases gave 99 requirements without IDs, one per line
-  of their text. Now such a heading is the requirement and the text under it is its description.
-- **`expect(await x.isVisible()).toBeTruthy()` where ESLint does not run.** The pattern stopped at the first `)` inside
-  `expect(`, so a call in the argument was never seen: with static analysis off nothing caught this one-time read of the
-  page. Now it is a medium finding ("reads the page once"), the same ESLint gives, and only one of the two where ESLint
-  ran; `expect(isValid(cart())).toBeTruthy()` is a weak assertion like `expect(x).toBeTruthy()`.
-- **A spec that writes R IDs with the ticket's prefix.** With `TASK-1/R1. …` in the spec every requirement had "no test",
-  even when a test named it: the spec kept `TASK-1/R1`, a test's reference was read as `R1`. Now a test that names `R1`
-  (or `TASK-1/R1`) covers it.
-- **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D
-  jest`, `yarn add vitest`, `uv add pytest` and the like counted as runs of the tests, because the runner's name is in
-  them: a session that only set up a venv had "runs" with no result. Now a command that installs, removes or shows a
-  package, `npm init jest@latest`, `which pytest` and a runner's `--version` or `--help` run nothing. An install
-  followed by the tests (`pip install -r requirements.txt && pytest`) is still a run.
-- **Import again no longer asks whether the file is this session when only command output is new.** It compared each
-  step's text, and a command's text is its output: the same Cursor transcript with output from the log looked like
-  "45% of its steps". Now only what the person and the agent said is compared word for word; a tool step by its kind,
-  file and command.
 
 ## 0.1.129
 
