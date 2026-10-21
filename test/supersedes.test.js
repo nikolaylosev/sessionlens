@@ -115,6 +115,7 @@ test("covers(): an engine replaces only what its own rules look for", () => {
     "fragile_wait|networkidle",
     "sleep_or_skip_added|skip",
     "sleep_or_skip_added|sleep",
+    "weak_assert|awaited", // a page's state read once (0.1.130)
   ]);
 });
 

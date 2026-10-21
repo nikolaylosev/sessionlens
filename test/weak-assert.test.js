@@ -8,7 +8,7 @@
    weak_assert are in lint-mapped-checks.test.js. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { load } = require("./helpers");
+const { load, M } = require("./helpers");
 
 const { Lens } = load();
 
@@ -123,4 +123,55 @@ test("Python: a predicate (is_*, has_*, can_*, exists(), isdigit()) is a check o
     weak(P, "assert data['id']"),
     weak(P, "assert issues"),
   ]);
+});
+
+test("calls inside expect( (0.1.130): a page's state read once is medium, any other truthiness high; ESLint's own finding replaces the first", async () => {
+  const { loadEngines } = require("../perf/snapshot-lint");
+  const LensLint = require(M("lint.js"));
+  const F = "e2e/cart.spec.ts";
+  const code = [
+    "import { test, expect } from '@playwright/test';",
+    "test('cart', async ({ page }) => {",
+    "  await page.goto('/cart');",
+    "  expect(await page.getByRole('button', { name: 'Pay' }).isVisible()).toBeTruthy();",
+    "  expect(isValid(cart(page))).toBeTruthy();",
+    "});",
+    "",
+  ].join("\n");
+  const cfg = Lens.profile("qa-ts");
+  const events = [{ seq: 1, kind: "write", file: F, new_content: code }];
+  const regex = Lens.runChecks(events, cfg).filter((f) => f.check === "weak_assert");
+  assert.deepEqual(regex.map((f) => [f.severity, f.kind || "", f.message]).sort(), [
+    ["high", "", `${F}: weak assertion “expect(isValid(cart(page))).toBeTruthy()” — checks “didn't crash”, not a value`],
+    [
+      "medium",
+      "awaited",
+      `${F}: “expect(await page.getByRole('button', { name: 'Pay' }).isVisible()).toBeTruthy()” reads the page once — it never waits or retries; use a web-first assertion, await expect(locator).toBeVisible()`,
+    ],
+  ]);
+  // ESLint ran: its prefer-web-first-assertions is the one finding on that line; the regex keeps the other
+  await loadEngines();
+  const lr = LensLint.run({ events }, cfg, {});
+  const merged = LensLint.merge(Lens.runChecks(events, cfg), lr.findings, cfg.language).filter((f) => f.check === "weak_assert");
+  assert.deepEqual(merged.map((f) => [f.source || "formal", f.rule || f.kind || ""]).sort(), [
+    ["formal", ""],
+    ["lint", "playwright/prefer-web-first-assertions"],
+  ]);
+  // the page's title read once is one too: await expect(page).toHaveTitle(…) waits
+  assert.deepEqual(
+    Lens.runChecks([{ seq: 1, kind: "write", file: F, new_content: "test('t', async ({ page }) => {\n  expect(await page.title()).toBeTruthy();\n});\n" }], cfg)
+      .filter((f) => f.check === "weak_assert")
+      .map((f) => [f.severity, f.kind]),
+    [["medium", "awaited"]],
+  );
+  // qa-api: an awaited result of an API call is no page read, a weak assertion like any other
+  assert.deepEqual(
+    Lens.runChecks(
+      [{ seq: 1, kind: "write", file: "tests/users.test.ts", new_content: "it('user', async () => {\n  expect(await getUser(1)).toBeDefined();\n});\n" }],
+      Lens.profile("qa-api"),
+    )
+      .filter((f) => f.check === "weak_assert")
+      .map((f) => f.severity),
+    ["high"],
+  );
 });
