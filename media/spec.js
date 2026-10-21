@@ -222,7 +222,7 @@
       const next = ms[i + 1];
       if (next && next.index === m.index + m[0].length) [body, carried] = splitTrailingComment(body, x);
       const doc = (body.match(/^\s*(?:"""|''')([\s\S]*?)(?:"""|''')/) || [])[1] || "";
-      out.push({ name, header: lead + " " + name + " " + doc + " " + body.split("\n").slice(0, 3).join(" "), body });
+      out.push({ name, header: lead + " " + name + " " + doc + " " + body.split("\n").slice(0, 3).join(" "), body, at: m.index });
     });
     return out;
   }
@@ -257,6 +257,38 @@
     return new RegExp(`(?<![A-Za-z0-9])${m[1]}[-_ ]?${m[2]}${m[2] ? "[-_]?" : ""}${m[3]}(?!\\d)`, "i").test(text || "");
   }
 
+  /* A test made in a loop over the cases (0.1.130): test(`${item.id}: …`) inside for (const item of LINKS) or
+     LINKS.forEach((item) => …), the IDs in the array (Tests-mcp: NAV-02…NAV-20 in two arrays, every one "with no
+     test"). → the text of the array the title takes its value from, or "" when the title names no loop variable or the
+     array is not found. Its IDs are the ones written as strings. */
+  function loopSource(code, at, name) {
+    const from = Math.max(0, at - 600),
+      before = code.slice(from, at);
+    let v = "",
+      src = "",
+      inlineAt = -1;
+    const forOf = [...before.matchAll(/for\s*\(\s*(?:const|let|var)\s+(\w+)\s+of\s+([\w$.]+|\[)/g)].pop();
+    const each = [...before.matchAll(/([\w$.]+)\s*\.forEach\(\s*(?:async\s*)?\(?\s*(\w+)/g)].pop();
+    const last = forOf && (!each || forOf.index > each.index) ? "for" : each ? "each" : "";
+    if (last === "for") {
+      [v, src] = [forOf[1], forOf[2]];
+      if (src === "[") inlineAt = from + forOf.index + forOf[0].length - 1;
+    } else if (last === "each") [v, src] = [each[2], each[1]];
+    if (!v || !new RegExp("\\$\\{\\s*" + v + "\\b").test(name)) return "";
+    if (inlineAt < 0) {
+      const decl = new RegExp("(?:const|let|var)\\s+" + src.split(".").pop() + "\\s*(?::[^=\\n]+)?=\\s*\\[").exec(code);
+      if (!decl) return "";
+      inlineAt = decl.index + decl[0].length - 1;
+    }
+    let depth = 0;
+    for (let i = inlineAt; i < code.length; i++) {
+      if (code[i] === "[") depth++;
+      else if (code[i] === "]" && !--depth) return code.slice(inlineAt, i + 1);
+    }
+    return "";
+  }
+  const asString = (id, text) => new RegExp("['\"`]" + id.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "['\"`]").test(text);
+
   // a test's title as a plan's scenario names it: case, spaces and a final period aside
   const title = (t) =>
     String(t || "")
@@ -274,7 +306,9 @@
     const readable = Object.keys(byFile).filter((file) => supports(language, file));
     if (!readable.length) return null;
     const all = [];
-    for (const file of readable) for (const t of tests(byFile[file], language, file)) all.push({ ...t, file });
+    for (const file of readable)
+      for (const t of tests(byFile[file], language, file))
+        all.push({ ...t, file, looped: /\$\{/.test(t.name) && typeof t.at === "number" ? loopSource(byFile[file], t.at, t.name) : "" });
     const ids = spec.requirements.map((r) => r.id);
     const covered = {};
     ids.forEach((id) => (covered[id] = []));
@@ -285,7 +319,11 @@
       /* an R ID by its R part: a test names R1 for TASK-1/R1 as for R1 (0.1.130: a spec written with the ticket's
          prefix had every requirement "with no test"); a key as namesKey reads it */
       const r = spec.requirements
-        .filter((q) => (q.byTitle ? title(q.text) === title(t.name) : named.has(q.id.replace(/^.*\//, "")) || (KEY_ID.test(q.id) && namesKey(q.id, t.header))))
+        .filter((q) =>
+          q.byTitle
+            ? title(q.text) === title(t.name)
+            : named.has(q.id.replace(/^.*\//, "")) || (KEY_ID.test(q.id) && namesKey(q.id, t.header)) || (!!t.looped && asString(q.id, t.looped)),
+        )
         .map((q) => q.id);
       if (!r.length && !seeds.some((f) => sameFile(t.file, f))) unlinked.push(t);
       r.forEach((id) => covered[id].push(t.name));
