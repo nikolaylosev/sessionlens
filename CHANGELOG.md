@@ -25,6 +25,10 @@
   tokens, by model name or its start with `*`, with the cache's own prices if you like), and the metrics show
   `cost ≈ 12.40` and the Markdown report a line with it. Only when every model of the session has a price; otherwise
   `cost —` says which have none.
+- **On a subscription: the limits a session used, and "API equivalent".** A Codex transcript has the share of the
+  subscription's limits: the metrics show `limits +12% 5 h · +2% week` (a long session adds up every window that reset
+  while it ran), the plan on hover, and the report a line with it. A price can have a `label`: with `"label": "API
+  equivalent"` the cost reads `cost ≈ 12.40 (API equivalent)`, what the session would have cost through the API.
 
 ### Fixed
 - **Installing a test runner is no test run.** `pip install pytest`, `python -m pip install pytest`, `npm install -D

@@ -42,9 +42,10 @@
   "config.sessionsGroupBy.custom": "By your own groups: right-click a session → Move to group…, or drag it onto a group. Sessions in none are under No group.",
   "cmd.recordCursorRuns": "Record Cursor agent runs",
   "cmd.stopRecordingCursorRuns": "Stop recording Cursor agent runs",
-  "config.tokenPrices": "Your prices per million tokens, to show a session's cost next to its tokens, for example `{ \"my-model\": { \"input\": 3, \"output\": 15, \"cacheRead\": 0.3 } }` (made-up numbers: put in your own). A key is a model's name as the transcript gives it (the tooltip of a session's tokens lists them), or the start of one followed by `*` (`my-model-*`). SessionLens has no prices of its own: they change, and differ by model, plan and API. The cost is shown only when every model of a session has a price; the money is whatever yours are in.",
+  "config.tokenPrices": "Your prices per million tokens, to show a session's cost next to its tokens, for example `{ \"my-model\": { \"input\": 3, \"output\": 15, \"cacheRead\": 0.3 } }` (made-up numbers: put in your own). A key is a model's name as the transcript gives it (the tooltip of a session's tokens lists them), or the start of one followed by `*` (`my-model-*`). SessionLens has no prices of its own: they change, and differ by model, plan and API. On a subscription you pay no tokens: put the API's prices with `\"label\": \"API equivalent\"` to see what a session would have cost through the API. The cost is shown only when every model of a session has a price; the money is whatever yours are in.",
   "config.tokenPrices.input": "Price per million input tokens not read from the cache.",
   "config.tokenPrices.output": "Price per million output tokens.",
   "config.tokenPrices.cacheRead": "Price per million input tokens read from the cache (the input price when not set).",
-  "config.tokenPrices.cacheWrite": "Price per million input tokens written to the cache (the input price when not set)."
+  "config.tokenPrices.cacheWrite": "Price per million input tokens written to the cache (the input price when not set).",
+  "config.tokenPrices.label": "What these prices are, shown next to the cost: on a subscription, \"API equivalent\" says the cost is what the session would have cost through the API, not what you paid."
 }

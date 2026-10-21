@@ -325,6 +325,7 @@
         ] : [],
         // the cost, when every model of the session has a price (0.1.130)
         ...((c) => c && c.cost !== null ? [T("md_cost", { c: c.text })] : [])(sessionCost(s)),
+        ...((l) => l ? [l.md] : [])(sessionLimits(s)),
         r.spec && r.spec.n ? T("md_spec", {
           n: r.spec.n,
           unc: s.coverage ? T("md_unc", { list: s.coverage.uncovered.length ? s.coverage.uncovered.join(", ") : T("md_none") }) : ""
@@ -2019,7 +2020,20 @@ ${en.raw}`).join("\n\n\n");
     const c = Lens.usageCost(s.usage, prices());
     if (!c) return null;
     if (c.cost === null) return { text: "—", tip: T("m_cost_missing", { m: c.missing.map((m) => m || T("m_cost_nomodel")).join(", ") }), cost: null };
-    return { text: "≈ " + money(c.cost), tip: T("m_cost_tip"), cost: c.cost };
+    const label = (c.labels || []).join(", ");
+    return { text: "≈ " + money(c.cost) + (label ? ` (${label})` : ""), tip: T("m_cost_tip"), cost: c.cost, label };
+  }
+  var windowName = (min) => min === 10080 ? T("m_limit_week") : min % 60 === 0 ? T("m_limit_hours", { n: min / 60 }) : T("m_limit_minutes", { n: min });
+  function sessionLimits(s) {
+    const l = s.usage && s.usage.limits;
+    if (!l || !Array.isArray(l.windows) || !l.windows.length) return null;
+    const part = (w) => `+${w.used}% ${windowName(w.minutes)}` + (w.spans > 1 ? " " + T("m_limit_spans", { n: w.spans }) : "");
+    const tipOf = (w) => w.spans > 1 ? T("m_limit_tip_spans", { w: windowName(w.minutes), u: w.used, n: w.spans }) : T("m_limit_tip_one", { w: windowName(w.minutes), u: w.used, a: w.from, b: w.to });
+    return {
+      text: l.windows.map(part).join(" · "),
+      tip: [T("m_limit_head", { p: l.plan || "?" }), ...l.windows.map(tipOf), T("m_limit_others")].join("\n"),
+      md: T("md_limits", { list: l.windows.map(part).join(", "), p: l.plan || "?" })
+    };
   }
   function renderReview() {
     const s = curS();
@@ -2040,7 +2054,9 @@ ${en.raw}`).join("\n\n\n");
       // the session's tokens (0.1.130), when its transcript had them
       s.usage ? `<span title="${esc(usageTip(s.usage))}">${T("m_tokens")} <b>${esc(T("m_tokens_val", { in: compact(s.usage.input), out: compact(s.usage.output) }))}</b></span>` : "",
       // and their cost, with the person's prices (0.1.130)
-      ((c) => c ? `<span title="${esc(c.tip)}">${T("m_cost")} <b>${esc(c.text)}</b></span>` : "")(sessionCost(s))
+      ((c) => c ? `<span title="${esc(c.tip)}">${T("m_cost")} <b>${esc(c.text)}</b></span>` : "")(sessionCost(s)),
+      // the share of a subscription's limits the session used (Codex, 0.1.130)
+      ((l) => l ? `<span title="${esc(l.tip)}">${T("m_limits")} <b>${esc(l.text)}</b></span>` : "")(sessionLimits(s))
     ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
     $("#reimport").hidden = !Lens.needsReimport(s);
     const toolCode = s.events.some((e) => e.file && e.new_content);

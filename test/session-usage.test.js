@@ -108,6 +108,7 @@ test("Codex: the last running total and the models of its turns; the number of r
       "gpt-6-luna": { input: 1000, cached: 800, cacheWrite: 0, output: 50 },
       "gpt-5.6-sol": { input: 3443051, cached: 3105120, cacheWrite: 0, output: 18354 },
     },
+    limits: null,
   });
 });
 
@@ -259,19 +260,20 @@ const COST = 0.10348;
 test("usageCost: the cache's own prices or the input's, a prefix with * (the longest wins), no case; none without every model", () => {
   const u = Lens.usageOf(CLAUDE);
   assert.ok(Math.abs(Lens.usageCost(u, PRICES).cost - COST) < 1e-12);
-  assert.deepEqual(Lens.usageCost(u, PRICES).missing, []);
+  assert.deepEqual([Lens.usageCost(u, PRICES).missing, Lens.usageCost(u, PRICES).labels], [[], []]);
   // the longest prefix, whatever the order; a name in any case, on either side
   const longer = { "claude-sonnet-*": PRICES["claude-sonnet-*"], "claude-*": { input: 1000, output: 1000 }, "CLAUDE-OPUS-5-5": PRICES["claude-opus-5-5"] };
   assert.ok(Math.abs(Lens.usageCost(u, longer).cost - COST) < 1e-12, "claude-sonnet-* over claude-*, the name in any case");
   const mixed = { byModel: { "Claude-Opus-5-5": u.byModel["claude-opus-5-5"] } };
   assert.ok(Math.abs(Lens.usageCost(mixed, PRICES).cost - 0.0925) < 1e-12, "the model's name in another case");
-  assert.deepEqual(Lens.usageCost(u, { "claude-sonnet-*": PRICES["claude-sonnet-*"] }), { cost: null, missing: ["claude-opus-5-5"] });
+  assert.deepEqual(Lens.usageCost(u, { "claude-sonnet-*": PRICES["claude-sonnet-*"] }), { cost: null, missing: ["claude-opus-5-5"], labels: [] });
   // a reply that names no model has no price
-  assert.deepEqual(Lens.usageCost({ byModel: { "": { input: 10, cached: 0, cacheWrite: 0, output: 5 } } }, PRICES), { cost: null, missing: [""] });
+  assert.deepEqual(Lens.usageCost({ byModel: { "": { input: 10, cached: 0, cacheWrite: 0, output: 5 } } }, PRICES), { cost: null, missing: [""], labels: [] });
   // "*" alone is every model, that one too
   assert.deepEqual(Lens.usageCost({ byModel: { "": { input: 1e6, cached: 0, cacheWrite: 0, output: 0 } } }, { "*": { input: 2, output: 4 } }), {
     cost: 2,
     missing: [],
+    labels: [],
   });
   assert.equal(Lens.usageCost({ input: 10, output: 5 }, PRICES), null, "no tokens per model: a session imported before");
 });
@@ -349,7 +351,7 @@ test("with the person's prices the tab and the report show the cost; a model wit
   const all = await open(PRICES);
   assert.equal(all.chip.textContent, "cost ≈ 0.10");
   assert.equal(all.chip.getAttribute("title"), "With your prices per million tokens (sessionlens.tokenPrices), in their money");
-  assert.match(all.md, /^Cost: ≈ 0\.10 \(your prices per million tokens\)\.$/m);
+  assert.match(all.md, /^Cost: ≈ 0\.10, with your prices per million tokens\.$/m);
   assert.equal(/sessionlens\.tokenPrices/.test(all.tokensTip), false, "prices set: no hint on the tokens");
   const part = await open({ "claude-sonnet-*": PRICES["claude-sonnet-*"] });
   assert.equal(part.chip.textContent, "cost —");
@@ -358,4 +360,116 @@ test("with the person's prices the tab and the report show the cost; a model wit
   // less than a hundredth
   const tiny = await open({ "claude-*": { input: 0.001, output: 0.001 } });
   assert.equal(tiny.chip.textContent, "cost ≈ <0.01");
+});
+
+// ---- on a subscription ----
+test("a label on the prices goes with the cost: what the session would have cost through the API", async () => {
+  const api = {
+    "claude-sonnet-*": Object.assign({ label: "API equivalent" }, PRICES["claude-sonnet-*"]),
+    "claude-opus-5-5": Object.assign({ label: "API equivalent" }, PRICES["claude-opus-5-5"]),
+  };
+  assert.deepEqual(Lens.normPrices({ m: { input: 1, output: 2, label: "  API equivalent " } }), { m: { input: 1, output: 2, label: "API equivalent" } });
+  assert.deepEqual(Lens.normPrices({ m: { input: 1, output: 2, label: "x".repeat(41) }, n: { input: 1, output: 2, label: "a\u0001b" } }), {
+    m: { input: 1, output: 2 },
+    n: { input: 1, output: 2 },
+  });
+  assert.deepEqual(Lens.usageCost(Lens.usageOf(CLAUDE), api).labels, ["API equivalent"], "once for two models");
+  const at = new Date(2026, 9, 1, 12).toISOString();
+  const s = {
+    id: "lbl-1",
+    name: "cost",
+    task: "",
+    profile: "qa-ts",
+    created: at,
+    events: [],
+    findings: [],
+    verdicts: {},
+    spec: "",
+    usage: Lens.usageOf(CLAUDE),
+  };
+  const { chip, md } = await openWith(s, api, /^cost/);
+  assert.equal(chip.textContent, "cost ≈ 0.10 (API equivalent)");
+  assert.match(md, /^Cost: ≈ 0\.10 \(API equivalent\), with your prices per million tokens\.$/m);
+});
+
+const rl = (p, s, plan = "team") => ({
+  limit_id: "codex",
+  primary: p && { used_percent: p[0], window_minutes: 300, resets_at: p[1] },
+  secondary: s && { used_percent: s[0], window_minutes: 10080, resets_at: s[1] },
+  plan_type: plan,
+});
+const codexWith = (limits) =>
+  [
+    J({ type: "session_meta", payload: { id: "x", cwd: "/p" } }),
+    J({ type: "turn_context", payload: { model: "gpt-6-luna" } }),
+    ...limits.map((r, i) =>
+      J({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: { input_tokens: 1000 * (i + 1), output_tokens: 10 * (i + 1) },
+            last_token_usage: { input_tokens: 1000, output_tokens: 10 },
+          },
+          rate_limits: r,
+        },
+      }),
+    ),
+  ].join("\n");
+
+test("Codex on a subscription: the share of each limit window the session used, also over windows that reset", () => {
+  // one window each: from the first record to the last; resets_at moving a second is the same window
+  assert.deepEqual(Lens.usageOf(codexWith([rl([0, 1000], [0, 9000]), rl([5, 1001], [1, 9001]), rl([12, 1001], [2, 9001])])).limits, {
+    plan: "team",
+    windows: [
+      { minutes: 300, used: 12, spans: 1, from: 0, to: 12 },
+      { minutes: 10080, used: 2, spans: 1, from: 0, to: 2 },
+    ],
+  });
+  // the 5-hour window reset twice while it ran: 40 → 90 in the first, 0 → 30 and 0 → 7 in the next ones
+  const long = Lens.usageOf(codexWith([rl([40, 1000]), rl([90, 1000]), rl([30, 19000]), rl([7, 37000])])).limits;
+  assert.deepEqual(long.windows, [{ minutes: 300, used: 87, spans: 3, from: 40, to: 7 }]);
+  assert.equal(Lens.usageOf(codexWith([])), null, "no rate limits, no tokens either: none");
+});
+
+async function openWith(s, prices, chipRx) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-usage-sub-"));
+  const st = createStore({ dir: path.join(dir, "sessions") });
+  await st.open();
+  await st.put(s, { analyzedGen: Lens.analysisGen({ ruleOverrides: {}, lint: false, epoch: 0 }) });
+  const h = bootHost({
+    storageDir: dir,
+    globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+    vscode: prices ? { config: { global: { "sessionlens.tokenPrices": prices } } } : {},
+  });
+  const p = await openPage(h, { sessionId: s.id });
+  await p.ready();
+  const chip = [...p.document.querySelectorAll("#metrics span[title]")].find((x) => chipRx.test(x.textContent));
+  click(p, "#export-md");
+  let m = null;
+  await until(() => (m = p.sent.find((x) => x.type === "save:file" && /\.md$/.test(x.payload.name))));
+  p.close();
+  return { chip, md: m.payload.content };
+}
+
+test("the tab and the report show the limits a Codex session used, with the plan", async () => {
+  const at = new Date(2026, 9, 1, 12).toISOString();
+  const usage = Lens.usageOf(codexWith([rl([0, 1000], [0, 9000]), rl([12, 1001], [2, 9001])]));
+  const s = { id: "lim-1", name: "limits", task: "", profile: "qa-ts", created: at, events: [], findings: [], verdicts: {}, spec: "", usage };
+  const { chip, md } = await openWith(s, null, /^limits/);
+  assert.equal(chip.textContent, "limits +12% 5 h · +2% week");
+  assert.equal(
+    chip.getAttribute("title"),
+    [
+      "The share of the subscription's limits used while this session ran (Codex, team plan):",
+      "5 h window: +12% (0% → 12%)",
+      "week window: +2% (0% → 2%)",
+      "Other sessions running at the same time count too.",
+    ].join("\n"),
+  );
+  assert.match(md, /^Subscription limits used: \+12% 5 h, \+2% week \(Codex, team plan\)\.$/m);
+  const long = Lens.usageOf(codexWith([rl([40, 1000]), rl([90, 1000]), rl([30, 19000]), rl([7, 37000])]));
+  const l2 = await openWith(Object.assign({}, s, { id: "lim-2", usage: long }), null, /^limits/);
+  assert.equal(l2.chip.textContent, "limits +87% 5 h (3 windows)");
+  assert.match(l2.chip.getAttribute("title"), /5 h windows: 87% of a window in all, over 3 windows that reset while it ran/);
 });

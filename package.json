@@ -275,6 +275,11 @@
                 "type": "number",
                 "minimum": 0,
                 "description": "%config.tokenPrices.cacheWrite%"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 40,
+                "description": "%config.tokenPrices.label%"
               }
             },
             "additionalProperties": false
