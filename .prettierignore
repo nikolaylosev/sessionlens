@@ -3,6 +3,7 @@ media/vendor-eslint*.js
 media/vendor-ruff.js
 media/tree-sitter.js
 media/app.js
+media/cursor-hook.js
 *.wasm
 *.vsix
 *.md
