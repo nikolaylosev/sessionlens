@@ -58,6 +58,10 @@
   plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
+- **"The build passes" is no claim that the tests pass.** "Сборка проходит", "tsc проходит", "Prettier is passing"
+  counted as the agent saying the tests pass, so a session got a high "claims tests pass, but no test run". Now a
+  sentence about a build, the types, a compiler, a linter or a formatter is no such claim, unless it names the tests
+  too ("Сборка и тесты проходят").
 - **"User frustration" on text you did not write.** On real sessions about half of these findings were not the
   person's words: Codex's editor extension wraps each message (`# Files mentioned by the user: … ## My request: …`),
   so every message started the same and was "the same request repeated"; Claude Code's summary of a compacted
