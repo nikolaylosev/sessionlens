@@ -1,6 +1,6 @@
 # SessionLens for VS Code — architecture and functional blocks
 
-This document describes the whole extension as it stands at **v0.1.125**: what it is made of, how the parts talk
+This document describes the whole extension as it stands at **v0.1.130**: what it is made of, how the parts talk
 to each other, where data lives, and what each functional block does. It is written for developers who change the
 code and for reviewers who need to know where to look.
 
@@ -295,6 +295,7 @@ classDiagram
     findings
     verdicts
     metrics
+    usage
     coverage
     calibHidden
     suppressed
@@ -335,6 +336,7 @@ classDiagram
     model
     verifier
     demoted
+    trial
   }
   class Verdict {
     v
@@ -381,7 +383,8 @@ Key points:
 - **Finding.** `check` is the one key of the rules system (RA §1). `source` says which track made it; calibration
   is per check and source. `kind` is set on regex findings of the checks an engine may replace (RA §6.3). A model
   finding has `evidence`, and `model` / `verifier` (`provider/model`, since 0.1.115); an engine finding has `rule`,
-  `line` and `code` (the lines around it).
+  `line` and `code` (the lines around it). `demoted` marks a finding calibration made low, `trial` (0.1.130) one of a
+  new check on trial made low until it has 10 verdicts (RA §5.2).
 - **Assertions panel** (`#asserts` in `review.js`): the `assert_delta` of each edit, and since 0.1.127 the tests that
   assert through a page object (`Lens.poAssertions`): each test of the last version of a test file that calls an
   `expect…()` method, its own assertions, and each method's in the last version of the file that defines it (a file
@@ -404,10 +407,22 @@ Key points:
   as `~`, `Lens.homeless`, so no path shows the user name; 6 at 0.1.125: a Cursor session's MCP calls are named
   `mcp__<server>__<tool>`; 7 at 0.1.125: an edit is applied with its new text as it is, so `$&`, `` $` ``, `$'` and
   `$$` in it no longer put other text into the file; 8 at 0.1.125: the assertions of a page object or a helper are counted
-  by its methods). `source_outputs` (0.1.121) is the ends of the command
+  by its methods; 9 at 0.1.127: subagents, Playwright's test agents, here-document writes, Claude Code's own text in a
+  user message, a diff in a message, a Cursor session's files before and after an edit; 10 at 0.1.130: a Cursor
+  session's calls of Playwright's test agents with their arguments; 11 at 0.1.130: a user message without Codex's
+  editor wrapper, Claude Code's compacted-conversation summary or Cursor's own query). `source_outputs` (0.1.121) is the ends of the command
   outputs Cursor's database returned, 20 000 characters each, so Back to regex parsing and Import again can parse the
   tests again. `source_project` (0.1.122) is the name of the transcript's folder in `~/.cursor/projects`, so a later
-  import can make the absolute paths relative again.
+  import can make the absolute paths relative again. `source_edits` (0.1.127) is a Cursor chat's files before and
+  after each edit, while all of them are under 400 000 characters; `source_cursor_id` (0.1.130) is the chat's id, so
+  Import again can ask for the Cursor hook's log (`cursor:log`).
+- **Usage** (`usage`, 0.1.130) is what `Lens.usageOf` reads from the transcript: input, cached input, cache writes,
+  output, requests and models, and per model (`byModel`). Claude Code's `message.usage` is counted once per message
+  id (it is repeated on every block of a reply); Codex's `token_count` by its running total, a repeat that only
+  changes the limits not counted; a Cursor session's from the hook's `stop` lines. A Codex transcript also gives the
+  share of the subscription's limits it used (`Lens.codexLimits`: the 5-hour and weekly windows, a window that reset
+  while the session ran added up). The cost is not stored: `Lens.usageCost` computes it from the person's
+  `sessionlens.tokenPrices` (exact model name, else the longest `prefix*`; none when a model has no price).
 
 ---
 
@@ -655,7 +670,9 @@ they differ from what the pinned package gives.
 
 ### 6.6 Specification and coverage
 
-The reviewer pastes requirements (`R1. …`, `AUTH-142/R3 …`, an "Out of scope" part) on the session's tab.
+The reviewer pastes requirements (`R1. …`, `AUTH-142/R3 …`, since 0.1.130 a key of a test management tool such as
+`NAV-01` or `CIP-T123`, an "Out of scope" part) on the session's tab, or takes with one click a plan the agent saved
+with Playwright's planner or a document of test cases it wrote (`LensSpec.offers`, 0.1.130, RA §17.1).
 `spec.js` parses them; `LensSpec.checks` finds the tests in the session's code (per language, RA §17) and links a
 requirement to a test when the test's name, docstring, the comment above it or its first lines mention the ID.
 Results: the coverage matrix on the tab and the `spec` findings. For a specification without IDs the tab says that
@@ -708,7 +725,9 @@ sequenceDiagram
 
 ### 6.8 Review and verdicts
 
-A session's tab shows the header (verdict, profile, events, last result, metrics), the specification, the model
+A session's tab shows the header (verdict, profile, events, last result, metrics; since 0.1.130 also the tokens, the
+cost with the person's own prices and a Codex session's share of the subscription's limits, with a line each in the
+Markdown report), the specification, the model
 buttons, the findings with filters (source, severity, without verdict) and, per finding, a tag of its source,
 **Confirm**, **False** and a comment. The tag (0.1.117) reads regex, gherkin, spec or model as the filter does; a
 `lint` finding names the engine of the session's profile (eslint, tree-sitter or robot), while the filter and the
@@ -744,6 +763,8 @@ flowchart TD
   already has), the calibration log (RA §5.2).
 - **Never calibrated:** the model's findings, `no_spec` and `spec_uncovered`, imported findings, and a check the
   registry marks `calibrate: false` (`hardcoded_secret`, since 0.1.116).
+- **New checks on trial** (0.1.130): a check the registry marks `trial: true` is low, marked "new check, on trial",
+  while its source has fewer than 10 verdicts; the Calibration table says "on trial" (RA §5.2).
 - **Effect of a moved rule** (`effect()`): findings per session before and after the day the rule was marked
   Moved. A session counts by when the agent ran it (`started`, else `created`), only sessions of the profiles that
   can report the check count, and the demo never does (0.1.116).
@@ -758,7 +779,9 @@ flowchart TD
 |---|---|---|
 | Sessions | `globalStorage/sessions/<name>.json` + `<name>.meta.json` | atomic write (temp file, rename), repair on open, retry on Windows locks (RA §15) |
 | Settings of the page, rule overrides, calibration log, results of compress/skill | `globalState`, keys in `STORAGE_KEYS` | the page reads and writes only these keys |
-| Nine user settings | VS Code configuration `sessionlens.*` | the three CLI paths; `minGapMs`, `maxCode`, `verify`, `lint`, `rulesTarget` in two-way sync with the ⚙ tab (RA §16.1); `sessionsGroupBy`, set by the Sessions tree's title button |
+| Ten user settings | VS Code configuration `sessionlens.*` | the three CLI paths; `minGapMs`, `maxCode`, `verify`, `lint`, `rulesTarget` in two-way sync with the ⚙ tab (RA §16.1); `sessionsGroupBy`, set by the Sessions tree's title button; `tokenPrices`, edited in `settings.json` only and read by the page (0.1.130) |
+| The person's own groups | `globalStorage/groups.json` (0.1.127) | an empty group of "My groups" lives there, shared by all windows |
+| Cursor hook logs | `~/.cursor/sessionlens/log/<chat id>.jsonl` (0.1.130) | written by the hook only after **Record Cursor agent runs**; removed after 30 days |
 | API keys | SecretStorage | never in `globalState`, never in a webview (RA §14) |
 | Local / Qwen base URLs | `globalState.hostBaseUrls`, written only by `baseurl:set` | the page cannot point the host at an address |
 
@@ -769,7 +792,8 @@ VS Code configuration, sessions from `globalState` into files, keys into SecretS
 
 `sessionlens.claudeCliPath`, `sessionlens.codexCliPath`, `sessionlens.cursorCliPath`, `sessionlens.minGapMs`, `sessionlens.maxCode`,
 `sessionlens.verify`, `sessionlens.lint`, `sessionlens.rulesTarget`, `sessionlens.sessionsGroupBy` (0.1.124, the host's
-own: the Sessions tree reads it, the page does not see it). The ⚙ tab edits the same values (but the last) plus the
+own: the Sessions tree reads it, the page does not see it), `sessionlens.tokenPrices` (0.1.130: the page reads it,
+never writes it; a change reanalyzes nothing and redraws the open pages). The ⚙ tab edits the first eight plus the
 models per task, the keys, the local and Qwen addresses and the demo button. A change in `settings.json` reaches every open page.
 
 ### 6.12 Demo session
