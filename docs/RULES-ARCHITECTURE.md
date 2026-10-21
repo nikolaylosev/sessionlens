@@ -1554,7 +1554,9 @@ What the import keeps for them:
   (below generation 10, since 0.1.130: a Cursor session's write of these tools with no file, whose arguments the
   import did not read), and
   for a session with a shell command that writes a file from a here-document (`heredocWrites`), stored as the command
-  alone, for a session with a user message that has Claude Code's or the editor's text in it (`personText`), and for
+  alone, for a session with a user message that has Claude Code's or the editor's text in it (`personText`; below
+  generation 11, since 0.1.130: Codex's editor wrapper `codexRequest`, Claude Code's compacted-conversation summary,
+  Cursor's own query after a background task, `harnessUserText`), and for
   one with a diff in an agent's message whose code was taken with its removed lines (`diffAfter`), and for a Cursor
   transcript with edits and no files before and after them from Cursor's database (`cursorEditsMissing`; `reimport()`
   then asks for the file, like a session whose subagents are missing; since 0.1.130 also below generation 10, as the

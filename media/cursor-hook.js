@@ -172,7 +172,7 @@ var require_i18n = __commonJS({
           seg_failed_hdr: "SEGMENTATION FAILED",
           seg_use_spec: "Use the found specification",
           seg_reset: "Back to regex parsing",
-          reimport_msg: "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, text Claude Code put into your messages, or a diff in the agent's message. Import the transcript again to check; the session keeps its name, specification and verdicts.",
+          reimport_msg: "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, text Claude Code, Codex or Cursor put into your messages, or a diff in the agent's message. Import the transcript again to check; the session keeps its name, specification and verdicts.",
           reimport_go: "Import again",
           reimport_pick: "Pick the transcript of this session. Where is it?",
           reimport_other: "This file does not look like this session: {p}% of its steps are in it. Replace the session's steps with it anyway?",
@@ -2162,7 +2162,7 @@ var require_lens = __commonJS({
             if (!b || typeof b !== "object") continue;
             if (b.type === "text" && (b.text || "").trim()) {
               if (agent && role === "user") continue;
-              const text2 = role === "user" ? rec.isMeta === true ? "" : personText(b.text) : b.text;
+              const text2 = role === "user" ? rec.isMeta === true || rec.isCompactSummary === true ? "" : personText(b.text) : b.text;
               if (!text2) continue;
               const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: text2 });
               if (r.kind === "message") attachCodeFromText(r);
@@ -2301,6 +2301,14 @@ var require_lens = __commonJS({
         }
         return out.join("\n");
       }
+      const CODEX_WRAP = /^#\s+(?:Context from my IDE setup|Files mentioned by the user|Files pasted by the user):/;
+      function codexRequest(t) {
+        if (!CODEX_WRAP.test(t)) return t;
+        const m = /\n##\s+My request(?: for Codex)?:[ \t]*\n([\s\S]*)$/.exec(t);
+        return m ? m[1].trim() : t;
+      }
+      const COMPACT_SUMMARY = /^This session is being continued from a previous conversation that ran out of context\./;
+      const harnessUserText = (t) => codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim());
       function fromCodexJsonl(text, cfg) {
         const out = [], files = {}, pending = {};
         let seq = 0, cwd = "";
@@ -2364,7 +2372,8 @@ var require_lens = __commonJS({
               const kinds = (p.internal_chat_message_metadata_passthrough || {}).content_item_kinds;
               if (Array.isArray(kinds) && kinds.length && !kinds.includes("user.text")) continue;
             }
-            const t = (Array.isArray(p.content) ? p.content : []).map((b) => b && b.text || "").join("\n").trim();
+            const joined = (Array.isArray(p.content) ? p.content : []).map((b) => b && b.text || "").join("\n").trim();
+            const t = role === "user" ? codexRequest(joined) : joined;
             if (t) {
               const r = { seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: t };
               if (r.kind === "message") attachCodeFromText(r);
@@ -2457,13 +2466,12 @@ var require_lens = __commonJS({
         const ms = Date.UTC(Number(m[3]), mon, Number(m[2]), h, Number(m[5]), Number(m[6] || 0)) - offset * 6e4;
         return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
       }
+      const CURSOR_OWN_QUERY = /^Briefly inform the user about the task result and perform any follow-up actions \(if needed\)\.$/;
       function cursorUserText(t) {
         const when = /<timestamp>([\s\S]*?)<\/timestamp>/.exec(t);
         const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(t);
-        return {
-          text: (query ? query[1] : t.replace(/<timestamp>[\s\S]*?<\/timestamp>/g, "")).trim(),
-          ts: when ? cursorTime(when[1]) : ""
-        };
+        const text = (query ? query[1] : t.replace(/<timestamp>[\s\S]*?<\/timestamp>/g, "")).trim();
+        return { text: CURSOR_OWN_QUERY.test(text) ? "" : text, ts: when ? cursorTime(when[1]) : "" };
       }
       const cursorProjectSlug = (p) => p.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
       function cursorRoot(paths, project) {
@@ -3059,7 +3067,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 10;
+      const IMPORT_GEN = 11;
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
@@ -3107,6 +3115,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
+        if ((s.importGen || 0) < 11 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
         if ((s.importGen || 0) < 9 && s.events.some(
           (e) => e.kind === "message" && e.new_content && [...String(e.text || "").matchAll(/```(\w+)?\n([\s\S]*?)```/g)].some((m) => diffAfter(m[1], m[2]) !== m[2])
@@ -4139,7 +4148,7 @@ var require_lens = __commonJS({
           const out = [], users = ev.filter((e) => e.kind === "user");
           users.forEach((u, i) => {
             const t = u.text.toLowerCase(), said = t.trim();
-            if ((RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
+            if (i > 0 && (RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
               out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
             else if (i > 0 && t.length > 15 && users[i - 1].text.toLowerCase().slice(0, 40) === t.slice(0, 40))
               out.push(F("user_frustration", "medium", u.seq, T("repeat", { text: clip(u.text.trim(), 80) })));
