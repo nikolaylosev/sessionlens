@@ -2,7 +2,7 @@
 
 This is how we see SessionLens developing, as of version 0.1.130 (October 2026). There are no dates, and the order
 can change with feedback. To suggest something, please
-[open an issue](https://github.com/nikolaylosev/sessionlens-vscode/issues).
+[open an issue](https://github.com/nikolaylosev/sessionlens/issues).
 
 ## Today
 
@@ -43,7 +43,7 @@ around process mistakes that only the session shows.
 ## Now
 
 - Test 0.1.130 by hand in real VS Code and Cursor, the Cursor hook on Windows too, and ship fixes as patch releases.
-- Tune checks based on [false finding reports](https://github.com/nikolaylosev/sessionlens-vscode/issues/new?template=false-finding.yml).
+- Tune checks based on [false finding reports](https://github.com/nikolaylosev/sessionlens/issues/new?template=false-finding.yml).
 
 ## Next: command line tool and CI
 

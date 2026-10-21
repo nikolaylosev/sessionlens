@@ -422,12 +422,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nikolaylosev/sessionlens-vscode.git"
+    "url": "https://github.com/nikolaylosev/sessionlens.git"
   },
   "bugs": {
-    "url": "https://github.com/nikolaylosev/sessionlens-vscode/issues"
+    "url": "https://github.com/nikolaylosev/sessionlens/issues"
   },
-  "homepage": "https://github.com/nikolaylosev/sessionlens-vscode#readme",
+  "homepage": "https://github.com/nikolaylosev/sessionlens#readme",
   "qna": "marketplace",
   "galleryBanner": {
     "color": "#12202f",
