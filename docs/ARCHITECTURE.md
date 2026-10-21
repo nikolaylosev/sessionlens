@@ -141,8 +141,11 @@ media/                everything the webview loads (also required by Node tests)
   demo-session.js     the made-up session behind "Try a demo session"
   vscode-bridge.js    the page side of the message bridge
   app.js              GENERATED from src/webview by `npm run build` — never edit by hand
+  cursor-hook.js      GENERATED from src/hook: the Cursor hook, Node, not loaded by the page (0.1.130)
   sidepanel.html, styles.css, icon.*
 
+src/hook/             the Cursor hook's source (0.1.130): after each command and file edit of a Cursor agent, one
+                      line in ~/.cursor/sessionlens/log/<conversation_id>.jsonl — the output a Cursor transcript lacks
 src/webview/          the panel's source, bundled by esbuild into media/app.js (RA §19)
   index.js main.js    entry, start-up, refresh
   sessions.js         Sessions tab: import, profile, demo, list

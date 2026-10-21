@@ -41,6 +41,7 @@ module.exports = [
       "media/tree-sitter.js",
       "media/app.js",
       "media/app.js.map",
+      "media/cursor-hook.js",
       "*.vsix",
       ".vscode-test/**",
     ],
