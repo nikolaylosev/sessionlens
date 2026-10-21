@@ -3104,7 +3104,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
         if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
-        if ((s.importGen || 0) < 9 && cursorEditsMissing(s)) return true;
+        if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;

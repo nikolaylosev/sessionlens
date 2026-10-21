@@ -2330,7 +2330,9 @@
      files lie next to it and the text kept at import does not have them. */
   const SUBAGENT_TOOLS = ["Agent", "Task"];
   /* A Cursor Agent transcript with edits and none of the files before and after them that Cursor's IDE database keeps:
-     imported before 0.1.127, or dropped onto the panel. Picked again, the file brings them (fromCursorJsonl's edits). */
+     imported before 0.1.127, or dropped onto the panel. Picked again, the file brings them (fromCursorJsonl's edits).
+     Since 0.1.130 the CLI's database gives them too (from what the agent read): a session imported with generation 9,
+     a Cursor CLI chat among them, is asked once more. */
   function cursorEditsMissing(s) {
     if (!s || s.source_edits || s.agent !== "cursor") return false;
     if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false; // an Agent CLI log has them
@@ -2411,7 +2413,7 @@
     if ((s.importGen || 0) < 7 && dollarEditBefore125(s)) return true;
     if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
-    if ((s.importGen || 0) < 9 && cursorEditsMissing(s)) return true;
+    if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)

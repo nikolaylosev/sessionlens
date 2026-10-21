@@ -94,6 +94,7 @@ async function tab(opts = {}) {
     verdicts: Object.fromEntries([claim, ...more].map((f) => [Lens.fkey(f), { v: "ok", note: "seen", at: "2026-09-01T00:00:00.000Z" }])),
     spec: "R1 the discount is applied",
     source_text: opts.sourceText || "",
+    ...(opts.extra || {}),
   };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-reimport-"));
   const st = createStore({ dir: path.join(dir, "sessions") });
@@ -369,4 +370,45 @@ test("a new import and the demo record the import version: no hint", async () =>
   assert.equal(Lens.needsReimport(Object.assign({}, s, { importGen: Lens.IMPORT_GEN })), false);
   const src = fs.readFileSync(path.join(__dirname, "..", "src", "webview", "sessions.js"), "utf8");
   assert.equal((src.match(/importGen: Lens\.IMPORT_GEN/g) || []).length, 2, "importText and openDemo");
+});
+
+test("Import again for a Cursor session of 0.1.127–0.1.129 without the files before its edits: the file is picked again (0.1.130)", async () => {
+  // a Cursor transcript: the agent wrote over a test file; the CLI's database now gives the file before (what it read)
+  const line = (role, content) => JSON.stringify({ role, message: { content } });
+  const text = [
+    line("user", [{ type: "text", text: "<user_query>Clean up the cart tests</user_query>" }]),
+    line("assistant", [{ type: "tool_use", name: "Write", input: { path: "/w/e2e/cart.spec.ts", contents: PW(TOTAL) } }]),
+  ].join("\n");
+  const events = Lens.importAny(text, cfg, { cursorProject: "w" });
+  const s = { profile: "qa-ts", agent: "cursor", importGen: 9, source_text: text, events };
+  assert.equal(Lens.needsReimport(s), true, "imported with generation 9");
+  assert.equal(Lens.needsReimport({ ...s, importGen: Lens.IMPORT_GEN }), false);
+  assert.equal(Lens.needsReimport({ ...s, source_edits: [{ path: "/w/e2e/cart.spec.ts", before: PW(TOTAL, DISCOUNT), after: PW(TOTAL) }] }), false, "has them");
+  const { p } = await tab({ events: oldEvents(transcript()), sourceText: text, extra: { agent: "cursor", importGen: 9, events } });
+  const asked = [];
+  p.window.chooseDialog = async (msg) => (asked.push(msg), null); // the person cancels the pick
+  const n0 = puts(p).length;
+  click(p, "#reimport-go");
+  await until(() => asked.length);
+  await p.idle();
+  assert.equal(asked.length, 1, "the file is asked for, not the kept text parsed again");
+  assert.equal(puts(p).length, n0, "cancelled: nothing written");
+  assert.deepEqual(p.errors, []);
+  p.close();
+});
+
+test("Import again for a Claude Code session of generation 9 parses the kept text: subagents are asked for only before 0.1.127", async () => {
+  const text = transcript();
+  const events = [...oldEvents(text), { seq: 99, kind: "tool", tool: "Agent", text: "" }];
+  const { p } = await tab({ events, sourceText: text, extra: { importGen: 9 } });
+  const asked = [];
+  p.window.chooseDialog = async (msg) => (asked.push(msg), null);
+  p.window.confirmDialog = async () => true;
+  const n0 = puts(p).length;
+  click(p, "#reimport-go");
+  await until(() => puts(p).length > n0);
+  await p.idle();
+  assert.deepEqual(asked, [], "no file asked for");
+  assert.deepEqual(p.errors, []);
+  p.close();
 });

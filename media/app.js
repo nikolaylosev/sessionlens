@@ -1940,7 +1940,7 @@ ${en.raw}`).join("\n\n\n");
   async function reimport() {
     const sid = state.current, s = curS();
     if (!s) return;
-    const fromFile = (s.importGen || 0) < 9 && (Lens.subagentsMissing(s) || Lens.cursorEditsMissing(s));
+    const fromFile = (s.importGen || 0) < 9 && Lens.subagentsMissing(s) || (s.importGen || 0) < 10 && Lens.cursorEditsMissing(s);
     let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project, cursorId = s.source_cursor_id, cursorUsage = null, fromLog = false;
     if (!text) {
       const source = await chooseDialog(T("reimport_pick"), [

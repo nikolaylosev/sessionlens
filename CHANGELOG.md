@@ -19,7 +19,7 @@
   seen. Its database keeps what the agent read, though: now the last version the session saw of the file (a whole
   read, a write, an edit applied to it) is the file before. A version is dropped when it may be out of date: after a
   failed call, a command that may write files (`sed -i`, `git checkout`, a formatter, a redirect) or another tool that
-  names the file.
+  names the file. A Cursor session imported before without them asks once to be imported again, from the file.
 
 - **A session's tokens.** The metrics under a session's header show its tokens, input and output (`tokens 3.4M in ·
   18k out`), and on hover how much of the input the cache gave, how much was written to it, the requests to the model
