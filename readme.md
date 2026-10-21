@@ -1,5 +1,11 @@
 # SessionLens
 
+[![VS Marketplace](https://vsmarketplacebadges.dev/version/nikolaylosev.sessionlens-vscode.svg?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=nikolaylosev.sessionlens-vscode)
+[![Open VSX](https://img.shields.io/open-vsx/v/nikolaylosev/sessionlens-vscode?label=Open%20VSX)](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/nikolaylosev/sessionlens-vscode)](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode)
+[![CI](https://github.com/nikolaylosev/sessionlens-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/nikolaylosev/sessionlens-vscode/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/nikolaylosev/sessionlens-vscode/blob/main/LICENSE)
+
 SessionLens is built for QA automation (AQA) engineers who write autotests with Claude Code, Codex or Cursor's Agent. It reviews what the agent actually did in a session: reads the transcript, flags where the agent went wrong, lets you record a verdict on each finding, and turns the findings you confirm into rules for `CLAUDE.md`, `AGENTS.md` (read by Codex and Cursor) or Cursor's `.cursor/rules/sessionlens.mdc`.
 
 It runs in VS Code and in Cursor, VSCodium and other editors that install extensions from [Open VSX](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode).
