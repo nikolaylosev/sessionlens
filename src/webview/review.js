@@ -25,6 +25,20 @@ export function initReview() {
       });
     ev.target.value = "";
   });
+  // a plan or a document of test cases the agent wrote, offered as the specification (0.1.130)
+  $("#spec-offer").addEventListener("click", async (ev) => {
+    const btn = /** @type {HTMLElement} */ (ev.target).closest("[data-offer]");
+    if (!btn) return;
+    const o = LensSpec.offers(curS().events)[Number(btn.getAttribute("data-offer"))];
+    if (!o) return;
+    await needEngine(curS().profile);
+    await updateSession(state.current, (s) => {
+      s.spec = o.text;
+      analyze(s);
+    });
+    renderReview();
+    $("#spec-d").open = true; // show what was taken, so it can be corrected by hand
+  });
   $("#spec-save").addEventListener("click", async () => {
     const spec = $("#spec").value;
     await needEngine(curS().profile);
@@ -392,6 +406,16 @@ export function renderReview() {
   $("#seg-spec").hidden = !(s.seg && s.seg.spec_suggested);
   $("#seg-reset").hidden = !s.source_text;
   $("#spec").value = s.spec || "";
+  // offered only while the session has no specification: the person's own one is never replaced
+  const offers = (s.spec || "").trim() ? [] : LensSpec.offers(s.events).slice(0, 3);
+  $("#spec-offer").hidden = !offers.length;
+  $("#spec-offer").innerHTML = offers
+    .map(
+      (o, i) =>
+        `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : "spec_offer_cases", { f: o.file, n: o.n }))}</span>` +
+        `<button class="btn tiny" data-offer="${i}">${esc(T("spec_offer_use"))}</button></div>`,
+    )
+    .join("");
   $("#spec-count").textContent =
     s.specParsed && s.specParsed.n
       ? T("spec_count", { n: s.specParsed.n, oos: s.specParsed.oos ? T("spec_oos", { n: s.specParsed.oos }) : "" }) +

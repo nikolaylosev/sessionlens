@@ -928,6 +928,32 @@
     if (name === "test_run") return { command: ["npx playwright test", ...(Array.isArray(inp.locations) ? inp.locations : [])].join(" ") };
     return { command: `npx playwright test --debug ${JSON.stringify((inp.test && inp.test.title) || "")}` };
   }
+  /* The plan planner_save_plan saves {name, overview, suites: [{name, seedFile, tests: [{name, file, steps: [{perform,
+     expect}]}]}]}, as Playwright writes it to its file (0.1.130): the session keeps it as the step's plan, so the panel
+     can offer it as the specification (LensSpec.offers). It is no code: no check reads it. */
+  function planMarkdown(inp) {
+    const suites = Array.isArray(inp && inp.suites) ? inp.suites : [];
+    if (!suites.length) return "";
+    const out = [`# ${inp.name || "Test Plan"}`, ""];
+    if (inp.overview) out.push("## Application Overview", "", String(inp.overview), "");
+    out.push("## Test Scenarios", "");
+    suites.forEach((su, i) => {
+      out.push(`### ${i + 1}. ${(su && su.name) || ""}`, "");
+      if (su && su.seedFile) out.push(`**Seed:** \`${su.seedFile}\``, "");
+      (Array.isArray(su && su.tests) ? su.tests : []).forEach((t, j) => {
+        out.push(`#### ${i + 1}.${j + 1}. ${(t && t.name) || ""}`, "");
+        if (t && t.file) out.push(`**File:** \`${t.file}\``, "");
+        const steps = Array.isArray(t && t.steps) ? t.steps : [];
+        if (steps.length) out.push("**Steps:**");
+        steps.forEach((st, k) => {
+          out.push(`  ${k + 1}. ${(st && st.perform) || ""}`);
+          for (const x of Array.isArray(st && st.expect) ? st.expect : []) out.push(`    - expect: ${x}`);
+        });
+        out.push("");
+      });
+    });
+    return out.join("\n");
+  }
   function classify(tool, input, cfg) {
     const f = input.file_path || input.path || "";
     const pw = playwrightTestTool(tool);
@@ -1186,6 +1212,10 @@
               out.push(x);
             }
           const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+          if (playwrightTestTool(b.name || "") && mcpParts(b.name || "")[1] === "planner_save_plan") {
+            const plan = planMarkdown(b.input);
+            if (plan) r.plan = plan.slice(0, 200000);
+          }
           if (kind === "write") {
             const o = base(f);
             keepBefore(r, f, o, cfg);

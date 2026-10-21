@@ -229,6 +229,9 @@ var require_i18n = __commonJS({
           md_limits: "Subscription limits used: {list} (Codex, {p} plan).",
           m_to_green: "edits to green",
           spec_none: "(none)",
+          spec_offer_plan: "The agent saved a test plan, {f}: {n} {n|scenario|scenarios}.",
+          spec_offer_cases: "The agent wrote test cases, {f}: {n} with IDs.",
+          spec_offer_use: "Use as specification",
           spec_auto: " · numbered automatically, coverage not checked",
           spec_unparsed: "(text given, no requirements recognised — number them or use R1., R2.)",
           spec_count: "({n} {n|requirement|requirements}{oos})",
@@ -1969,6 +1972,29 @@ var require_lens = __commonJS({
         if (name === "test_run") return { command: ["npx playwright test", ...Array.isArray(inp.locations) ? inp.locations : []].join(" ") };
         return { command: `npx playwright test --debug ${JSON.stringify(inp.test && inp.test.title || "")}` };
       }
+      function planMarkdown(inp) {
+        const suites = Array.isArray(inp && inp.suites) ? inp.suites : [];
+        if (!suites.length) return "";
+        const out = [`# ${inp.name || "Test Plan"}`, ""];
+        if (inp.overview) out.push("## Application Overview", "", String(inp.overview), "");
+        out.push("## Test Scenarios", "");
+        suites.forEach((su, i) => {
+          out.push(`### ${i + 1}. ${su && su.name || ""}`, "");
+          if (su && su.seedFile) out.push(`**Seed:** \`${su.seedFile}\``, "");
+          (Array.isArray(su && su.tests) ? su.tests : []).forEach((t, j) => {
+            out.push(`#### ${i + 1}.${j + 1}. ${t && t.name || ""}`, "");
+            if (t && t.file) out.push(`**File:** \`${t.file}\``, "");
+            const steps = Array.isArray(t && t.steps) ? t.steps : [];
+            if (steps.length) out.push("**Steps:**");
+            steps.forEach((st, k) => {
+              out.push(`  ${k + 1}. ${st && st.perform || ""}`);
+              for (const x of Array.isArray(st && st.expect) ? st.expect : []) out.push(`    - expect: ${x}`);
+            });
+            out.push("");
+          });
+        });
+        return out.join("\n");
+      }
       function classify(tool, input, cfg) {
         const f = input.file_path || input.path || "";
         const pw = playwrightTestTool(tool);
@@ -2157,6 +2183,10 @@ var require_lens = __commonJS({
                   out.push(x);
                 }
               const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+              if (playwrightTestTool(b.name || "") && mcpParts(b.name || "")[1] === "planner_save_plan") {
+                const plan = planMarkdown(b.input);
+                if (plan) r.plan = plan.slice(0, 2e5);
+              }
               if (kind === "write") {
                 const o = base(f);
                 keepBefore(r, f, o, cfg);

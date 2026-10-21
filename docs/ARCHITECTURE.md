@@ -443,7 +443,8 @@ flowchart TD
   onto the panel or pasted has no subagents.
   **Playwright's test agents** (`npx playwright init-agents`, since 0.1.127) work through Playwright's MCP server
   (`playwright-test`): `generator_write_test {fileName, code}` is read as a `write` of that test, `planner_save_plan` as
-  a `write` of the plan's file, `test_run {locations}` and `test_debug` as `run_tests` (`npx playwright test …`, the
+  a `write` of the plan's file (no code; since 0.1.130 the step keeps the plan as Playwright writes it, `plan`, from
+  `planMarkdown()`, which `LensSpec.offers` offers as the specification), `test_run {locations}` and `test_debug` as `run_tests` (`npx playwright test …`, the
   list reporter's output parsed as usual); a path from the project folder is made absolute with the session's `cwd`
   (`toolInput()` / `playwrightTestTool()` in `lens.js`). The server's `browser_*` tools are a look at the page
   (`browserLook`); its setup, log, list and test tools are housekeeping.

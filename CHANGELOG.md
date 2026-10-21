@@ -46,6 +46,12 @@
   wrong filter or an empty test database pass it too. Python (`== []`, `len(…) == 0`), TypeScript (`toHaveLength(0)`,
   `toEqual([])`), Java (`isEmpty()`, `hasSize(0)`) and C# (`Assert.Empty`, `BeEmpty()`); medium. A UI element that is not
   on the page (`toHaveCount(0)`) and a new object's first state are not results.
+- **The agent's own test plan or test cases as the specification.** When the agent saved a plan with Playwright's
+  planner agent, or wrote a document of test cases with IDs (`docs/test-cases.md` with `### NAV-01. …`), and the
+  session has no specification, the **Specification** section offers it: **Use as specification**. Nothing is taken
+  without that click, and a specification you gave is never replaced. A planner's plan is read as one requirement per
+  scenario (`1.1`), covered by a test named as the scenario, since the generator puts no number in a test's name; the
+  plan's seed test needs no requirement. The plan is offered for a session imported from this version on.
 
 ### Fixed
 - **A spec written as a document of test cases.** A heading that starts with an ID (`### NAV-01. The main menu is

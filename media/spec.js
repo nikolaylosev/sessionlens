@@ -19,10 +19,27 @@
   const OOS_HEAD = /вне\s+scope|out of scope|не\s+входит|исключ/i;
   const REQ_HEAD = /требован|requirement|сценари|scenario|критери|acceptance/i;
   const GWT_RE = /^\s*(?:Scenario|Сценарий)\s*[:\-]\s*(.+)$/i;
+  /* A plan of Playwright's planner agent (planner_save_plan, 0.1.130): "## Test Scenarios", a suite "### 1. Name" with
+     "**Seed:** `tests/seed.spec.ts`", and a scenario "#### 1.1. Name" with its steps. The generator names each test as
+     its scenario and puts no number in it, so a scenario is a requirement with its number as the ID that a test covers
+     by its title (byTitle); the seed tests are no tests without a requirement. */
+  const PLAN_HEAD = /^##\s+Test Scenarios\s*$/m;
+  const PLAN_ITEM = /^####\s+(\d{1,3}\.\d{1,3})\.\s+(.+)$/;
+  const PLAN_SEED = /^\*\*Seed:\*\*\s*`([^`]+)`/;
+  function parsePlan(text, spec) {
+    for (const line of text.split("\n")) {
+      const m = PLAN_ITEM.exec(line.trim());
+      if (m) spec.requirements.push({ id: m[1], text: m[2].trim(), byTitle: true });
+      const seed = PLAN_SEED.exec(line.trim());
+      if (seed && !spec.seeds.includes(seed[1])) spec.seeds.push(seed[1]);
+    }
+    return spec;
+  }
 
   function parse(text) {
-    const spec = { requirements: [], outOfScope: [], openQuestions: [], raw: text || "" };
+    const spec = { requirements: [], outOfScope: [], openQuestions: [], seeds: [], raw: text || "" };
     if (!text || !text.trim()) return spec;
+    if (PLAN_HEAD.test(text) && text.split("\n").some((l) => PLAN_ITEM.test(l.trim()))) return parsePlan(text, spec);
     let section = "",
       auto = 0;
     for (const raw of text.split("\n")) {
@@ -240,6 +257,15 @@
     return new RegExp(`(?<![A-Za-z0-9])${m[1]}[-_ ]?${m[2]}${m[2] ? "[-_]?" : ""}${m[3]}(?!\\d)`, "i").test(text || "");
   }
 
+  // a test's title as a plan's scenario names it: case, spaces and a final period aside
+  const title = (t) =>
+    String(t || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\.$/, "")
+      .toLowerCase();
+  const sameFile = (a, b) => a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
+
   function coverage(spec, events, language) {
     const byFile = {};
     for (const e of events) if (e.new_content) byFile[e.file || T("in_msg")] = e.new_content;
@@ -253,12 +279,15 @@
     const covered = {};
     ids.forEach((id) => (covered[id] = []));
     const unlinked = [];
+    const seeds = spec.seeds || [];
     for (const t of all) {
       const named = refs(t.header);
       /* an R ID by its R part: a test names R1 for TASK-1/R1 as for R1 (0.1.130: a spec written with the ticket's
          prefix had every requirement "with no test"); a key as namesKey reads it */
-      const r = ids.filter((id) => named.has(id.replace(/^.*\//, "")) || (KEY_ID.test(id) && namesKey(id, t.header)));
-      if (!r.length) unlinked.push(t);
+      const r = spec.requirements
+        .filter((q) => (q.byTitle ? title(q.text) === title(t.name) : named.has(q.id.replace(/^.*\//, "")) || (KEY_ID.test(q.id) && namesKey(q.id, t.header))))
+        .map((q) => q.id);
+      if (!r.length && !seeds.some((f) => sameFile(t.file, f))) unlinked.push(t);
       r.forEach((id) => covered[id].push(t.name));
     }
     return { tests: all, covered, uncovered: ids.filter((id) => !covered[id].length), unlinked, hasIds: spec.requirements.some((r) => !r.auto) };
@@ -294,5 +323,24 @@
     }
     return { findings: out, coverage: cov };
   }
-  return { parse, tests, coverage, checks, refs, supports, extractorFor };
+  /* What the agent wrote in the session that could be its specification (0.1.130): a plan it saved with Playwright's
+     planner (the step's plan), or a document it wrote (.md, .txt) whose requirements have IDs, two at least (a document
+     of test cases: "### NAV-01. …"). The last version of each file, newest first. The panel offers them while the
+     session has no specification; nothing is taken without the person's click. → [{ file, kind: "plan" | "cases", n, text }] */
+  function offers(events) {
+    const last = new Map();
+    for (const e of events || []) {
+      if (!e || !e.file) continue;
+      if (typeof e.plan === "string" && e.plan) last.set(e.file, { kind: "plan", text: e.plan, seq: e.seq });
+      else if (/\.(?:md|markdown|txt)$/i.test(e.file) && typeof e.new_content === "string" && !e.fragment_only)
+        last.set(e.file, { kind: "cases", text: e.new_content, seq: e.seq });
+    }
+    const out = [];
+    for (const [file, o] of last) {
+      const n = parse(o.text).requirements.filter((r) => !r.auto).length;
+      if (o.kind === "plan" ? n >= 1 : n >= 2) out.push({ file, kind: o.kind, n, text: o.text, seq: o.seq });
+    }
+    return out.sort((a, b) => b.seq - a.seq).map(({ file, kind, n, text }) => ({ file, kind, n, text }));
+  }
+  return { parse, tests, coverage, checks, refs, supports, extractorFor, offers };
 });
