@@ -1523,6 +1523,9 @@ What the import keeps for them:
   not code (`TEXT_RUNNER_CONFIG_RX`: the four Python files, and since 0.1.114 `pom.xml`, `build.gradle(.kts)` and
   `*.runsettings`; `config_weakened` is in qa-java and qa-c# since then) it moves `new_content` to `config_content`
   instead: `config_weakened` reads it, the code checks do not (`xfail_strict = true` must not be an expected failure).
+  The text of a document (`.md`, `.markdown`, `.txt`, `.rst`, `.adoc`, the whole file only) is kept as
+  `doc_content` since 0.1.130, up to 100 000 characters: no check reads it; `LensSpec.offers` does, to offer a
+  document of test cases as the specification.
 - **Stored sessions.** `test_deleted` and `product_code_edited` read what every stored session already has
   (`new_content`, the file names), so they work on a session saved before 0.1.113 — except a deletion in the first
   edit of a file, which needs `prev_content`, like `config_weakened` for a config the session only edited; a Codex

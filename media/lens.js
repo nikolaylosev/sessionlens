@@ -1975,12 +1975,16 @@
      .feature is the one exception to "profile decides what's source": Gherkin checks are profile-agnostic
      (see gherkinChecks below) and must see the file regardless of which profile is active, so it is never
      stripped even when the active profile's code_ext doesn't list it (only qa-api does today). */
+  /* A document's text is kept as doc_content (0.1.130), for no check: the Specification section offers a document of
+     test cases the agent wrote (LensSpec.offers), and its text was dropped here with the rest. */
+  const DOC_RX = /\.(?:md|markdown|txt|rst|adoc)$/i;
   function stripNonSource(events, cfg) {
     for (const e of events) {
       if (!e.new_content || !e.file) continue;
       if (/\.feature$/i.test(e.file)) continue;
       const ext = (cfg.code_ext || []).some((x) => e.file.endsWith(x));
       if (!ext && (NOT_SOURCE.test(e.file) || (cfg.code_ext || []).length)) {
+        if (DOC_RX.test(e.file) && !e.fragment_only) e.doc_content = e.new_content.slice(0, 100000);
         if (TEXT_RUNNER_CONFIG_RX.test(e.file)) e.config_content = e.new_content;
         else delete e.prev_content;
         delete e.new_content;

@@ -370,8 +370,11 @@
     for (const e of events || []) {
       if (!e || !e.file) continue;
       if (typeof e.plan === "string" && e.plan) last.set(e.file, { kind: "plan", text: e.plan, seq: e.seq });
-      else if (/\.(?:md|markdown|txt)$/i.test(e.file) && typeof e.new_content === "string" && !e.fragment_only)
-        last.set(e.file, { kind: "cases", text: e.new_content, seq: e.seq });
+      else if (/\.(?:md|markdown|txt)$/i.test(e.file) && !e.fragment_only) {
+        // the import keeps a document's text as doc_content: new_content is for code
+        const text = typeof e.doc_content === "string" ? e.doc_content : e.new_content;
+        if (typeof text === "string") last.set(e.file, { kind: "cases", text, seq: e.seq });
+      }
     }
     const out = [];
     for (const [file, o] of last) {

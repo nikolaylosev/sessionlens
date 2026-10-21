@@ -314,6 +314,8 @@ classDiagram
     new_content
     prev_content
     config_content
+    doc_content
+    plan
     fragment_only
     tests
     output_missing
@@ -372,6 +374,8 @@ Key points:
   fragment only when the file was never seen whole: `fragment_only`). `prev_content` is the file as it was, kept for
   runner configs and test files so a first edit can be compared. `config_content` is the text of a runner config
   that is not code (`pytest.ini`, `pom.xml`, `build.gradle`, `.runsettings`…), kept away from the code checks.
+  `doc_content` (0.1.130) is the text of a document the agent wrote (`.md`, `.txt`, `.rst`, `.adoc`), and `plan` the
+  plan of Playwright's planner; no check reads them, the Specification section offers them (`LensSpec.offers`).
   `ts` is the step's time from the transcript (empty for a claude.ai export). `output_missing` (0.1.121) marks a
   test run whose output the transcript does not keep (a Cursor import): its result is unknown, not red.
 - **Finding.** `check` is the one key of the rules system (RA §1). `source` says which track made it; calibration
