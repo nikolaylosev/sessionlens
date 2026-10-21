@@ -204,6 +204,63 @@ function cleanLogs({ home, now = Date.now(), days = LOG_DAYS, platform = process
   return removed;
 }
 
+/* The log of one chat as the import of a Cursor transcript takes Cursor's database (cursor-db.js), or null when there
+   is none: { outputs: [{ command, output, exitCode }], edits: [{ path, before, after }] }, in the order they came.
+   An output's exit code is the one postToolUse gave for the same call (a red run has none: Cursor sent no postToolUse
+   after it, only postToolUseFailure). An edit is a file line (the whole file after it) with the file before: the last
+   version of it in the log, or for its first edit, the file after with the edit undone (afterFileEdit's old and new
+   text); a file whose version before cannot be told is not an edit here, its later ones are. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function readLog({ home, id, platform = process.platform }) {
+  if (typeof id !== "string" || !UUID.test(id)) return null;
+  let text;
+  try {
+    text = fs.readFileSync(path.join(paths(home, platform).logDir, id + ".jsonl"), "utf8");
+  } catch {
+    return null;
+  }
+  const lines = [];
+  for (const l of text.split("\n")) {
+    try {
+      const r = JSON.parse(l);
+      if (r && r.v === 1 && r.conversation_id === id) lines.push(r);
+    } catch {
+      /* a half-written or broken line: left out */
+    }
+  }
+  const exit = new Map();
+  for (const r of lines) if (r.event === "exit" && r.tool_use_id && Number.isInteger(r.exit_code)) exit.set(r.tool_use_id, r.exit_code);
+  const outputs = [],
+    edits = [],
+    known = new Map(), // path → the file as the last line of it left it
+    pending = new Map(); // path → afterFileEdit's edits, waiting for the file line that follows them
+  for (const r of lines) {
+    if (r.event === "shell" && typeof r.command === "string" && typeof r.output === "string")
+      outputs.push({ command: r.command, output: r.output, exitCode: exit.has(r.tool_use_id) ? exit.get(r.tool_use_id) : undefined });
+    else if (r.event === "edit" && typeof r.file_path === "string" && Array.isArray(r.edits)) pending.set(r.file_path, r.edits);
+    else if (r.event === "file" && typeof r.file_path === "string" && typeof r.content === "string") {
+      const before = known.has(r.file_path) ? known.get(r.file_path) : undone(r.content, pending.get(r.file_path));
+      pending.delete(r.file_path);
+      known.set(r.file_path, r.content);
+      if (typeof before === "string") edits.push({ path: r.file_path, before, after: r.content });
+    }
+  }
+  return { outputs, edits };
+}
+// the file before its edits: each new text put back to the old one, from the last edit; null when that is not certain
+function undone(after, eds) {
+  if (!Array.isArray(eds) || !eds.length) return null;
+  let s = after;
+  for (const e of eds.slice().reverse()) {
+    const o = typeof e.old === "string" ? e.old : null,
+      n = typeof e.new === "string" ? e.new : null;
+    if (o === null || n === null) return null;
+    if (n === "" || s.indexOf(n) < 0 || s.indexOf(n) !== s.lastIndexOf(n)) return null; // not found, or not once
+    s = s.replace(n, () => o);
+  }
+  return s;
+}
+
 function isRecording({ home, platform = process.platform }) {
   const r = readHooks(paths(home, platform).hooksFile);
   return !r.error && r.exists && installed(r.json);
@@ -225,4 +282,5 @@ module.exports = {
   refresh,
   cleanLogs,
   isRecording,
+  readLog,
 };

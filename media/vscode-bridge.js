@@ -152,6 +152,8 @@
   // switching the view in the current webview.
   window.__slOpenSession = (id) => call("session:open", { id });
   window.__slPickTranscript = (payload) => call("open:transcript", payload || {});
+  // the Cursor hook's log of a chat (0.1.130): Import again of a Cursor session asks for it
+  window.__slCursorLog = (id) => call("cursor:log", { id });
   // Ask the host to close this tab (the session it was showing no longer exists).
   window.__slCloseSelf = () => call("panel:close", {});
   // Tell the host which internal tab is showing, so it can show/hide the native Sessions

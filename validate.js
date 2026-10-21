@@ -227,6 +227,8 @@ const VALIDATORS = {
   "claude:check": none,
   "codex:check": none,
   "cursor:check": none,
+  // the log of the Cursor hook for one chat (0.1.130): its id is a UUID, the name of its transcript
+  "cursor:log": (p) => (typeof p.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id) ? null : "bad chat id"),
   "settings:open": none,
   "session:open": (p, ctx) => (!checkId(p.id) && ctx.sessionExists(p.id) ? null : "no such session"),
   "session:list": none,

@@ -122,7 +122,8 @@ providers.js          host: HTTP transport to model providers (node:http/https)
 cli.js                host: runs the user's claude / codex / cursor agent CLI with no tools, in an empty temp folder
 cursor-db.js          host: the command output of a Cursor Agent chat, read-only from Cursor's own databases
 cursor-hooks.js       host: Record / Stop recording Cursor agent runs: the hook in ~/.cursor/hooks.json and
-                      ~/.cursor/sessionlens/ (0.1.130), the person's own hooks kept, logs removed after 30 days
+                      ~/.cursor/sessionlens/ (0.1.130), the person's own hooks kept, logs removed after 30 days;
+                      readLog: a chat's log as the import's command output and file versions
 package.json          manifest: views, commands, settings (package.nls.json holds the strings)
 
 media/                everything the webview loads (also required by Node tests)
@@ -270,7 +271,7 @@ Message types (validated by `VALIDATORS` in `validate.js`):
 | Lifecycle | `page:ready`, `panel:close`, `tab:active`, `log:timing` |
 | Storage | `storage:get`, `storage:set` (only the keys in `STORAGE_KEYS`) |
 | Sessions | `session:list`, `session:get`, `session:put`, `session:delete`, `session:clear`, `session:open` |
-| Files and OS | `open:transcript`, `save:file`, `save:folder-files` (a generated skill's files, inside the folder the user picked), `clipboard:write`, `settings:open` |
+| Files and OS | `open:transcript`, `cursor:log` (the Cursor hook's log of one chat, by its id, 0.1.130), `save:file`, `save:folder-files` (a generated skill's files, inside the folder the user picked), `clipboard:write`, `settings:open` |
 | Keys and addresses | `secret:set`, `secret:delete`, `secret:status`, `baseurl:set` |
 | Model | `ai:call`, `claude:check`, `claude:run`, `codex:check`, `codex:run`, `cursor:check`, `cursor:run` |
 
@@ -494,6 +495,9 @@ flowchart TD
   (`terminals/<pid>.txt`, `agent-tools/<uuid>.txt`) are not read: nothing in them names the call they belong to.
   Older Composer transcripts use another schema and are not detected. There is no command that imports the chat
   open in Cursor. The extension host has no stable API for its path.
+  Since 0.1.130 the Cursor hook's log of the chat comes first (`cursor-hooks.js` `readLog`, by the file's id, the same
+  shapes as below; the session keeps the id as `source_cursor_id`, and Import again asks for the log with
+  `cursor:log`); each part the log does not have comes from the databases.
   When the file is picked in the panel, the host (`cursor-db.js`) looks up the chat by the file's id in Cursor's own
   databases and returns the commands with their output beside the text (`open:transcript` → `cursorOutputs`): the
   CLI's `~/.cursor/chats/<md5 of the workspace>/<id>/store.db`, or the IDE's `globalStorage/state.vscdb`. Both are

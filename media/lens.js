@@ -2189,7 +2189,10 @@
      (a newer import may add events, such as Codex deletions), near 0 for another one. */
   function transcriptMatch(stored, fresh) {
     // a session imported before 0.1.124 has the home folder spelled out where a new import has ~ (fromHome)
-    const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), String(e.text || "").slice(0, 60)].join("|");
+    /* the text only of what was said: a tool step's is its result, which a later import may have and an earlier did not
+       (0.1.130: Cursor's command output from the hook's log made the same transcript "45% of its steps") */
+    const said = (e) => (e.kind === "user" || e.kind === "message" ? String(e.text || "").slice(0, 60) : "");
+    const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), said(e)].join("|");
     // a Codex 0.159 command stored before 0.1.121 as a bare "tool exec" step is the same step as its command now
     const same = (x, y) => sig(x) === sig(y) || (x.kind === "tool" && x.tool === "exec" && y.tool === "exec");
     const a = stored || [],
