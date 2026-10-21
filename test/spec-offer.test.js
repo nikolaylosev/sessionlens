@@ -206,3 +206,30 @@ test("the tab offers the plan while the session has no specification; a click ma
   assert.equal(q("#spec-count").textContent, "(2 requirements)");
   tab.close();
 });
+
+test("a document of test cases written in a real import is offered: the import keeps its text, for no check", () => {
+  const doc = "# Test cases\n\nSite: https://shop.example.org/\n\n### NAV-01. The menu is visible\n\nSteps. Open the home page.\n\n### NAV-02. About opens\n";
+  const text = [
+    { type: "user", message: { role: "user", content: "Write the test cases" } },
+    {
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "w", name: "Write", input: { file_path: "/w/shop/docs/test-cases.md", content: doc } }] },
+    },
+    { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "w", content: "ok" }] } },
+  ]
+    .map((l) => JSON.stringify(l))
+    .join("\n");
+  const ev = Lens.importAny(text, cfg, {});
+  const w = ev.find((e) => e.kind === "write");
+  assert.deepEqual([w.new_content, w.doc_content], [undefined, doc], "no code; the document's text");
+  assert.deepEqual(
+    LensSpec.offers(ev).map((o) => [o.file, o.kind, o.n, o.text === doc]),
+    [[w.file, "cases", 2, true]],
+  );
+  // a README the agent wrote: kept, offered as nothing (no IDs)
+  const readme = text.replace("docs/test-cases.md", "README.md").replace(JSON.stringify(doc).slice(1, -1), "# Shop\\nRun npm test.\\n");
+  assert.deepEqual(LensSpec.offers(Lens.importAny(readme, cfg, {})), []);
+  // a config is no document: its text is not kept
+  const json = text.replace("docs/test-cases.md", "package.json");
+  assert.equal(Lens.importAny(json, cfg, {}).find((e) => e.kind === "write").doc_content, undefined);
+});

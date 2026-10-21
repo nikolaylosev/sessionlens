@@ -2801,12 +2801,14 @@ var require_lens = __commonJS({
         return events;
       }
       const NOT_SOURCE = /\.(?:json|jsonc|md|txt|ya?ml|lock|gitignore|env|toml|ini|cfg)$/i;
+      const DOC_RX = /\.(?:md|markdown|txt|rst|adoc)$/i;
       function stripNonSource(events, cfg) {
         for (const e of events) {
           if (!e.new_content || !e.file) continue;
           if (/\.feature$/i.test(e.file)) continue;
           const ext = (cfg.code_ext || []).some((x) => e.file.endsWith(x));
           if (!ext && (NOT_SOURCE.test(e.file) || (cfg.code_ext || []).length)) {
+            if (DOC_RX.test(e.file) && !e.fragment_only) e.doc_content = e.new_content.slice(0, 1e5);
             if (TEXT_RUNNER_CONFIG_RX.test(e.file)) e.config_content = e.new_content;
             else delete e.prev_content;
             delete e.new_content;
