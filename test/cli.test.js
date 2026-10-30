@@ -1,299 +1,171 @@
 "use strict";
-/* cli.js (phase 3, step 3.8): how a .cmd/.bat CLI is started through cmd.exe, and the system prompt file. The
-   command line is built by a pure function, so it is checked here on any OS; the real Windows run is the win32-only test at
-   the end (it runs in CI on windows-latest). */
+/* sessionlens analyze (phase 11, step 4): cli/lib/cli.js, run in this process with its output captured, and the bin
+   once through a real process. The decisions it carries (TODO §6.1, 30.10): --profile is required; --ci sets no_spec
+   and stop_markers_missing aside unless --spec is given; exit 0 whatever the colour unless --fail-on red|yellow, 1 when
+   it matches, 2 when the CLI could not do its work; colours only on a terminal without NO_COLOR or --no-color. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { root } = require("./helpers");
-const cli = require(path.join(root, "cli.js"));
+const { spawnSync } = require("child_process");
+const { load, root } = require("./helpers");
 
-test("needsShell: only .cmd/.bat on Windows", () => {
-  assert.equal(cli.needsShell("C:\\npm\\claude.cmd", true), true);
-  assert.equal(cli.needsShell("C:\\npm\\CLAUDE.BAT", true), true);
-  assert.equal(cli.needsShell("C:\\x\\claude.exe", true), false);
-  assert.equal(cli.needsShell("/usr/bin/claude.cmd", false), false);
-});
+const { Lens } = load();
+const { run } = require(path.join(root, "cli", "lib", "cli.js"));
+const BIN = path.join(root, "cli", "bin", "sessionlens.js");
 
-test('buildWinCommand: plain double quotes, never \\"; the arguments runClaude really passes are accepted', () => {
-  const args = [
-    "-p",
-    "--output-format",
-    "json",
-    "--no-session-persistence",
-    "--tools",
-    "",
-    "--strict-mcp-config",
-    "--disable-slash-commands",
-    "--system-prompt-file",
-    cli.SYSTEM_FILE,
-    "--model",
-    "sonnet[1m]",
-  ];
-  const cmd = cli.buildWinCommand("C:\\Users\\Никита Иванов\\AppData\\Roaming\\npm\\claude.cmd", args);
-  assert.equal(
-    cmd,
-    '"C:\\Users\\Никита Иванов\\AppData\\Roaming\\npm\\claude.cmd" "-p" "--output-format" "json" "--no-session-persistence" "--tools" "" "--strict-mcp-config" "--disable-slash-commands" "--system-prompt-file" "system.txt" "--model" "sonnet[1m]"',
-  );
-  assert.ok(!cmd.includes('\\"'));
-  const codex = cli.buildWinCommand("C:\\Program Files (x86)\\codex.cmd", [
-    "exec",
-    "-",
-    "--json",
-    "--ephemeral",
-    "--skip-git-repo-check",
-    "--sandbox",
-    "read-only",
-    "--model",
-    "gpt-5.1-codex",
-  ]);
-  assert.ok(codex.startsWith('"C:\\Program Files (x86)\\codex.cmd" "exec" "-"'));
-});
+const J = JSON.stringify;
+const CODE =
+  "import { test, expect } from '@playwright/test';\ntest('R1: adds a todo', async ({ page }) => {\n  await page.goto('/');\n  await page.getByPlaceholder('What needs to be done?').fill('Milk');\n  await page.getByPlaceholder('What needs to be done?').press('Enter');\n  await expect(page.getByTestId('todo-title')).toHaveText(['Milk']);\n});\n";
+const tool = (id, name, input, result) => [
+  J({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } }),
+  J({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: result }] } }),
+];
+// a Claude Code session: a test written, run green, reported; its only findings are no_spec and stop_markers_missing
+const HONEST = [
+  J({ type: "user", message: { role: "user", content: "Write a test for adding a todo" } }),
+  ...tool("t1", "Write", { file_path: "tests/todo.spec.ts", content: CODE }, "ok"),
+  ...tool("t2", "Bash", { command: "npx playwright test" }, "  ✓  1 [chromium] › tests/todo.spec.ts:2:5 › R1: adds a todo (500ms)\n\n  1 passed (1.2s)\n"),
+  J({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "The test passes." }] } }),
+].join("\n");
+// the same test with a sleep in it: high, from ESLint (the engine loaded) and from the regex check
+const SLEEPY = HONEST.replace(
+  J(CODE).slice(1, -1),
+  J(CODE.replace("  await page.goto('/');\n", "  await page.goto('/');\n  await page.waitForTimeout(2000);\n")).slice(1, -1),
+);
 
-test("buildWinCommand: anything cmd.exe could read as more than text refuses the whole command", () => {
-  for (const bad of ["%PATH%", "a&calc", "a|b", 'a"b', "a^b", "a!b", "a<b", "a>b", "a\nb", "C:\\Users\\100%\\tmp\\system.txt"]) {
-    assert.equal(cli.buildWinCommand("C:\\npm\\claude.cmd", ["-p", bad]), null, bad);
-  }
-  assert.equal(cli.buildWinCommand("C:\\a&b\\claude.cmd", ["-p"]), null);
-});
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-cli-"));
+test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+const file = (name, text) => (fs.writeFileSync(path.join(dir, name), text), name);
+file("honest.jsonl", HONEST);
+file("sleepy.jsonl", SLEEPY);
+file("spec.md", "# Todos\n\n- R1. A todo can be added.\n");
+file("not-a-log.txt", "");
 
-test("runClaude: the system prompt goes in as a relative file name, resolved against the temp cwd", { skip: process.platform === "win32" }, async () => {
-  // a stand-in for `claude`: records its arguments and what it finds at the relative path, answers like `claude -p --output-format json`
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl fake cli Никита ")); // a space and a non-ASCII name, as on Windows
-  const bin = path.join(dir, "claude");
-  const log = path.join(dir, "log.json");
-  fs.writeFileSync(
-    bin,
-    `#!${process.execPath}
-const fs = require("fs"); const a = process.argv.slice(2); const i = a.indexOf("--system-prompt-file");
-fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify({ args: a, cwd: process.cwd(), file: i >= 0 ? fs.readFileSync(a[i + 1], "utf8") : null }));
-process.stdout.write(JSON.stringify({ result: "ok", total_cost_usd: 0 }));
-`,
-    { mode: 0o755 },
-  );
-  try {
-    const r = await cli.runClaude({ system: "SYSTEM PROMPT", user: "u", cliPath: bin });
-    assert.equal(r.text, "ok");
-    const seen = JSON.parse(fs.readFileSync(log, "utf8"));
-    const i = seen.args.indexOf("--system-prompt-file");
-    assert.equal(seen.args[i + 1], "system.txt");
-    assert.equal(seen.file, "SYSTEM PROMPT");
-    assert.ok(path.basename(seen.cwd).startsWith("sessionlens-cli-"));
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// Phase 7 (7B.1): a real run through cmd.exe, from a folder whose path has a space and a non-ASCII user name — the case
-// buildWinCommand exists for. Runs only on Windows (CI: windows-latest).
-test("runClaude on Windows: a .cmd CLI in a folder with a space and a non-ASCII name", { skip: process.platform !== "win32" }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl cli Никита "));
-  const js = path.join(dir, "fake.js"),
-    log = path.join(dir, "log.json"),
-    bin = path.join(dir, "claude.cmd");
-  fs.writeFileSync(
-    js,
-    `const fs = require("fs"); const a = process.argv.slice(2); const i = a.indexOf("--system-prompt-file");
-let input = ""; process.stdin.on("data", (d) => { input += d; }); process.stdin.on("end", () => {
-  fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify({ args: a, file: i >= 0 ? fs.readFileSync(a[i + 1], "utf8") : null, input }));
-  process.stdout.write(JSON.stringify({ result: "ok", total_cost_usd: 0 }));
-});
-`,
-  );
-  fs.writeFileSync(bin, `@"${process.execPath}" "%~dp0fake.js" %*\r\n`);
-  try {
-    const r = await cli.runClaude({ system: "SYSTEM PROMPT", user: "user text", cliPath: bin });
-    assert.deepEqual(r.error, undefined, JSON.stringify(r.error));
-    assert.equal(r.text, "ok");
-    const seen = JSON.parse(fs.readFileSync(log, "utf8"));
-    assert.equal(seen.args[seen.args.indexOf("--system-prompt-file") + 1], "system.txt");
-    assert.equal(seen.file, "SYSTEM PROMPT");
-    assert.equal(seen.input, "user text");
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ---------- Cursor Agent CLI (0.1.121) ----------
-const crypto = require("crypto");
-
-/* A stand-in for `agent`, with a fake home: records its arguments, cwd, stdin and the permissions file it finds, leaves
-   the copy Cursor keeps (CLI 2026.10.01: ~/.cursor/chats/<md5 of cwd>/<id>/ and ~/.cursor/projects/<cwd slug>/), and
-   answers like `agent -p --output-format json`, or fails like it (exit 1, one line on stderr). */
-function fakeCursor({ stderr = "", code = 0, traces = true } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl fake cursor Никита "));
-  const home = path.join(dir, "home"),
-    bin = path.join(dir, "agent"),
-    log = path.join(dir, "log.json");
-  fs.writeFileSync(
-    bin,
-    `#!${process.execPath}
-const fs = require("fs"), path = require("path"), crypto = require("crypto");
-let input = ""; process.stdin.on("data", (d) => { input += d; }); process.stdin.on("end", () => {
-  const cwd = fs.realpathSync(process.cwd()), perm = path.join(cwd, ".cursor", "cli.json");
-  fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2), cwd, input, perm: fs.existsSync(perm) ? JSON.parse(fs.readFileSync(perm, "utf8")) : null }));
-  if (${traces}) {
-    const chat = path.join(${JSON.stringify(home)}, ".cursor", "chats", crypto.createHash("md5").update(cwd).digest("hex"), "chat-1");
-    fs.mkdirSync(chat, { recursive: true }); fs.writeFileSync(path.join(chat, "meta.json"), JSON.stringify({ cwd }));
-    const proj = path.join(${JSON.stringify(home)}, ".cursor", "projects", cwd.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-/, ""), "agent-transcripts", "chat-1");
-    fs.mkdirSync(proj, { recursive: true }); fs.writeFileSync(path.join(proj, "chat-1.jsonl"), input);
-  }
-  if (${code}) { process.stderr.write(${JSON.stringify(stderr)}); process.exit(${code}); }
-  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "ok", session_id: "chat-1" }));
-});
-`,
-    { mode: 0o755 },
-  );
-  // someone else's chat and project, which must stay
-  fs.mkdirSync(path.join(home, ".cursor", "chats", "0123456789abcdef0123456789abcdef", "other"), { recursive: true });
-  fs.mkdirSync(path.join(home, ".cursor", "projects", "Users-me-shop", "agent-transcripts"), { recursive: true });
-  return { dir, home, bin, log };
-}
-const listCursor = (home) =>
-  ["chats", "projects"].flatMap((d) => {
-    try {
-      return fs.readdirSync(path.join(home, ".cursor", d)).map((n) => `${d}/${n}`);
-    } catch {
-      return [];
-    }
+async function cli(args, io = {}) {
+  let out = "",
+    err = "";
+  const code = await run(args, {
+    stdout: { write: (t) => (out += t) },
+    stderr: { write: (t) => (err += t) },
+    env: io.env || {},
+    isTTY: !!io.isTTY,
+    cwd: dir,
   });
+  return { code, out, err };
+}
 
-test(
-  "runCursor: prompt on stdin, read-only ask mode, every tool denied in the temp folder, Cursor's copy removed",
-  { skip: process.platform === "win32" },
-  async () => {
-    const f = fakeCursor();
-    try {
-      const r = await cli.runCursor({ system: "SYSTEM", user: "user text", model: "gpt-5.2", cliPath: f.bin, home: f.home });
-      assert.deepEqual([r.text, r.costUsd, r.traces], ["ok", null, "removed"]);
-      const seen = JSON.parse(fs.readFileSync(f.log, "utf8"));
-      assert.deepEqual(seen.args, ["-p", "--output-format", "json", "--mode", "ask", "--trust", "--model", "gpt-5.2"], "no prompt argument");
-      // every request starts with "use no tool, no skill" (0.1.127)
-      assert.equal(seen.input, cli.CURSOR_NO_TOOLS + "\n\nSYSTEM\n\nuser text");
-      assert.match(cli.CURSOR_NO_TOOLS, /Do not use any tool/);
-      assert.deepEqual(seen.perm, cli.CURSOR_PERMISSIONS);
-      assert.deepEqual(seen.perm.permissions.deny, ["Shell(*)", "Write(**)", "Read(**)", "WebFetch(*)", "Mcp(*:*)"]);
-      assert.ok(path.basename(seen.cwd).startsWith("sessionlens-cursor-"));
-      assert.ok(!fs.existsSync(seen.cwd), "the temp folder is gone");
-      assert.deepEqual(listCursor(f.home).sort(), ["chats/0123456789abcdef0123456789abcdef", "projects/Users-me-shop"], "only this run's copy is removed");
-    } finally {
-      fs.rmSync(f.dir, { recursive: true, force: true });
-    }
-  },
-);
-
-test("runCursor: a failure is a line on stderr, worded per code; the copy is removed after a failure too", { skip: process.platform === "win32" }, async () => {
-  for (const [stderr, code] of [
-    ["Error: Authentication required. Please run 'agent login' first, or set CURSOR_API_KEY environment variable.", "auth"],
-    ["Cannot use this model: no-such-model. Available models: auto, gpt-5.2", "model"],
-    ["something else broke", "failed"],
-  ]) {
-    const f = fakeCursor({ stderr, code: 1 });
-    try {
-      const r = await cli.runCursor({ user: "u", cliPath: f.bin, home: f.home });
-      assert.equal(r.error.code, code, stderr);
-      assert.equal(r.traces, "removed");
-    } finally {
-      fs.rmSync(f.dir, { recursive: true, force: true });
-    }
+test("--help, --version, and what the CLI cannot do: exit 2 with the reason", async () => {
+  const help = await cli(["--help"]);
+  assert.equal(help.code, 0);
+  assert.match(help.out, /^Usage: sessionlens analyze <log> --profile <name>/);
+  assert.match(help.out, /qa-ts, qa-cypress/);
+  assert.deepEqual(await cli(["--version"]), { code: 0, out: Lens.ANALYSIS_VERSION + "\n", err: "" });
+  const errors = {
+    "sessionlens: expected: sessionlens analyze <log>": ["honest.jsonl"],
+    "--profile is required": ["analyze", "honest.jsonl"],
+    'unknown profile "qa-rust"': ["analyze", "honest.jsonl", "--profile", "qa-rust"],
+    '--fail-on is none, red or yellow, not "blue"': ["analyze", "honest.jsonl", "--profile", "qa-ts", "--fail-on", "blue"],
+    "one output at a time": ["analyze", "honest.jsonl", "--profile", "qa-ts", "--json", "--md"],
+    "cannot read nope.jsonl: no such file": ["analyze", "nope.jsonl", "--profile", "qa-ts"],
+    "cannot read nope.md: no such file": ["analyze", "honest.jsonl", "--profile", "qa-ts", "--spec", "nope.md"],
+    "not-a-log.txt: no steps read": ["analyze", "not-a-log.txt", "--profile", "qa-ts"],
+    "spec.md is not a rules.json": ["analyze", "honest.jsonl", "--profile", "qa-ts", "--rules", "spec.md"],
+    "Unknown option '--colour'": ["analyze", "honest.jsonl", "--profile", "qa-ts", "--colour"],
+  };
+  for (const [msg, args] of Object.entries(errors)) {
+    const r = await cli(args);
+    assert.equal(r.code, 2, args.join(" "));
+    assert.equal(r.out, "", args.join(" "));
+    assert.ok(r.err.includes(msg), `${args.join(" ")}: ${r.err}`);
   }
-  const f = fakeCursor({ stderr: "Error: Authentication required.", code: 1, traces: false });
-  try {
-    assert.equal((await cli.runCursor({ user: "u", cliPath: f.bin, home: f.home })).traces, "none", "nothing written: nothing to remove");
-  } finally {
-    fs.rmSync(f.dir, { recursive: true, force: true });
-  }
+  // a claude.ai export of two conversations: one session per file
+  const two = [1, 2].map((n) => ({
+    name: `c${n}`,
+    chat_messages: [
+      { sender: "human", text: "hi" },
+      { sender: "assistant", text: "Hello" },
+    ],
+  }));
+  const many = await cli(["analyze", file("export.json", J(two)), "--profile", "qa-ts"]);
+  assert.equal(many.code, 2);
+  assert.match(many.err, /holds 2 conversations/);
 });
 
-test("removeCursorTraces: a chats folder that also holds a chat of another folder is kept and reported", () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "sl-cursor-home-"));
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sessionlens-cursor-"));
-  try {
-    const real = fs.realpathSync(ws);
-    const chats = path.join(home, ".cursor", "chats", crypto.createHash("md5").update(real).digest("hex"));
-    for (const [id, cwd] of [
-      ["mine", real],
-      ["theirs", "/Users/me/shop"],
-    ]) {
-      fs.mkdirSync(path.join(chats, id), { recursive: true });
-      fs.writeFileSync(path.join(chats, id, "meta.json"), JSON.stringify({ cwd }));
-    }
-    assert.equal(cli.removeCursorTraces(ws, home), "failed");
-    assert.ok(fs.existsSync(path.join(chats, "theirs")));
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(ws, { recursive: true, force: true });
-  }
+test("the review: text by default; --ci sets the context aside unless --spec is given; --fail-on decides the exit code", async () => {
+  const base = ["analyze", "honest.jsonl", "--profile", "qa-ts"];
+  const plain = await cli(base);
+  assert.equal(plain.code, 0, "red, and still 0 without --fail-on");
+  assert.match(plain.out, /^SessionLens .* · qa-ts · honest\.jsonl\nVerdict: Red/);
+  assert.match(plain.out, /\nhigh +no_spec /);
+  assert.equal((await cli([...base, "--fail-on", "red"])).code, 1);
+  assert.equal((await cli([...base, "--fail-on", "yellow"])).code, 1, "red is worse than yellow");
+  const ci = await cli([...base, "--ci", "--fail-on", "yellow"]);
+  assert.equal(ci.code, 0, "green once the context is set aside");
+  assert.match(ci.out, /Verdict: Green/);
+  assert.match(ci.out, /Context, not counted \(no specification given\): no_spec, stop_markers_missing/);
+  // with a specification, the plan is the agent's again: stop_markers_missing counts
+  const spec = await cli([...base, "--ci", "--spec", "spec.md", "--fail-on", "yellow"]);
+  assert.equal(spec.code, 1);
+  assert.match(spec.out, /Verdict: Yellow/);
+  assert.doesNotMatch(spec.out, /Context, not counted/);
+  // the engine of the profile's language ran: its finding and the regex one are one, from ESLint
+  const sleepy = await cli(["analyze", "sleepy.jsonl", "--profile", "qa-ts", "--ci", "--fail-on", "red", "--json"]);
+  assert.equal(sleepy.code, 1);
+  const j = JSON.parse(sleepy.out);
+  assert.equal(j.verdict, "red");
+  assert.deepEqual(
+    j.findings.map((f) => `${f.check}/${f.source}`),
+    ["sleep_or_skip_added/lint"],
+  );
+  assert.deepEqual(
+    j.context.map((f) => f.check),
+    ["no_spec", "stop_markers_missing"],
+  );
+  assert.equal(j.sessionlens, Lens.ANALYSIS_VERSION);
+  assert.match((await cli([...base, "--md"])).out, /^## Session review: honest\.jsonl\n/);
 });
 
-test(
-  "cursorSocketDir: a long path is cut to 84 characters and gets the first 7 hex digits of its sha256",
-  { skip: process.platform === "win32" && "POSIX paths" },
-  () => {
-    // the expected names come from the rule as Cursor's CLI 2026.10.01 applies it (checked against a folder it made)
-    assert.equal(cli.cursorSocketDir("/Users/me/.cursor/projects", "/Users/me/shop"), path.join("/Users/me/.cursor/projects", "Users-me-shop"));
-    const long = cli.cursorSocketDir("/Users/me/.cursor/projects", "/Users/me/Downloads/samples/a-project-with-a-rather-long-name/tests");
-    const whole = path.join("/Users/me/.cursor/projects", "Users-me-Downloads-samples-a-project-with-a-rather-long-name-tests");
-    assert.equal(crypto.createHash("sha256").update(whole).digest("hex").slice(0, 7), "a965ed5", "the hash is of the whole path");
-    assert.equal(path.basename(long), "Users-me-Downloads-samples-a-project-with-a-rather-long-n-a965ed5");
-    assert.equal(long.length, 92);
-  },
-);
-
-test("removeCursorTraces: the worker's socket folder under its cut name goes too; another cut name stays", () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "h"));
-  const deep = fs.mkdtempSync(path.join(os.tmpdir(), "sl-a-folder-with-a-long-name-so-the-path-passes-the-limit-"));
-  const ws = fs.mkdtempSync(path.join(deep, "sessionlens-cursor-"));
-  try {
-    const projects = path.join(home, ".cursor", "projects");
-    const sock = cli.cursorSocketDir(projects, fs.realpathSync(ws));
-    assert.ok(!path.basename(sock).endsWith(path.basename(ws)), "the cut name does not end with the folder's name");
-    fs.mkdirSync(sock, { recursive: true });
-    const other = path.join(projects, path.basename(sock).slice(0, -7) + "0000000");
-    fs.mkdirSync(other, { recursive: true });
-    assert.equal(cli.removeCursorTraces(ws, home), "removed");
-    assert.deepEqual(fs.readdirSync(projects), [path.basename(other)]);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(deep, { recursive: true, force: true });
-  }
+test("--rules: a rules.json's severities and switched-off checks; rows it cannot apply are named on stderr", async () => {
+  const rules = file(
+    "rules.json",
+    J({
+      schema: "sessionlens/rules@1",
+      rules: [{ check: "no_spec", severity: "low" }, { check: "stop_markers_missing", enabled: false }, { check: "no_such_check" }],
+    }),
+  );
+  const r = await cli(["analyze", "honest.jsonl", "--profile", "qa-ts", "--rules", rules, "--fail-on", "yellow"]);
+  assert.equal(r.code, 0);
+  assert.match(r.out, /Verdict: Green/);
+  assert.match(r.out, /\nlow +no_spec /);
+  assert.doesNotMatch(r.out, /stop_markers_missing/);
+  assert.equal(r.err, "sessionlens: rules.json: rule 3 (no_such_check) is ignored: unknown_check\n");
 });
 
-test("checkCursor: `agent status` exits 0 signed in or not, so its text decides", { skip: process.platform === "win32" }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-fake-agent-"));
-  const bin = path.join(dir, "agent");
-  const write = (status) =>
-    fs.writeFileSync(
-      bin,
-      `#!${process.execPath}
-process.stdout.write(process.argv[2] === "--version" ? "2026.10.01-e373342\\n" : ${JSON.stringify(status)}); process.exit(0);
-`,
-      { mode: 0o755 },
-    );
-  try {
-    write("\u001b[32m✓\u001b[0m Logged in as qa@example.com\n");
-    let r = await cli.checkCursor({ cliPath: bin });
-    assert.deepEqual([r.installed, r.version, r.loggedIn, r.account], [true, "2026.10.01", true, "qa@example.com"]);
-    write("Not logged in\n");
-    r = await cli.checkCursor({ cliPath: bin });
-    assert.deepEqual([r.installed, r.loggedIn, r.account], [true, false, ""]);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+test("colours on a terminal only, not with NO_COLOR or --no-color, and never in --md or --json", async () => {
+  const args = ["analyze", "honest.jsonl", "--profile", "qa-ts"];
+  assert.match((await cli(args, { isTTY: true })).out, /\x1b\[31mVerdict: Red/);
+  assert.doesNotMatch((await cli(args)).out, /\x1b\[/);
+  assert.doesNotMatch((await cli(args, { isTTY: true, env: { NO_COLOR: "1" } })).out, /\x1b\[/);
+  assert.doesNotMatch((await cli([...args, "--no-color"], { isTTY: true })).out, /\x1b\[/);
+  assert.doesNotMatch((await cli([...args, "--md"], { isTTY: true })).out, /\x1b\[/);
 });
 
-test("buildWinCommand: the arguments runCursor passes are accepted", () => {
-  const cmd = cli.buildWinCommand("C:\\Users\\Никита Иванов\\AppData\\Local\\cursor-agent\\agent.cmd", [
-    "-p",
-    "--output-format",
-    "json",
-    "--mode",
-    "ask",
-    "--trust",
-    "--model",
-    "gpt-5.2",
-  ]);
-  assert.ok(cmd && cmd.endsWith('"--mode" "ask" "--trust" "--model" "gpt-5.2"'), cmd);
+test("the bin: the exit code of the process; an engine that does not load is exit 2", () => {
+  const sh = (args, pre = []) => spawnSync(process.execPath, [...pre, BIN, ...args], { encoding: "utf8", cwd: dir });
+  const v = sh(["--version"]);
+  assert.equal(v.status, 0);
+  assert.equal(v.stdout, Lens.ANALYSIS_VERSION + "\n");
+  assert.equal(sh(["analyze", "honest.jsonl", "--profile", "qa-ts", "--fail-on", "red"]).status, 1);
+  assert.equal(sh(["analyze", "honest.jsonl", "--profile", "qa-ts", "--ci", "--fail-on", "red"]).status, 0);
+  // the loader replaced by one that fails, before the CLI loads it
+  const stub = file(
+    "failing-engine.js",
+    `require.cache[${J(path.join(root, "cli", "lib", "engines.js"))}] = { exports: { loadEngine: async () => ({ state: "failed", error: "no bundle" }) } };\n`,
+  );
+  const r = sh(["analyze", "honest.jsonl", "--profile", "qa-ts"], ["--require", path.join(dir, stub)]);
+  assert.equal(r.status, 2);
+  assert.equal(r.stderr, "sessionlens: the typescript lint engine did not load: no bundle\n");
+  assert.equal(r.stdout, "");
 });

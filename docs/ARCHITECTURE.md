@@ -169,6 +169,8 @@ test/                 node --test: unit, DOM (jsdom + fake vscode), snapshots in
 test-integration/     a real VS Code (@vscode/test-electron)
 perf/                 performance runs and snapshot generators
 cli/                  the command-line tool (phase 11, in progress; not in the .vsix)
+  bin/sessionlens.js  the command; hands the process to lib/cli.js
+  lib/cli.js          sessionlens analyze <log> --profile <name>: flags, reading the files, the analysis, exit codes
   lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
 scripts/              build-webview.js, check-vsix.js, release-notes.js
