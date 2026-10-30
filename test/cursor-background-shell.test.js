@@ -73,6 +73,14 @@ const runs = (text) =>
 
 test("a run moved to the background: the await's exit code and the terminal file's output are its result", () => {
   assert.deepEqual(runs(log(RUN(741739), AWAIT(741739, 1), READ(741739, FULL))), ["2 passed / 1 failed"]);
+  // a later look at the file's head (offset, limit) is no output: the whole read stays (a real run in the lab)
+  const head = call(
+    "r2",
+    "readToolCall",
+    { path: "/home/runner/.cursor/projects/x/terminals/741739.txt", offset: 1, limit: 5 },
+    { success: { content: "---\npid: 3294\n" } },
+  );
+  assert.deepEqual(runs(log(RUN(741739), AWAIT(741739, 1), READ(741739, FULL), head)), ["2 passed / 1 failed"]);
 });
 
 test("without the await and the file its result is unknown, not green; another shell's file is not its own", () => {

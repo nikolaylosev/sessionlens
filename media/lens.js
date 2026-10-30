@@ -1839,7 +1839,7 @@
     const lines = [];
     /* A Shell call the CLI moved to the background when it ran past its timeout (backgroundReason, 30 s in CI; a test
        run waiting for an element does): its exit code 0 and its stdout are only what it had by then. The agent's
-       await of its shellId (awaitToolCall: complete, exitCode) and a read of the CLI's file of its output
+       await of its shellId (awaitToolCall: complete, exitCode) and a whole read of the CLI's file of its output
        (terminals/<shellId>.txt) give the real ones (0.1.132). Without either the result is unknown, not green. */
     const late = {};
     for (const r of recs) {
@@ -1851,7 +1851,8 @@
         if (Number.isInteger(code)) (late[String(ok.complete.taskId)] ||= {}).exitCode = code;
       }
       const term = c.kind === "readToolCall" && /[\\/]terminals[\\/](\d+)\.txt$/.exec(String((c.args && c.args.path) || ""));
-      if (term && typeof ok.content === "string") (late[term[1]] ||= {}).output = ok.content;
+      // a part of the file (offset, limit: a look at its head) is not its output
+      if (term && typeof ok.content === "string" && c.args.offset == null && c.args.limit == null) (late[term[1]] ||= {}).output = ok.content;
     }
     for (const r of recs) {
       if (!r.call) {

@@ -2681,7 +2681,7 @@ var require_lens = __commonJS({
             if (Number.isInteger(code)) (late[String(ok.complete.taskId)] ||= {}).exitCode = code;
           }
           const term = c.kind === "readToolCall" && /[\\/]terminals[\\/](\d+)\.txt$/.exec(String(c.args && c.args.path || ""));
-          if (term && typeof ok.content === "string") (late[term[1]] ||= {}).output = ok.content;
+          if (term && typeof ok.content === "string" && c.args.offset == null && c.args.limit == null) (late[term[1]] ||= {}).output = ok.content;
         }
         for (const r of recs) {
           if (!r.call) {
