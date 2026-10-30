@@ -293,28 +293,9 @@ export function initCalibration() {
 }
 
 // ---------- export ----------
-// which model found a model finding, and which one verified it (0.1.115); nothing for the other sources
-const modelOf = (f) => Object.assign({}, f.model ? { model: f.model } : {}, f.verifier ? { verifier: f.verifier } : {});
+// which model found a model finding, and which one verified it (media/report.js)
+const modelOf = (f) => LensReport.modelOf(f);
 
-/* 0.1.116: what calibration hides is in the reports too, so a green report does not read as "nothing found".
-   Each hidden finding carries the record that hid it (s.suppressed: precision and verdicts of its check and source). */
-function hiddenRows(s) {
-  const why = new Map((s.suppressed || []).map((x) => [x.check + "|" + x.source, x]));
-  return (s.calibHidden || []).map((f) => {
-    const src = f.source || "formal",
-      w = why.get(f.check + "|" + src);
-    return {
-      check: f.check,
-      severity: f.severity,
-      seq: f.seq,
-      message: f.message,
-      source: src,
-      precision: w ? w.precision : null,
-      verdicts: w ? w.n : null,
-      verdict: s.verdicts[fkey(f)] || null,
-    };
-  });
-}
 // the PR report names the hidden high findings one by one and counts the rest; nothing when calibration hid nothing
 function hiddenMd(rows, sev) {
   if (!rows.length) return [];
@@ -331,29 +312,9 @@ function hiddenMd(rows, sev) {
   ];
 }
 
+// the Report .json, shared with the CLI (media/report.js)
 export function reportObj(s) {
-  return {
-    schema: "sessionlens/finding@1",
-    session: s.name,
-    task: s.task,
-    profile: s.profile,
-    created: s.created,
-    verdict: Lens.verdict(s.findings),
-    metrics: s.metrics,
-    spec: s.specParsed,
-    findings: s.findings.map((f) => ({
-      check: f.check,
-      severity: f.severity,
-      seq: f.seq,
-      message: f.message,
-      evidence: f.evidence || null,
-      source: f.source || "formal",
-      ...modelOf(f),
-      verdict: s.verdicts[fkey(f)] || null,
-    })),
-    hiddenByCalibration: hiddenRows(s),
-    dropped: s.dropped || [],
-  };
+  return LensReport.json(s);
 }
 
 export function highWithoutVerdict(s) {

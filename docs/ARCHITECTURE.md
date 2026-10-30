@@ -141,6 +141,7 @@ media/                everything the webview loads (also required by Node tests)
   spec.js             specification parsing and coverage
   analyze.js          the analysis of one session: every track joined, calibration, Rules overrides; shared by the
                       panel and the CLI (RA §3)
+  report.js           the Report .json (sessionlens/finding@1), shared by the panel's export and the CLI's --json
   ai.js               model review: providers table, prompts, tasks, verify, queue
   segment.js          model-based segmentation of a session
   dialogs.js          in-page dialogs (the webview has no modal dialogs)
@@ -169,6 +170,7 @@ test-integration/     a real VS Code (@vscode/test-electron)
 perf/                 performance runs and snapshot generators
 cli/                  the command-line tool (phase 11, in progress; not in the .vsix)
   lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)
+  lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
 scripts/              build-webview.js, check-vsix.js, release-notes.js
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX)
 ```

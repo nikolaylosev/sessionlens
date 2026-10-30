@@ -23,6 +23,7 @@ const SCRIPT_FILES = [
   "rules.js",
   "spec.js",
   "analyze.js",
+  "report.js",
   "ai.js",
   "segment.js",
   "dialogs.js",
