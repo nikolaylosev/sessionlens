@@ -139,6 +139,8 @@ media/                everything the webview loads (also required by Node tests)
   tree-sitter.js      web-tree-sitter runtime (vendored)
   rules.js            the rule book: text, severity, on/off; apply() of the user's overrides (RA §4)
   spec.js             specification parsing and coverage
+  analyze.js          the analysis of one session: every track joined, calibration, Rules overrides; shared by the
+                      panel and the CLI (RA §3)
   ai.js               model review: providers table, prompts, tasks, verify, queue
   segment.js          model-based segmentation of a session
   dialogs.js          in-page dialogs (the webview has no modal dialogs)
@@ -154,7 +156,7 @@ src/webview/          the panel's source, bundled by esbuild into media/app.js (
   index.js main.js    entry, start-up, refresh
   sessions.js         Sessions tab: import, profile, demo, list
   review.js           a session's tab: findings, verdicts, spec, segmentation, timeline, coverage
-  analysis.js         analyzeNow(): the analysis pipeline
+  analysis.js         analyzeNow(): media/analyze.js with the panel's settings, calibration and Rules tab
   calibration.js      Calibration tab, exports, rules for CLAUDE.md / AGENTS.md / .cursor/rules, compress, skill
   rules.js            Rules tab
   prompts.js          Model rules tab
@@ -185,6 +187,7 @@ flowchart TB
     LINT[lint.js] --> CHK
     RULES[rules.js] --> CHK
     SPEC[spec.js]
+    ANZ[analyze.js] --> LENS & LINT & RULES & SPEC
     AI[ai.js]
     SEG[segment.js] --> AI
   end
@@ -592,7 +595,9 @@ so it never drifts from the code (RA §8.4).
 
 ### 6.3 Analysis pipeline
 
-`analyzeNow(s)` in `src/webview/analysis.js` is the only place where all tracks meet (RA §3):
+`LensAnalyze.analyze(s, opts)` in `media/analyze.js` is the only place where all tracks meet (RA §3). The panel calls it
+from `analyzeNow(s)` in `src/webview/analysis.js` with its settings, calibration and Rules tab; the CLI (phase 11)
+calls the same function:
 
 ```mermaid
 flowchart LR
@@ -645,7 +650,7 @@ rule ids map to check names through one `*_RULE_MAP` per language.
 
 ```mermaid
 flowchart LR
-  A[analyzeNow] --> R[LensLint.run]
+  A[LensAnalyze.analyze] --> R[LensLint.run]
   R --> E{"engine of cfg.language"}
   E -->|typescript / javascript| P[vendor-eslint.js<br/>eslint-plugin-playwright]
   E -->|cypress| C[vendor-eslint-cypress.js]

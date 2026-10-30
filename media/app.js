@@ -132,32 +132,7 @@
     }
   }
   function analyzeNow(s) {
-    const cfg = Lens.profile(s.profile);
-    const formal = Lens.runChecks(s.events, cfg);
-    const gherkin = Lens.gherkinChecks(s.events);
-    const spec = LensSpec.parse(s.spec || "");
-    const sc = LensSpec.checks(spec, s.events, cfg.language);
-    const ai = (s.findings || []).filter((f) => f.source === "ai");
-    let base = formal;
-    s.lintNote = "";
-    delete s.lintPending;
-    if (state.settings.lint !== false) {
-      const lr = LensLint.run(s, cfg, state.settings);
-      s.lintNote = lr.note;
-      s.lintWhy = lr.why || [];
-      s.lintLog = lr.log || [];
-      if (lr.pending) s.lintPending = true;
-      if (lr.ran) base = LensLint.merge(formal, lr.findings, Lens.lintLanguage(cfg));
-    }
-    const cal = Lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai], calibStatsBySource(), state.ruleOverrides);
-    s.findings = Lens.sortFindings(LensRules.apply(cal.findings, state.ruleOverrides));
-    s.coverage = sc.coverage;
-    s.specParsed = { n: spec.requirements.length, oos: spec.outOfScope.length, hasIds: spec.requirements.some((r) => !r.auto) };
-    s.suppressed = cal.suppressed;
-    s.calibHidden = cal.hidden;
-    Lens.carryVerdicts(s);
-    s.metrics = Lens.metrics(s.events, cfg);
-    s.task = s.task || Lens.taskId(s.events);
+    LensAnalyze.analyze(s, { settings: state.settings, calibStats: calibStatsBySource(), overrides: state.ruleOverrides });
     state.gens[s.id] = s.lintPending ? "" : genNow();
   }
 

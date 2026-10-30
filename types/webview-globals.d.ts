@@ -6,6 +6,7 @@ declare const LensChecks: any;
 declare const LensLint: any;
 declare const LensRules: any;
 declare const LensSpec: any;
+declare const LensAnalyze: any;
 declare const LensDemo: any;
 declare const LensAI: any;
 declare const LensSeg: any;
