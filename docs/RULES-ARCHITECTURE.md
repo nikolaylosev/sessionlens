@@ -110,12 +110,13 @@ finding card, `sortFindings`, `LensRules.apply`).
 
 ## 3. Five independent sources of findings
 
-`analyzeNow(s)` in `src/webview/analysis.js` (bundled into `media/app.js`, §19; `analyze(s)` only times it)
-collects findings from **five** independent tracks and joins them into one array BEFORE
-calling `LensRules.apply()`. The join, shortened:
+`LensAnalyze.analyze(s, opts)` in `media/analyze.js` collects findings from **five** independent tracks and joins them into one array BEFORE
+calling `LensRules.apply()`. It reads no panel state: the panel's `analyzeNow(s)` in `src/webview/analysis.js`
+(bundled into `media/app.js`, §19; `analyze(s)` there only times it) passes its settings, the verdict counts and the
+Rules tab's overrides as `opts`, and the CLI (phase 11) calls the same function. The join, shortened:
 
 ```js
-function analyzeNow(s) {
+function analyze(s, { settings, calibStats, overrides }) {
   const cfg = Lens.profile(s.profile);
   const formal  = Lens.runChecks(s.events, cfg);               // 1. regex checks, depend on the profile
   const gherkin = Lens.gherkinChecks(s.events);                 // 2. .feature files, do NOT depend on the profile
@@ -123,13 +124,13 @@ function analyzeNow(s) {
   const sc      = LensSpec.checks(spec, s.events, cfg.language);// 3. specification ↔ tests
   const ai      = (s.findings || []).filter(f => f.source === "ai"); // 4. model review (computed earlier)
   let base = formal;
-  if (state.settings.lint !== false) {
-    const lr = LensLint.run(s, cfg, state.settings);            // 5. ESLint/tree-sitter/custom-parser engines
+  if (settings.lint !== false) {
+    const lr = LensLint.run(s, cfg, settings);                  // 5. ESLint/tree-sitter/custom-parser engines
     if (lr.ran) base = LensLint.merge(formal, lr.findings, cfg.language); // only what that engine finds itself (§6.3)
   }
   const cal = Lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai],     // calibration per check and source
-                             calibStatsBySource(), state.ruleOverrides);       // (since v0.1.112, §5.2)
-  s.findings = Lens.sortFindings(LensRules.apply(cal.findings, state.ruleOverrides));
+                             calibStats, overrides);                           // (since v0.1.112, §5.2)
+  s.findings = Lens.sortFindings(LensRules.apply(cal.findings, overrides));
   s.suppressed = cal.suppressed; s.calibHidden = cal.hidden;
 }
 ```
@@ -154,9 +155,9 @@ The key properties of this function that matter for review:
   findings stay as they are and nothing is replaced. This is the
   "graceful degradation" contract examined in §7.
 
-After `apply()`, `analyzeNow` stores `coverage`, `specParsed`, `metrics` and `task`, and calls
-`Lens.carryVerdicts(s)` (§8.2). While an engine is still loading it sets `lintPending` and leaves
-the session's generation empty, so the session is analyzed again (§7).
+After `apply()`, `analyze` stores `coverage`, `specParsed`, `metrics` and `task`, and calls
+`Lens.carryVerdicts(s)` (§8.2). While an engine is still loading it sets `lintPending`; the panel's `analyzeNow` then
+leaves the session's generation empty, so the session is analyzed again (§7).
 
 ---
 
@@ -720,7 +721,7 @@ summary stores the `analyzedGen` its findings were computed with.
   session tab does it when it opens. Until 0.1.116 the version was not part of `analysisGen`, as in 0.1.100: a session
   kept the findings of the version that analyzed it, and the new checks of 0.1.113 and 0.1.114 did not show up in it
   until a Rules edit.
-- **Verdicts across a rewording.** `analyzeNow()` ends with `Lens.carryVerdicts(s)`: a verdict whose key (`fkey`:
+- **Verdicts across a rewording.** `LensAnalyze.analyze()` ends with `Lens.carryVerdicts(s)`: a verdict whose key (`fkey`:
   check, step, the first 40 characters of the message) no longer matches a finding moves to the finding of the same
   check and step, if exactly one such finding has no verdict of its own (shown or in `calibHidden`). So a finding a new
   version words differently keeps its verdict and its weight in calibration; a finding that is gone keeps nothing.
@@ -874,7 +875,7 @@ the two heuristic spec checks; not `no_spec`, `spec_uncovered` or the model's `a
 
 Take `unannotated_test_method` for the `qa-java` profile.
 
-1. The user imports a transcript with `qa-java`. `analyzeNow(s)` calls
+1. The user imports a transcript with `qa-java`. `LensAnalyze.analyze(s)` calls
    `Lens.profile("qa-java")` → `cfg.language === "java"`.
 2. `Lens.runChecks(s.events, cfg)` iterates over `cfg.checks`
    (`[...METHOD, ...PROCESS, ...CODE]`), sees the name `unannotated_test_method`
@@ -1017,11 +1018,12 @@ Closed items are kept for the record. The list was opened at v0.1.98; later item
 | `media/lint-robot.js` | A line-based Robot Framework parser of its own, its own rules, synchronous |
 | `media/vendor-eslint*.js` | ESLint bundles (ready-made/built), their own rules |
 | `media/spec.js` | 4 checks where the specification meets the tests; which tests are found (§17) |
+| `media/analyze.js` | `LensAnalyze.analyze()`: the five tracks joined, calibration, `apply()` (§3); no panel state, shared by the panel and the CLI |
 | `media/demo-session.js` | `LensDemo` (since v0.1.110): the made-up transcript and specification behind "Try a demo session"; imported like a picked file, with a fixed id; `test/demo-session.test.js` pins its findings |
 | `media/ai.js` | 7 model review checks, prompts, the model's answer schema |
 | `media/i18n.js` | All `r_<check>`/`<check>_msg`/`g_<group>` texts; `I18N.has(lang, key)` for tests |
 | `test/` | `rules-consistency` (registry ↔ detectors ↔ i18n), `finding-pipeline` (one finding per source), `book-snapshot`, `render-snapshot`, `spec-extract`, `profile-info` |
-| `src/webview/*.js` → `media/app.js` | The panel. `analyzeNow()` in `analysis.js` (joining the 5 tracks), `renderRules()`, `saveRules()`, export to `CLAUDE.md`, `AGENTS.md` or `.cursor/rules/sessionlens.mdc`, UI filters by `source`. `media/app.js` is generated (§19) |
+| `src/webview/*.js` → `media/app.js` | The panel. `analyzeNow()` in `analysis.js` (`media/analyze.js` with the panel's settings, calibration and Rules tab), `renderRules()`, `saveRules()`, export to `CLAUDE.md`, `AGENTS.md` or `.cursor/rules/sessionlens.mdc`, UI filters by `source`. `media/app.js` is generated (§19) |
 | `store.js` | Sessions in files: writing through a temporary file and rename, `rev`, summaries (`*.meta.json`), reconciliation on open (see §15) |
 | `validate.js` | The trust boundary: the table of validators of webview → host messages, the storage key whitelist, checking skill paths (see §14) |
 | `extension.js` | The host: webview messages, VS Code settings (`CONFIG_SETTINGS`), palette and tree commands, the Sessions tree, the Output channel, host strings through `t()` (see §16) |
@@ -1506,7 +1508,7 @@ everywhere (`.gitattributes`), so the check gives the same answer on Windows.
 |---|---|
 | `common.js` | helpers (`$`, `esc`, `T`), theme, the small-keys store, `state` |
 | `store.js` | sessions in the host's store, `updateSession`, the background pass, calibration stats |
-| `analysis.js` | `analyze()` / `analyzeNow()` |
+| `analysis.js` | `analyze()` / `analyzeNow()`: timing, and `media/analyze.js` with the panel's state |
 | `sessions.js` | navigation, import, the Sessions tab and the profile details (§8.4) |
 | `review.js` | a session's tab: review, specification, model segmentation |
 | `calibration.js` | export of verdicts and the Calibration tab |

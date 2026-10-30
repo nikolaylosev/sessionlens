@@ -55,6 +55,7 @@ test("the page lists only the core scripts; extension.js hands over every engine
     "lint.js",
     "rules.js",
     "spec.js",
+    "analyze.js", // the analysis of a session, shared with the CLI (phase 11)
     "ai.js",
     "segment.js",
     "dialogs.js",

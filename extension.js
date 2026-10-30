@@ -22,6 +22,7 @@ const SCRIPT_FILES = [
   "lint.js",
   "rules.js",
   "spec.js",
+  "analyze.js",
   "ai.js",
   "segment.js",
   "dialogs.js",

@@ -19,35 +19,10 @@ export function analyze(s, event) {
   }
 }
 
+/* The analysis itself is media/analyze.js, shared with the CLI; the panel gives it its settings, calibration and
+   Rules tab, and keeps which rules the result was computed with. */
 export function analyzeNow(s) {
-  const cfg = Lens.profile(s.profile);
-  const formal = Lens.runChecks(s.events, cfg);
-  const gherkin = Lens.gherkinChecks(s.events); // profile-agnostic: runs on any .feature file regardless of s.profile
-  const spec = LensSpec.parse(s.spec || "");
-  const sc = LensSpec.checks(spec, s.events, cfg.language);
-  const ai = (s.findings || []).filter((f) => f.source === "ai");
-  let base = formal;
-  s.lintNote = "";
-  delete s.lintPending;
-  if (state.settings.lint !== false) {
-    const lr = LensLint.run(s, cfg, state.settings);
-    s.lintNote = lr.note;
-    s.lintWhy = lr.why || [];
-    s.lintLog = lr.log || [];
-    if (lr.pending) s.lintPending = true; // the engine is still loading here: not a final result (see below)
-    if (lr.ran) base = LensLint.merge(formal, lr.findings, Lens.lintLanguage(cfg)); // supersede only when the linter actually parsed
-  }
-  // phase 8: calibration per check and source, after the merge (a superseded regex finding is gone before it) and
-  // before the Rules tab's overrides
-  const cal = Lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai], calibStatsBySource(), state.ruleOverrides);
-  s.findings = Lens.sortFindings(LensRules.apply(cal.findings, state.ruleOverrides));
-  s.coverage = sc.coverage;
-  s.specParsed = { n: spec.requirements.length, oos: spec.outOfScope.length, hasIds: spec.requirements.some((r) => !r.auto) };
-  s.suppressed = cal.suppressed;
-  s.calibHidden = cal.hidden; // what an "off" check found: counted for calibration, never shown
-  Lens.carryVerdicts(s); // a verdict on a finding the new version words differently stays with it (0.1.116)
-  s.metrics = Lens.metrics(s.events, cfg);
-  s.task = s.task || Lens.taskId(s.events);
+  LensAnalyze.analyze(s, { settings: state.settings, calibStats: calibStatsBySource(), overrides: state.ruleOverrides });
   // which rules these findings were computed with; "" (not analyzed) while the lint engine was still loading, so
   // ensureFresh() and the background pass analyze it again (phase 5)
   state.gens[s.id] = s.lintPending ? "" : genNow();
