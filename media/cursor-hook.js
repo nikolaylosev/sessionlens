@@ -1177,7 +1177,8 @@ var require_lens = __commonJS({
       const KW = {
         plan_markers: ["| Требование", "| Requirement", "ПЛАН", "PLAN"],
         /* Since 0.1.127 also the plain words for whose error it is, as Playwright's healer writes them ("Test problem.",
-           "Typo in the test.") */
+           "Typo in the test."); since 0.1.132 the words for an assertion that is wrong, as a Cursor agent wrote them in CI
+           ("Two assertion bugs: the counter should be …") */
         triage_markers: [
           "гипотез",
           "баг продукта",
@@ -1194,6 +1195,14 @@ var require_lens = __commonJS({
           "bug in the test",
           "error in the test",
           "the test is wrong",
+          "the tests are wrong",
+          "assertion bug",
+          "wrong assertion",
+          "incorrect assertion",
+          "assertion is wrong",
+          "assertions are wrong",
+          "wrong expectation",
+          "broken test",
           "application defect",
           "application bug",
           "app defect",
@@ -1206,6 +1215,11 @@ var require_lens = __commonJS({
           "опечатка в тесте",
           "ошибка в тесте",
           "тест неверн",
+          "тесты неверн",
+          "неверная проверка",
+          "неверный ассерт",
+          "ошибка в ассерт",
+          "ошибка в проверке",
           "дефект приложения",
           "баг приложения",
           "ошибка приложения",
