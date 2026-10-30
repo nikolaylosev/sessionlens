@@ -1,13 +1,12 @@
 "use strict";
-/* Phase 5: LensLint.run() of a checkout's media/lint.js, with the REAL engines (the three ESLint bundles through vm,
-   the three tree-sitter engines booted in Node from the .wasm files of this checkout), over one small session per
-   language. Prints { profile: { ran, note, findings } } as JSON.
+/* Phase 5: LensLint.run() of a checkout's media/lint.js, with the REAL engines (the three ESLint bundles, the three
+   tree-sitter engines and Ruff, loaded and booted in Node by the CLI's loader from this checkout's files), over one
+   small session per language. Prints { profile: { ran, note, findings } } as JSON.
    node perf/snapshot-lint.js <root> > test/__snapshots__/lint-v0101.json   (root: a 0.1.101 checkout)
    The test compares the current lint.js with that file: once an engine is loaded, lazy loading must not change what
    run() reports. For the current checkout, SL_UPDATE_SNAPSHOTS=1 npm test writes the same file (test/lazy-engines.test.js). */
-const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const { loadEngine } = require("../cli/lib/engines");
 
 const MEDIA = path.join(__dirname, "..", "media"); // the engines: vendor files, identical in both checkouts
 
@@ -111,30 +110,13 @@ function transcript(file, content) {
 }
 
 let engines = null;
+// every engine, through the CLI's loader (cli/lib/engines.js), so the tests that use this exercise it too
 async function loadEngines() {
   if (engines) return engines;
-  // the Cypress bundle reads __dirname while it initializes (a leftover of a Node module it carries); a webview has a
-  // harmless one via the bundle's own shim, Node's vm context has none
-  if (typeof global.__dirname === "undefined") global.__dirname = MEDIA;
-  for (const f of ["vendor-eslint.js", "vendor-eslint-cypress.js", "vendor-eslint-detox.js"])
-    vm.runInThisContext(fs.readFileSync(path.join(MEDIA, f), "utf8"), { filename: f });
-  global.TreeSitter = require(path.join(MEDIA, "tree-sitter.js"));
-  global.LensLintJava = require(path.join(MEDIA, "lint-java.js"));
-  global.LensLintCSharp = require(path.join(MEDIA, "lint-csharp.js"));
-  global.LensLintRuff = require(path.join(MEDIA, "lint-ruff.js")); // Ruff, booted by LensLintPython (0.1.129)
-  global.LensLintPython = require(path.join(MEDIA, "lint-python.js"));
-  global.LensLintRobot = require(path.join(MEDIA, "lint-robot.js"));
-  const core = () => path.join(MEDIA, "tree-sitter.wasm");
-  await global.LensLintJava.boot({ locateCore: core, javaWasmUrl: path.join(MEDIA, "tree-sitter-java.wasm") });
-  await global.LensLintCSharp.boot({ locateCore: core, csharpWasmUrl: path.join(MEDIA, "tree-sitter-c_sharp.wasm") });
-  await global.LensLintPython.boot({
-    locateCore: core,
-    pythonWasmUrl: path.join(MEDIA, "tree-sitter-python.wasm"),
-    ruffWasmBytes: fs.readFileSync(path.join(MEDIA, "ruff.wasm")),
-  });
-  if (!global.LensLintRuff.isReady()) throw new Error(`LensLintRuff did not boot: ${global.LensLintRuff.bootError()}`);
-  for (const g of ["LensLintJava", "LensLintCSharp", "LensLintPython"])
-    if (!global[g].isReady()) throw new Error(`${g} did not boot: ${global[g].bootError()}`);
+  for (const language of ["typescript", "cypress", "detox", "java", "csharp", "python", "robot"]) {
+    const r = await loadEngine(language, { dir: MEDIA });
+    if (r.state !== "ready") throw new Error(`the ${language} engine did not load: ${r.error}`);
+  }
   engines = true;
   return engines;
 }
