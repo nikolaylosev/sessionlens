@@ -8,6 +8,14 @@
   the cache gave 174k), with the model the run used, and the cost when your `sessionlens.tokenPrices` has its price.
   Until now such a session showed no tokens.
 
+### Fixed
+- **A test whose title has a quote in it is a test.** A JavaScript or TypeScript test's title could hold no quote at
+  all: `test('TODO-01: the counter reads "1 todo left"', …)`, `it("keeps the user's cart", …)` or
+  `test('can\'t log in', …)` was no test. So a specification's requirements named in such titles had "no test" (a
+  Cursor agent in CI named five tests this way, and all five requirements were reported uncovered), and a deleted
+  or weakened test with such a title was not seen. Now the title runs to its own closing quote, and an escaped quote
+  is part of it.
+
 ## 0.1.131
 
 ### Fixed
