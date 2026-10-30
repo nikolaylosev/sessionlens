@@ -9,6 +9,9 @@
   Until now such a session showed no tokens.
 
 ### Fixed
+- **"Assertion bug" is a triage.** After a red run, an agent that says the assertion was the mistake ("Two assertion
+  bugs: the counter should be …", "wrong assertion", "the tests are wrong", "неверная проверка") has said whose error
+  it is; such a session got a high "Edited right after a failure with no triage". Found on a Cursor agent in CI.
 - **A test whose title has a quote in it is a test.** A JavaScript or TypeScript test's title could hold no quote at
   all: `test('TODO-01: the counter reads "1 todo left"', …)`, `it("keeps the user's cart", …)` or
   `test('can\'t log in', …)` was no test. So a specification's requirements named in such titles had "no test" (a

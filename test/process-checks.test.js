@@ -65,6 +65,29 @@ test("fix_after_fail_without_triage, not reported: triage first (English or Russ
   assert.deepEqual(found([TASK, WRITE, RED, ["write", "NOTES.md", "todo\n"]], "fix_after_fail_without_triage"), []);
 });
 
+/* 0.1.132: a wrong assertion named as such is a triage too (a Cursor agent in CI: "Two assertion bugs: the counter
+   should be …"), in English and in Russian. */
+test("fix_after_fail_without_triage, not reported: the assertion named as the mistake", () => {
+  for (const said of [
+    'Two assertion bugs: the counter should be "2 items left".',
+    "The tests are wrong: TodoMVC uses the class completed.",
+    "Wrong assertion, the total is 4.",
+    "An incorrect assertion: the app shows 4.",
+    "The assertion is wrong here.",
+    "Both assertions are wrong.",
+    "A wrong expectation in the test.",
+    "This is a broken test.",
+    "Неверная проверка: итог равен 4.",
+    "Неверный ассерт в тесте.",
+    "Ошибка в ассерте: ждём 4.",
+    "Ошибка в проверке итога.",
+    "Тесты неверны: класс completed.",
+  ])
+    assert.deepEqual(found([TASK, WRITE, RED, ["say", said], FIX], "fix_after_fail_without_triage"), [], said);
+  // said before the red run, it is no triage of it
+  assert.equal(found([TASK, WRITE, ["say", "Looks like assertion bugs."], RED, FIX], "fix_after_fail_without_triage").length, 1);
+});
+
 test("peeked_at_src_before_plan: product code read or searched before the plan was approved", () => {
   const peeked = (file) => `high: Read ${file} before the plan was approved — product code is off-limits during generation`;
   assert.deepEqual(found([TASK, ["read", "src/cart.ts"], WRITE], "peeked_at_src_before_plan"), [peeked("src/cart.ts")], "no plan at all");
