@@ -2925,7 +2925,30 @@ var require_lens = __commonJS({
           b.cacheWrite += cacheWrite;
           b.output += output;
         };
-        if (isCursorStreamJson(t)) return null;
+        if (isCursorStreamJson(t)) {
+          const s = { input: 0, cached: 0, cacheWrite: 0, output: 0 }, ms = /* @__PURE__ */ new Set();
+          let model = "";
+          for (const line of t.split("\n")) {
+            if (!line.includes('"usage"') && !line.includes('"init"')) continue;
+            let r;
+            try {
+              r = JSON.parse(line);
+            } catch {
+              continue;
+            }
+            if (r && r.type === "system" && typeof r.model === "string") model = r.model;
+            const u = r && r.type === "result" && r.usage;
+            if (!u || typeof u !== "object") continue;
+            const cached = num2(u.cacheReadTokens), write = num2(u.cacheWriteTokens), input = num2(u.inputTokens) + cached + write, output = num2(u.outputTokens);
+            s.input += input;
+            s.cached += cached;
+            s.cacheWrite += write;
+            s.output += output;
+            if (model) ms.add(model);
+            add(model, input, cached, write, output);
+          }
+          return out({ ...s, requests: null, models: [...ms], byModel });
+        }
         if (isCursorJsonl(t)) {
           const u = opts && opts.cursorUsage;
           if (!u || typeof u !== "object") return null;
@@ -4367,7 +4390,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.131";
+      const ANALYSIS_VERSION = "0.1.132";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

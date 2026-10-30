@@ -419,7 +419,8 @@ Key points:
 - **Usage** (`usage`, 0.1.130) is what `Lens.usageOf` reads from the transcript: input, cached input, cache writes,
   output, requests and models, and per model (`byModel`). Claude Code's `message.usage` is counted once per message
   id (it is repeated on every block of a reply); Codex's `token_count` by its running total, a repeat that only
-  changes the limits not counted; a Cursor session's from the hook's `stop` lines. A Codex transcript also gives the
+  changes the limits not counted; a Cursor session's from the hook's `stop` lines; a Cursor CLI log's (stream-json,
+  0.1.132) from its `result` lines, the cache added back to `inputTokens`, the model from the `system` init line. A Codex transcript also gives the
   share of the subscription's limits it used (`Lens.codexLimits`: the 5-hour and weekly windows, a window that reset
   while the session ran added up). The cost is not stored: `Lens.usageCost` computes it from the person's
   `sessionlens.tokenPrices` (exact model name, else the longest `prefix*`; none when a model has no price).
