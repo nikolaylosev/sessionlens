@@ -351,6 +351,15 @@
   "edited": false
  },
  {
+  "check": "app_faked_in_test",
+  "group": "code",
+  "rule": "A test checks the real app. Never build, patch or replace what the app does to make a test pass: no script that adds to the page what the app lacks, no route that answers the app's own page or code, no copy of the app and no page of your own. If the app cannot pass a test, leave it failing and report the app's defect. Mocking an external API is fine.",
+  "severity": "high",
+  "enabled": true,
+  "good": "leave the test failing and report that the app has no Undo; mock only an external API (route.fulfill with JSON)",
+  "edited": false
+ },
+ {
   "check": "status_only_assert",
   "group": "api",
   "rule": "Assert the body, not just the status. A test that checks only “200” also passes on an empty response or an error page. Check the fields, their types and the headers that matter.",

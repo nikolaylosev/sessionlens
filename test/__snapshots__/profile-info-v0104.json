@@ -202,6 +202,11 @@
       "name": "empty_result_unverified",
       "off": false,
       "engineOnly": false
+     },
+     {
+      "name": "app_faked_in_test",
+      "off": false,
+      "engineOnly": false
      }
     ]
    },
@@ -231,7 +236,7 @@
     ]
    }
   ],
-  "count": 38,
+  "count": 39,
   "engine": {
    "kind": "eslint",
    "state": "on"
@@ -446,6 +451,11 @@
       "name": "empty_result_unverified",
       "off": false,
       "engineOnly": false
+     },
+     {
+      "name": "app_faked_in_test",
+      "off": false,
+      "engineOnly": false
      }
     ]
    },
@@ -475,7 +485,7 @@
     ]
    }
   ],
-  "count": 36,
+  "count": 37,
   "engine": {
    "kind": "eslint-cypress",
    "state": "on"
