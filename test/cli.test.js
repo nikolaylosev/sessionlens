@@ -1,7 +1,7 @@
 "use strict";
 /* sessionlens analyze (phase 11, step 4): cli/lib/cli.js, run in this process with its output captured, and the bin
-   once through a real process. The decisions it carries (TODO §6.1, 30.10): --profile is required; --ci sets no_spec
-   and stop_markers_missing aside unless --spec is given; exit 0 whatever the colour unless --fail-on red|yellow, 1 when
+   once through a real process. The decisions it carries (TODO §6.1, 30.10): --profile is required; --ci sets
+   stop_markers_missing aside, and no_spec without --spec; exit 0 whatever the colour unless --fail-on red|yellow, 1 when
    it matches, 2 when the CLI could not do its work; colours only on a terminal without NO_COLOR or --no-color. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -42,6 +42,7 @@ file("honest.jsonl", HONEST);
 file("sleepy.jsonl", SLEEPY);
 file("spec.md", "# Todos\n\n- R1. A todo can be added.\n");
 file("not-a-log.txt", "");
+file("no-requirements.md", "\n\n");
 
 async function cli(args, io = {}) {
   let out = "",
@@ -93,7 +94,7 @@ test("--help, --version, and what the CLI cannot do: exit 2 with the reason", as
   assert.match(many.err, /holds 2 conversations/);
 });
 
-test("the review: text by default; --ci sets the context aside unless --spec is given; --fail-on decides the exit code", async () => {
+test("the review: text by default; --ci sets the context aside; --fail-on decides the exit code", async () => {
   const base = ["analyze", "honest.jsonl", "--profile", "qa-ts"];
   const plain = await cli(base);
   assert.equal(plain.code, 0, "red, and still 0 without --fail-on");
@@ -104,12 +105,17 @@ test("the review: text by default; --ci sets the context aside unless --spec is 
   const ci = await cli([...base, "--ci", "--fail-on", "yellow"]);
   assert.equal(ci.code, 0, "green once the context is set aside");
   assert.match(ci.out, /Verdict: Green/);
-  assert.match(ci.out, /Context, not counted \(no specification given\): no_spec, stop_markers_missing/);
-  // with a specification, the plan is the agent's again: stop_markers_missing counts
+  assert.match(ci.out, /Context, not counted in CI: no_spec, stop_markers_missing/);
+  // with a specification nobody approves a plan in CI either; outside CI the plan counts
   const spec = await cli([...base, "--ci", "--spec", "spec.md", "--fail-on", "yellow"]);
-  assert.equal(spec.code, 1);
-  assert.match(spec.out, /Verdict: Yellow/);
-  assert.doesNotMatch(spec.out, /Context, not counted/);
+  assert.equal(spec.code, 0);
+  assert.match(spec.out, /Verdict: Green/);
+  assert.match(spec.out, /Context, not counted in CI: stop_markers_missing\n/);
+  assert.match((await cli([...base, "--spec", "spec.md"])).out, /Verdict: Yellow/);
+  // a specification file with nothing in it: no_spec says so, and counts
+  const empty = await cli([...base, "--ci", "--spec", "no-requirements.md", "--fail-on", "red"]);
+  assert.equal(empty.code, 1);
+  assert.match(empty.out, /\nhigh +no_spec /);
   // the engine of the profile's language ran: its finding and the regex one are one, from ESLint
   const sleepy = await cli(["analyze", "sleepy.jsonl", "--profile", "qa-ts", "--ci", "--fail-on", "red", "--json"]);
   assert.equal(sleepy.code, 1);
