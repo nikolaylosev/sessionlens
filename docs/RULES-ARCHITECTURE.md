@@ -1433,7 +1433,9 @@ as TS/JS (as in 0.1.103), `mobile` and `any` try all of their syntaxes. The resu
 cannot be read": it does not take part in coverage. If a session has no readable file at all, `coverage()` returns
 `null`, `checks()` raises neither `spec_uncovered` nor `test_without_requirement`, and the panel shows `no_readable_tests`.
 
-The `typescript` extractor takes `it(…)`/`test(…)` with a title, also with a modifier that still makes a test (`.only`,
+The `typescript` extractor takes `it(…)`/`test(…)` with a title (since 0.1.132 a title may hold the other kinds of
+quotes and escaped ones of its own, as `JS_TEST_TITLE` in `lens.js` for the JS profiles' `test_fn_pattern`; until then
+any quote in it made the test no test), also with a modifier that still makes a test (`.only`,
 `.skip`, `.fixme`, `.fail`, `.slow`, `.concurrent`, `.todo`), and not as the end of another word. A body stops at the
 next test or a `describe`/`context` block. Up to 0.1.109 any `test.<word>(` counted, so `test.describe("…")` was a test
 named after the block (a false `test_without_requirement` in nearly every Playwright file), and a `test.skip(…)` after

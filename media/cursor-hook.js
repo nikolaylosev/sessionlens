@@ -1274,10 +1274,11 @@ var require_lens = __commonJS({
       const NAMED = String.raw`(?:\w+\.)*[A-Z][A-Z0-9_]+\b`;
       const delayCall = (call, num2 = String.raw`\d`) => new RegExp(call + String.raw`\s*\(\s*(?:` + num2 + "|" + NAMED + ")");
       const SET_TIMEOUT = new RegExp(String.raw`setTimeout\s*\([^,]+,\s*(?:\d{3,}|` + NAMED + ")");
+      const JS_TEST_TITLE = /\b(?:it|test)\s*\(\s*(['"`])(?<name>(?:(?!\1)[^\\\n]|\\.)+)\1/g;
       const API_TEST_PATTERNS = [
         /(?:async\s+)?def\s+(test\w*)\s*\(/g,
         /@Test[^\n]*\n(?:\s*@\w+[^\n]*\n)*\s*(?:public\s+)?(?:static\s+)?(?:void|fun)\s+`?(\w[\w ]*?)`?\s*\(/g,
-        /\b(?:it|test)(?:\.\w+)?\s*\(\s*['"`]([^'"`]+)['"`]/g,
+        /\b(?:it|test)(?:\.\w+)?\s*\(\s*(['"`])(?<name>(?:(?!\1)[^\\\n]|\\.)+)\1/g,
         /\[(?:Test|Fact|Theory|TestMethod|TestCase)\b[^\]]*\](?:\s*\[[^\]]*\])*\s*(?:public\s+)?(?:async\s+)?(?:Task|void)\s+(\w+)/g,
         /func\s+(Test\w+)\s*\(/g,
         /\bpm\.test\s*\(\s*\\?['"`]([^'"`\\]+)/g,
@@ -1310,7 +1311,7 @@ var require_lens = __commonJS({
             /expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/g
           ],
           assert_line_patterns: [/\bexpect(?:\.(?:soft|poll))?\s*\(/],
-          test_fn_pattern: /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+          test_fn_pattern: JS_TEST_TITLE,
           /* Playwright's web-first assertions of a value or a state count as strong, so toHaveValue(q) → toBeVisible() is
              weakened, and toBeAttached() is as weak as toBeVisible(). Those two only for the same element: a locator with
              the value in it (locator('body').toContainText(q) → getByText(q).toBeVisible()) is a rewrite (0.1.125) */
@@ -1551,7 +1552,7 @@ var require_lens = __commonJS({
           skip_patterns: [/\b(?:it|describe|context)\.skip\b/],
           weak_assert_patterns: [/\.should\s*\(\s*['"`]exist['"`]\s*\)/g, /expect\s*\(\s*true\s*\)\s*\.to\.be\.true\b/g, /assert\.isTrue\s*\(\s*true\s*\)/g],
           assert_line_patterns: [/\.should\s*\(/, /\bexpect\s*\(/, /\bcy\.wrap\s*\([^)]*\)\.should\b/],
-          test_fn_pattern: /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+          test_fn_pattern: JS_TEST_TITLE,
           weaken_pairs: [[/\.should\s*\(\s*['"`](?:have\.text|contain\.text|have\.value|eq)['"`]/, /\.should\s*\(\s*['"`]exist['"`]\)/]]
         },
         /* Mirrors qa-cypress structurally: single-language (JS/TS + Jest), same generic METHOD/PROCESS/CODE
@@ -1572,7 +1573,7 @@ var require_lens = __commonJS({
           skip_patterns: [/\b(?:it|describe|test)\.skip\b/],
           weak_assert_patterns: [/expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/g],
           assert_line_patterns: [/\bexpect\s*\(/],
-          test_fn_pattern: /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+          test_fn_pattern: JS_TEST_TITLE,
           weaken_pairs: [[/\.(?:toHaveText|toHaveValue|toHaveId)\s*\(/, /\.(?:toBeVisible|toExist)\s*\(\)/]]
         },
         /* Robot Framework's own profile — its tabular, keyword-driven syntax never appears inside another
@@ -1746,7 +1747,8 @@ var require_lens = __commonJS({
         const ms = (Array.isArray(pat) ? pat.flatMap((p) => [...src.matchAll(p)]) : [...src.matchAll(pat)]).sort((a, b) => a.index - b.index);
         ms.forEach((m, i) => {
           const end = i + 1 < ms.length ? ms[i + 1].index : src.length;
-          out[m[1]] = src.slice(m.index, end);
+          const name = m.groups && m.groups.name !== void 0 ? m.groups.name.replace(/\\(['"`\\])/g, "$1") : m[1];
+          out[name] = src.slice(m.index, end);
         });
         return out;
       }
