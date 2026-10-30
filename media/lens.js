@@ -2126,7 +2126,11 @@
      - Claude Code: each reply's message.usage, once per message id (the same usage is on every block of a reply,
        written up to a dozen times); its input_tokens leave out what the cache gave, so input adds both back.
      - Codex: the last token_count's total_token_usage (a running total; input_tokens has the cached part in it).
-     - Cursor Agent: the transcript has none; opts.cursorUsage is the Cursor hook's log of its replies (readLog). */
+     - Cursor Agent: the transcript has none; opts.cursorUsage is the Cursor hook's log of its replies (readLog).
+     - Cursor Agent CLI log (stream-json, 0.1.132): each run's last line, type "result", has usage {inputTokens,
+       outputTokens, cacheReadTokens, cacheWriteTokens}; inputTokens leaves out the cache (15k next to 174k read from
+       it in a real run), so input adds it back. The model is the "system" init line's (often "Auto"); the requests
+       are not known. */
   function usageOf(text, opts) {
     const t = typeof text === "string" ? text.trimStart() : "";
     if (!t.startsWith("{")) return null;
@@ -2142,7 +2146,34 @@
       b.cacheWrite += cacheWrite;
       b.output += output;
     };
-    if (isCursorStreamJson(t)) return null;
+    if (isCursorStreamJson(t)) {
+      const s = { input: 0, cached: 0, cacheWrite: 0, output: 0 },
+        ms = new Set();
+      let model = "";
+      for (const line of t.split("\n")) {
+        if (!line.includes('"usage"') && !line.includes('"init"')) continue;
+        let r;
+        try {
+          r = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (r && r.type === "system" && typeof r.model === "string") model = r.model;
+        const u = r && r.type === "result" && r.usage;
+        if (!u || typeof u !== "object") continue;
+        const cached = num(u.cacheReadTokens),
+          write = num(u.cacheWriteTokens),
+          input = num(u.inputTokens) + cached + write,
+          output = num(u.outputTokens);
+        s.input += input;
+        s.cached += cached;
+        s.cacheWrite += write;
+        s.output += output;
+        if (model) ms.add(model);
+        add(model, input, cached, write, output);
+      }
+      return out({ ...s, requests: null, models: [...ms], byModel });
+    }
     if (isCursorJsonl(t)) {
       const u = opts && opts.cursorUsage;
       if (!u || typeof u !== "object") return null;
@@ -3979,7 +4010,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.131";
+  const ANALYSIS_VERSION = "0.1.132";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")

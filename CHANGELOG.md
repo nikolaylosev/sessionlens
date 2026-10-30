@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.132
+
+### Added
+- **Tokens of a Cursor Agent CLI log.** A log of `agent -p --output-format stream-json`, the way the Cursor CLI runs in
+  CI, ends each run with a line that has its tokens. The metrics now show them (`tokens 189k in · 2k out`, of which
+  the cache gave 174k), with the model the run used, and the cost when your `sessionlens.tokenPrices` has its price.
+  Until now such a session showed no tokens.
+
 ## 0.1.131
 
 ### Fixed

@@ -1,7 +1,8 @@
 "use strict";
 /* The tokens of a session (0.1.130, Lens.usageOf): Claude Code's usage once per reply (the same usage is on every block
    of a reply), its cached input added back; Codex's last running total; a Cursor transcript's from the hook's log
-   (readLog: its stop lines); none for a format that has none; and the same per model. The import keeps them on the
+   (readLog: its stop lines); a Cursor CLI log's (stream-json) from its result lines (0.1.132); none for a format that
+   has none; and the same per model. The import keeps them on the
    session (usage), the session's tab shows them in its metrics with the details on hover, and an older session
    without them shows none. The cost (Lens.usageCost) with the person's own prices (sessionlens.tokenPrices, read only:
    the page never writes them), only when every model of the session has one. */
@@ -142,6 +143,35 @@ test("Cursor: none in the transcript; the hook's stop lines give them; other for
   ].join("\n");
   assert.equal(Lens.usageOf(cli), null);
   assert.equal(Lens.usageOf(J([{ uuid: "c", name: "x", chat_messages: [] }])), null, "a claude.ai export");
+});
+
+test("Cursor CLI log (stream-json): each run's result line, the cache added back to the input; the init line's model", () => {
+  // the shape of a real run in CI (0.1.132): init with the model, the agent's lines, then the result with its usage
+  const run = (model, usage) => [
+    J({ type: "system", subtype: "init", apiKeySource: "env", cwd: "/home/runner/work/lab", session_id: "s1", model, permissionMode: "default" }),
+    J({ type: "user", message: { role: "user", content: [{ type: "text", text: "Write the tests" }] }, session_id: "s1" }),
+    J({ type: "tool_call", subtype: "completed", call_id: "c1", tool_call: { readToolCall: { args: { path: "/home/runner/work/lab/a.ts" } } } }),
+    J({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Done." }], usage: { input_tokens: 999, output_tokens: 999 } } }),
+    J({ type: "result", subtype: "success", duration_ms: 40747, is_error: false, result: "Done.", session_id: "s1", usage }),
+  ];
+  const one = run("Auto", { inputTokens: 15414, outputTokens: 2063, cacheReadTokens: 173824, cacheWriteTokens: 0 });
+  assert.deepEqual(Lens.usageOf(one.join("\n")), {
+    input: 189238,
+    cached: 173824,
+    cacheWrite: 0,
+    output: 2063,
+    requests: null,
+    models: ["Auto"],
+    byModel: { Auto: { input: 189238, cached: 173824, cacheWrite: 0, output: 2063 } },
+  });
+  // two runs in one log: summed, each under its own model
+  const two = [...one, ...run("gpt-5", { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 50 })].join("\n");
+  const u = Lens.usageOf(two);
+  assert.deepEqual([u.input, u.cached, u.cacheWrite, u.output, u.models], [189388, 173824, 50, 2083, ["Auto", "gpt-5"]]);
+  assert.deepEqual(u.byModel["gpt-5"], { input: 150, cached: 0, cacheWrite: 50, output: 20 });
+  // a result without usage, or a run cut off before its result: none
+  assert.equal(Lens.usageOf(one.slice(0, -1).join("\n")), null);
+  assert.equal(Lens.usageOf([...one.slice(0, -1), J({ type: "result", subtype: "success", result: "Done." })].join("\n")), null);
 });
 
 async function until(fn, ms = 8000) {
