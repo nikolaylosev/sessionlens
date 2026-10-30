@@ -4509,7 +4509,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.132";
+      const ANALYSIS_VERSION = "0.1.133";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

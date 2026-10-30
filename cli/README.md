@@ -52,7 +52,7 @@ Give it one session per file.
 | `--profile <name>` | Required. The kind of project: `qa-ts` (Playwright), `qa-cypress`, `qa-detox`, `qa-python`, `qa-java`, `qa-c#`, `qa-api`, `qa-mobile`, `qa-robot`, `qa-generic`. It picks the checks and the lint engine. |
 | `--spec <file>` | The specification the tests should cover. With it, SessionLens checks which requirements have a test. |
 | `--rules <file>` | A `rules.json` exported from the Rules tab of the extension: your team's severities and switched-off checks. |
-| `--ci` | For a session that ran in CI. Nobody was there to give a specification or approve a plan, so the findings `no_spec` and `stop_markers_missing` are listed as context and do not count in the verdict. With `--spec`, they count again. |
+| `--ci` | For a session that ran in CI. Nobody was there to approve the agent's plan, so `stop_markers_missing` (code written without a plan) is listed as context and does not count in the verdict. Without `--spec`, nobody could give a specification either, so `no_spec` is context too. |
 | `--fail-on <level>` | `none` (the default), `red` or `yellow`. Exit with code 1 when the session is that colour or worse. |
 | `--json` | Print the review as JSON (schema `sessionlens/finding@1`, the same file the extension exports). |
 | `--md` | Print the review as Markdown, for a CI job's summary. |
