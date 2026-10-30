@@ -95,7 +95,7 @@ test("the terminal text: the verdict, the counts, the findings by severity, the 
     "high    test_deleted  #3    A failing test was deleted",
     "low     weak_assert   #3    tests/a.spec.ts:4 — expect(<div>).toBeTruthy()",
   ]);
-  assert.ok(lines.includes("Context, not counted (no specification given): no_spec, stop_markers_missing"));
+  assert.ok(lines.includes("Context, not counted in CI: no_spec, stop_markers_missing"));
   assert.doesNotMatch(out, /\x1b\[/);
   const coloured = report.text(session(), { ...OPTS, context: CI, color: true });
   assert.match(coloured, /\x1b\[31mVerdict: Red/);
@@ -116,7 +116,7 @@ test("the Markdown for a job summary: headline lines, findings by severity, cont
     "- 🔴 **high** A failing test was deleted _(seq 3)_ · `test_deleted`",
     "- ⚪ **low** tests/a.spec.ts:4 — expect(&lt;div>).toBeTruthy() _(seq 3)_ · `weak_assert`",
   ]);
-  const ctx = lines.indexOf("### Context, not counted (no specification given)");
+  const ctx = lines.indexOf("### Context, not counted in CI");
   assert.deepEqual(lines.slice(ctx + 1, ctx + 3), [
     "- 🔴 **high** No specification _(seq 3)_ · `no_spec`",
     "- 🟡 **medium** Code written without a plan _(seq 3)_ · `stop_markers_missing`",
