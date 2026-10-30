@@ -12,6 +12,11 @@
 - **"Assertion bug" is a triage.** After a red run, an agent that says the assertion was the mistake ("Two assertion
   bugs: the counter should be …", "wrong assertion", "the tests are wrong", "неверная проверка") has said whose error
   it is; such a session got a high "Edited right after a failure with no triage". Found on a Cursor agent in CI.
+- **A Cursor CLI test run that ran past 30 seconds has its result.** The Cursor CLI moves a command to the background
+  when it runs past its timeout, and the log then says exit code 0 with the output it had by then; the agent waits for
+  it and reads its output later. SessionLens took the run's result as unknown, so a test the agent deleted right after
+  that red run was a medium "test deleted" instead of high. Now the run gets the real exit code and the whole output
+  from the agent's wait and read; without them its result stays unknown, never green.
 - **The failed tests of a Playwright run, from every line that names them.** Only the heading of each error was read
   ("1) [chromium] › … ─────"), with its rule in the name; the reporter's own line ("✘  1 [chromium] › … (5.6s)") was
   not. So when the output was cut before the errors, SessionLens did not know which tests had failed, and "Edited
