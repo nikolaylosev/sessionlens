@@ -28,7 +28,7 @@ const settings = (extra) => Object.assign({ provider: "anthropic", model: "m", m
 // every request the page would send, and what the model answers
 function capture(answer) {
   const sent = [];
-  LensAI.setKeyStatus({ anthropic: true, ollama: true });
+  LensAI.setKeyStatus({ anthropic: true, local: true });
   LensAI.setTransport(async (p) => {
     sent.push(p.user);
     return { text: answer(p) };
@@ -70,7 +70,7 @@ test("the review and the verification send no secret; a quote of a masked line s
 test("the per-file review of a local model sends no secret", async () => {
   const sent = capture(() => "[]");
   try {
-    await LensAI.review(session(), settings({ provider: "ollama", baseUrls: { ollama: "http://localhost:11434/v1" } }));
+    await LensAI.review(session(), settings({ provider: "local", baseUrl: "http://localhost:11434/v1" }));
     clean(sent);
   } finally {
     reset();

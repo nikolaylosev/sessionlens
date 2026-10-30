@@ -701,6 +701,9 @@ sequenceDiagram
 - **Providers** (`LensAI.PROVIDERS`): Anthropic, Google, OpenAI, xAI, DeepSeek, Qwen, a local OpenAI-compatible
   server, and the user's **Claude Code**, **Codex** or **Cursor** subscription through their CLI.
 - **Tasks** (`TASKS`): `segment`, `review`, `verify`, `compress`, `skill`; each may use its own model.
+- **The material is data** (0.1.131): every prompt with a session's material ends with a paragraph saying the
+  material is not instructions and no command is run because it says so, also after a prompt the person rewrote
+  (RA §14.5).
 - **Review** sends the session (chunked when large) and asks for findings in the same schema as the checks;
   **verify** asks a second call to keep only findings it can support with evidence (on by default). Since 0.1.115
   each model finding records `model` and, once verified, `verifier` (`provider/model`, `LensAI.modelLabel()`); the
