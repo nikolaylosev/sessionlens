@@ -84,6 +84,9 @@ Run the agent, save its log, then review it:
 Start without `--fail-on`, read the reports for a while, then add `--fail-on red` when you trust them. Keep the log as
 an artifact: you can open it in the extension later and mark each finding as right or wrong.
 
+A complete workflow with a Cursor agent, ready to copy into `.github/workflows/`:
+[`examples/cursor-agent.yml`](https://github.com/nikolaylosev/sessionlens/blob/main/cli/examples/cursor-agent.yml).
+
 ## What it does not do yet
 
 - No verdicts and no calibration: every check speaks at its default severity. A new check "on trial" is low.

@@ -616,7 +616,8 @@ npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --md >> "$GITHUB_ST
 
 It reads the same logs as the extension and runs the same lint engines. It prints text, Markdown for a CI job's
 summary, or the Report .json, and it uses no network. By default it never fails a build; add `--fail-on red` when you
-trust its reports. It has no verdicts and no model review yet. Its options are in [cli/README.md](cli/README.md).
+trust its reports. It has no verdicts and no model review yet. Its options are in [cli/README.md](cli/README.md), and a
+complete GitHub Actions workflow with a Cursor agent is in [cli/examples/cursor-agent.yml](cli/examples/cursor-agent.yml).
 
 ## Your data
 
