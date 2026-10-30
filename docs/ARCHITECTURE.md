@@ -171,6 +171,7 @@ perf/                 performance runs and snapshot generators
 cli/                  the command-line tool, npm package sessionlens-cli (phase 11; not in the .vsix)
   package.json        "private": scripts/pack-cli.js builds the package to publish (dist/cli), with media/ in it
   README.md           the package's page on npm
+  examples/           cursor-agent.yml: a GitHub Actions workflow, a Cursor agent in CI and SessionLens's review
   bin/sessionlens.js  the command; hands the process to lib/cli.js
   lib/cli.js          sessionlens analyze <log> --profile <name>: flags, reading the files, the analysis, exit codes
   lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)

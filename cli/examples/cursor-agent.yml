@@ -1,0 +1,62 @@
+# An example: a Cursor agent writes tests in CI, then SessionLens reviews its session.
+# Copy this file to .github/workflows/ in your repository and change the setup steps, the profile and the prompt.
+# It needs the repository secret CURSOR_API_KEY, an API key from the Cursor dashboard. Each run uses your Cursor plan.
+name: Agent writes tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: What the agent is asked to do
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Your project's setup: what the agent needs to run the tests.
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Install the Cursor CLI
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> "$GITHUB_PATH"
+
+      # The prompt reaches the shell through env, never pasted into the script. --force lets the agent write files.
+      # stream-json is the log SessionLens reads: every tool call with its result, so test runs have their output.
+      # The log goes outside the working copy, where the agent does not read it while it is being written.
+      - name: The agent writes the tests
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          PROMPT: ${{ inputs.prompt }}
+        run: agent -p "$PROMPT" --force --output-format stream-json > "$RUNNER_TEMP/agent.jsonl"
+
+      # --ci: nobody approved the agent's plan here, so that finding is context, not part of the verdict.
+      # Add --spec <file> if you have a specification, and --fail-on red once you trust the reports.
+      # sessionlens-cli@0.1 is the latest 0.1.x release.
+      - name: SessionLens reviews the session
+        if: always()
+        run: |
+          npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md >> "$GITHUB_STEP_SUMMARY"
+          npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --json > "$RUNNER_TEMP/review.json"
+
+      # Keep the log: open it in the SessionLens extension (Choose file) to mark each finding as right or wrong.
+      - name: Keep the log and the review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-session
+          path: |
+            ${{ runner.temp }}/agent.jsonl
+            ${{ runner.temp }}/review.json
