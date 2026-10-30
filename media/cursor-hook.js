@@ -35,6 +35,7 @@ var require_i18n = __commonJS({
           test_deleted_msg: "{file}: {n} {n|test|tests} deleted: {names}{after}",
           test_file_deleted_msg: "{file}: test file deleted{after}",
           after_red_run: " — right after a failing run (seq {seq})",
+          after_its_red_run: " — its last run failed (seq {seq})",
           product_edited: "{file}: product code changed in a testing task{after}",
           snapshot_cmd: "Snapshots updated: {cmd}{after}",
           snapshot_file: "{file}: snapshot written by hand{after}",
@@ -3583,7 +3584,10 @@ var require_lens = __commonJS({
         /* A test that disappears: from a file between two of its versions in the session, or with the whole file (rm,
            git rm, a deleted file in a Codex patch). Not a deletion: a test renamed with the same body, a test that shows up
            in another file (moved) or again in the same file later (restored). High right after a red run: that is how an
-           agent turns a suite green. Versions are what the session saw (new_content), so a stored session works too. */
+           agent turns a suite green. High too when the last run the test was in its file for was red (0.1.134): in the CI
+           lab an agent deleted a failing test, ran the rest green, put the test back without running it and deleted it
+           again, and the last run before that was green but without the test. Versions are what the session saw
+           (new_content), so a stored session works too. */
         test_deleted(ev, cfg) {
           if (!cfg.test_fn_pattern) return [];
           const tests = (src) => blocksByTest(src, cfg.test_fn_pattern);
@@ -3592,10 +3596,28 @@ var require_lens = __commonJS({
           const seen = versions.flatMap((e) => Object.keys(tests(e.new_content)).map((name) => ({ file: e.file, seq: e.seq, name })));
           const kept = (file, seq, name) => seen.some((t) => t.name === name && (t.file !== file || t.seq > seq));
           const out = [];
-          const push = (key, file, seq, names, red) => {
-            const r = red !== void 0 ? red : redRunBefore(ev, seq);
-            const vars = { file, n: names.length, names: names.join(", "), after: r ? T("after_red_run", { seq: r.seq }) : "" };
+          const push = (key, file, seq, names, red2, own) => {
+            const recent = red2 !== void 0 ? red2 : redRunBefore(ev, seq);
+            const r = recent || own;
+            const after = r ? T(r === recent ? "after_red_run" : "after_its_red_run", { seq: r.seq }) : "";
+            const vars = { file, n: names.length, names: names.join(", "), after };
             out.push(F("test_deleted", r ? "high" : "medium", seq, T(key, vars)));
+          };
+          const red = (run) => run && run.tests && (run.tests.failed || run.tests.errors) ? run : null;
+          const testsAt = (file, seq) => {
+            const before = versions.filter((v) => v.file === file && v.seq < seq);
+            return before.length ? tests(before[before.length - 1].new_content) : null;
+          };
+          const ownRedRun = (file, seq, names) => {
+            const runs = ev.filter((e) => e.kind === "run_tests" && (e.tests || e.output_missing) && e.seq < seq);
+            for (const name of names)
+              for (let i = runs.length - 1; i >= 0; i--) {
+                const t = testsAt(file, runs[i].seq);
+                if (t && !(name in t)) continue;
+                if (red(runs[i])) return runs[i];
+                break;
+              }
+            return null;
           };
           const last = {};
           for (const e of versions) {
@@ -3606,7 +3628,7 @@ var require_lens = __commonJS({
             const om = tests(before), nm = tests(e.new_content);
             const added = Object.keys(nm).filter((k) => !(k in om)).map((k) => norm(nm[k]));
             const gone = Object.keys(om).filter((k) => !(k in nm) && !(norm(om[k]) && added.includes(norm(om[k]))) && !kept(e.file, e.seq, k));
-            if (gone.length) push("test_deleted_msg", e.file, e.seq, gone);
+            if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, void 0, ownRedRun(e.file, e.seq, gone));
           }
           const same = (x, y) => {
             const [a, b] = [homeless(x), homeless(y)];
@@ -4509,7 +4531,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.133";
+      const ANALYSIS_VERSION = "0.1.134";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

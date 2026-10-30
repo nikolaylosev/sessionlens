@@ -29,6 +29,7 @@
       test_deleted_msg: "{file}: {n} {n|test|tests} deleted: {names}{after}",
       test_file_deleted_msg: "{file}: test file deleted{after}",
       after_red_run: " — right after a failing run (seq {seq})",
+      after_its_red_run: " — its last run failed (seq {seq})",
       product_edited: "{file}: product code changed in a testing task{after}",
       snapshot_cmd: "Snapshots updated: {cmd}{after}",
       snapshot_file: "{file}: snapshot written by hand{after}",

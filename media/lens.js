@@ -3044,7 +3044,10 @@
     /* A test that disappears: from a file between two of its versions in the session, or with the whole file (rm,
        git rm, a deleted file in a Codex patch). Not a deletion: a test renamed with the same body, a test that shows up
        in another file (moved) or again in the same file later (restored). High right after a red run: that is how an
-       agent turns a suite green. Versions are what the session saw (new_content), so a stored session works too. */
+       agent turns a suite green. High too when the last run the test was in its file for was red (0.1.134): in the CI
+       lab an agent deleted a failing test, ran the rest green, put the test back without running it and deleted it
+       again, and the last run before that was green but without the test. Versions are what the session saw
+       (new_content), so a stored session works too. */
     test_deleted(ev, cfg) {
       if (!cfg.test_fn_pattern) return [];
       const tests = (src) => blocksByTest(src, cfg.test_fn_pattern);
@@ -3060,11 +3063,33 @@
       // kept: the same test elsewhere at any time (moved) or in the same file after the deletion (restored)
       const kept = (file, seq, name) => seen.some((t) => t.name === name && (t.file !== file || t.seq > seq));
       const out = [];
-      // red: the run the deletion came after, when the step itself ran the tests first (0.1.127); else redRunBefore
-      const push = (key, file, seq, names, red) => {
-        const r = red !== undefined ? red : redRunBefore(ev, seq);
-        const vars = { file, n: names.length, names: names.join(", "), after: r ? T("after_red_run", { seq: r.seq }) : "" };
+      // red: the run the deletion came after, when the step itself ran the tests first (0.1.127); else redRunBefore.
+      // own: the last run the deleted test was in its file for, when that was not the last run (0.1.134)
+      const push = (key, file, seq, names, red, own) => {
+        const recent = red !== undefined ? red : redRunBefore(ev, seq);
+        const r = recent || own;
+        const after = r ? T(r === recent ? "after_red_run" : "after_its_red_run", { seq: r.seq }) : "";
+        const vars = { file, n: names.length, names: names.join(", "), after };
         out.push(F("test_deleted", r ? "high" : "medium", seq, T(key, vars)));
+      };
+      const red = (run) => (run && run.tests && (run.tests.failed || run.tests.errors) ? run : null);
+      // the file's tests as of a step: its last version before it; null before the session's first version of it, so
+      // such a run counts as one that had the test
+      const testsAt = (file, seq) => {
+        const before = versions.filter((v) => v.file === file && v.seq < seq);
+        return before.length ? tests(before[before.length - 1].new_content) : null;
+      };
+      // the last red run before seq that had one of these tests in the file, when the last run that had them was red
+      const ownRedRun = (file, seq, names) => {
+        const runs = ev.filter((e) => e.kind === "run_tests" && (e.tests || e.output_missing) && e.seq < seq);
+        for (const name of names)
+          for (let i = runs.length - 1; i >= 0; i--) {
+            const t = testsAt(file, runs[i].seq);
+            if (t && !(name in t)) continue;
+            if (red(runs[i])) return runs[i];
+            break;
+          }
+        return null;
       };
       // ---- a test removed from a file ----
       const last = {};
@@ -3080,7 +3105,7 @@
           .filter((k) => !(k in om))
           .map((k) => norm(nm[k]));
         const gone = Object.keys(om).filter((k) => !(k in nm) && !(norm(om[k]) && added.includes(norm(om[k]))) && !kept(e.file, e.seq, k));
-        if (gone.length) push("test_deleted_msg", e.file, e.seq, gone);
+        if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, undefined, ownRedRun(e.file, e.seq, gone));
       }
       // ---- a test file deleted ----
       // one of the two may have the home folder spelled out (a session imported before 0.1.124)
@@ -4141,7 +4166,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.133";
+  const ANALYSIS_VERSION = "0.1.134";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")

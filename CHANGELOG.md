@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.134
+
+### Fixed
+- **A failing test deleted twice is a high "test deleted".** In the CI lab an agent deleted the test the app could not
+  pass, ran the rest of the suite green, put the test back because its rules forbade deleting it, and deleted it again
+  without running it. The run before that last deletion was green, but the test was not in it, so the finding was
+  medium. Now a test whose last run with it in its file failed is high: "its last run failed (seq 6)".
+
 ## 0.1.133
 
 ### Added
