@@ -86,8 +86,7 @@ function text(s, opts = {}) {
   const w = Math.max(0, ...p.findings.map((f) => f.check.length));
   for (const f of p.findings) out.push(`${paint(c, f.severity, f.severity.padEnd(6))}  ${f.check.padEnd(w)}  ${step(f).padEnd(4)}  ${f.message}`);
   if (!p.findings.length) out.push(paint(c, "dim", "No findings."));
-  if (p.r.context && p.r.context.length)
-    out.push("", paint(c, "dim", `Context, not counted (no specification given): ${p.r.context.map((f) => f.check).join(", ")}`));
+  if (p.r.context && p.r.context.length) out.push("", paint(c, "dim", `Context, not counted in CI: ${p.r.context.map((f) => f.check).join(", ")}`));
   if (p.r.hiddenByCalibration.length) out.push("", paint(c, "dim", `Hidden by calibration: ${p.r.hiddenByCalibration.length}`));
   return out.join("\n") + "\n";
 }
@@ -100,7 +99,7 @@ function md(s, opts = {}) {
   const line = (f) => `- ${ICON[f.severity]} **${T("sev_" + f.severity)}** ${esc(f.message)}${f.seq >= 0 ? ` _(seq ${f.seq})_` : ""} · \`${f.check}\``;
   const out = [T("md_title", { t: esc(p.title) }), "", p.verdict, ...(p.usage ? [p.usage] : []), p.spec, ...(p.lint ? [`**Lint:** ${esc(p.lint)}`] : []), ""];
   out.push(`### Findings: ${p.count}`, ...(p.findings.length ? p.findings.map(line) : ["None."]), "");
-  if (p.r.context && p.r.context.length) out.push("### Context, not counted (no specification given)", ...p.r.context.map(line), "");
+  if (p.r.context && p.r.context.length) out.push("### Context, not counted in CI", ...p.r.context.map(line), "");
   if (p.r.hiddenByCalibration.length) out.push(T("md_hidden"), ...p.r.hiddenByCalibration.map(line), "");
   out.push(`_${footer(opts)}_`);
   return out.join("\n") + "\n";

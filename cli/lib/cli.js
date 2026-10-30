@@ -19,8 +19,9 @@ const LensRules = require(path.join(MEDIA, "rules.js"));
 const LensAnalyze = require(path.join(MEDIA, "analyze.js"));
 const LensReport = require(path.join(MEDIA, "report.js"));
 
-// in CI nobody can be asked for a specification or approve a plan: these two describe where the session ran
-const CI_CONTEXT = new Set(["no_spec", "stop_markers_missing"]);
+/* In CI nobody can approve a plan, and nobody can be asked for a specification: these describe where the session ran,
+   not how the agent worked. With --spec, no_spec is a finding again: it then says the file has no requirements. */
+const ciContext = (hasSpec) => new Set(hasSpec ? ["stop_markers_missing"] : ["no_spec", "stop_markers_missing"]);
 const FAIL_ON = { none: [], red: ["red"], yellow: ["red", "yellow"] };
 
 const USAGE = `Usage: sessionlens analyze <log> --profile <name> [options]
@@ -31,7 +32,7 @@ Options:
   --profile <name>   the project's profile (required): ${Lens.PROFILES.join(", ")}
   --spec <file>      the specification the tests should cover
   --rules <file>     a rules.json exported from the Rules tab of the editor extension
-  --ci               no_spec and stop_markers_missing are context, not counted in the verdict, unless --spec is given
+  --ci               stop_markers_missing (and no_spec, without --spec) are context, not counted in the verdict
   --fail-on <level>  none (default), red or yellow: exit with 1 when the session is that colour or worse
   --json             the Report .json
   --md               Markdown, for a CI job's summary
@@ -138,11 +139,11 @@ async function run(argv, io) {
   const opts = {
     version: Lens.ANALYSIS_VERSION,
     file,
-    context: o.ci && !files.spec ? CI_CONTEXT : null,
+    context: o.ci ? ciContext(!!files.spec) : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),
   };
   io.stdout.write(o.json ? report.json(s, opts) : o.md ? report.md(s, opts) : report.text(s, opts));
   return FAIL_ON[failOn].includes(LensReport.json(s, { context: opts.context }).verdict) ? 1 : 0;
 }
 
-module.exports = { run, CI_CONTEXT };
+module.exports = { run };
