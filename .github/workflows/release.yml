@@ -1,8 +1,8 @@
 name: Release
 
 # Push a tag vX.Y.Z on a commit of main whose package.json has version X.Y.Z and whose CHANGELOG.md has a section for
-# it. The build job checks and packages; the other three publish the same .vsix, each on its own, so a failed one can
-# be re-run alone ("Re-run failed jobs") without publishing anything twice.
+# it. The build job checks and packages the .vsix and the CLI's npm package; the other four publish them, each on its
+# own, so a failed one can be re-run alone ("Re-run failed jobs") without publishing anything twice.
 on:
   push:
     tags: ["v*"]
@@ -44,12 +44,16 @@ jobs:
       # written only now: a file in the folder before packaging would go into the .vsix (check:vsix refuses it)
       - name: Release notes
         run: node scripts/release-notes.js "$GITHUB_REF_NAME" > release-notes.md
+      # the CLI's npm package, dist/cli/sessionlens-cli-X.Y.Z.tgz (its version must be the tag's: pack-cli.js checks it)
+      - name: The CLI's npm package
+        run: node scripts/pack-cli.js
       - uses: actions/upload-artifact@v7
         with:
           name: release
           path: |
             ${{ steps.pack.outputs.vsix }}
             release-notes.md
+            dist/cli/*.tgz
 
   github-release:
     needs: build
@@ -100,3 +104,26 @@ jobs:
         run: |
           if [ -z "$OVSX_PAT" ]; then echo "::error::the repository secret OVSX_PAT is not set"; exit 1; fi
           npx --yes ovsx publish "$VSIX" --skip-duplicate
+
+  # npm trusted publishing: npm takes the GitHub Actions OIDC token of this job, so no npm token is in the secrets, and
+  # it adds a provenance attestation (which commit and workflow built the package). The trusted publisher is set on
+  # npmjs.com for sessionlens-cli: user nikolaylosev, repository sessionlens, workflow release.yml, npm publish allowed.
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: release
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # npm 11.5.1 or later, which trusted publishing needs
+          registry-url: https://registry.npmjs.org
+      - name: Publish sessionlens-cli to npm
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          if [ "$(npm view "sessionlens-cli@$v" version 2>/dev/null)" = "$v" ]; then echo "sessionlens-cli@$v is already on npm"; exit 0; fi
+          npm publish "dist/cli/sessionlens-cli-$v.tgz"

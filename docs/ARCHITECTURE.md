@@ -178,7 +178,7 @@ cli/                  the command-line tool, npm package sessionlens-cli (phase 
   lib/media.js        where the core is: the package's own media/, or the repository's
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
 scripts/              build-webview.js, check-vsix.js, release-notes.js, pack-cli.js (the CLI's npm package)
-.github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX)
+.github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX + npm)
 ```
 
 Layering. The arrows are "may depend on". Nothing in `media/` requires `vscode`; nothing in the host requires the
@@ -884,6 +884,7 @@ flowchart LR
   REL --> GH[GitHub release]
   REL --> MP[VS Code Marketplace]
   REL --> OV[Open VSX]
+  REL --> NPM[npm: sessionlens-cli]
 ```
 
 - **Unit and DOM tests** (`node --test`): the shared core runs in Node directly; the panel runs in jsdom with a

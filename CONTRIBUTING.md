@@ -70,9 +70,12 @@ git push origin v0.1.109
 ```
 
 `.github/workflows/release.yml` then checks that the tag is on `main` and matches the version, runs every check,
-packages the `.vsix`, and in separate jobs creates the GitHub release (the changelog section plus the request to report
-false findings, from `scripts/release-notes.js`), publishes to the Visual Studio Marketplace and publishes to Open VSX.
-A failed job can be re-run on its own; publishing a version that is already there is skipped.
+packages the `.vsix` and the CLI's npm package (`scripts/pack-cli.js`), and in separate jobs creates the GitHub
+release (the changelog section plus the request to report false findings, from `scripts/release-notes.js`), publishes
+to the Visual Studio Marketplace, publishes to Open VSX and publishes `sessionlens-cli` to npm. A failed job can be
+re-run on its own; publishing a version that is already there is skipped.
 
 The two stores need repository secrets: `VSCE_PAT` (an Azure DevOps token with the Marketplace › Manage scope) and
-`OVSX_PAT` (an Open VSX access token).
+`OVSX_PAT` (an Open VSX access token). npm needs no secret: `sessionlens-cli` has a trusted publisher on npmjs.com
+(user `nikolaylosev`, repository `sessionlens`, workflow `release.yml`, `npm publish` allowed), and the job publishes
+with its GitHub Actions OIDC token, with a provenance attestation. The CLI's version is the extension's.
