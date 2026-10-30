@@ -56,6 +56,7 @@ test("the page lists only the core scripts; extension.js hands over every engine
     "rules.js",
     "spec.js",
     "analyze.js", // the analysis of a session, shared with the CLI (phase 11)
+    "report.js", // the Report .json, shared with the CLI
     "ai.js",
     "segment.js",
     "dialogs.js",

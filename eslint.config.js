@@ -11,6 +11,7 @@ const PAGE_GLOBALS = {
   LensRules: "readonly",
   LensSpec: "readonly",
   LensAnalyze: "readonly",
+  LensReport: "readonly",
   LensDemo: "readonly",
   LensAI: "readonly",
   LensSeg: "readonly",

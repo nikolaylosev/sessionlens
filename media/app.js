@@ -512,23 +512,7 @@
       ev.target.value = "";
     });
   }
-  var modelOf = (f) => Object.assign({}, f.model ? { model: f.model } : {}, f.verifier ? { verifier: f.verifier } : {});
-  function hiddenRows(s) {
-    const why = new Map((s.suppressed || []).map((x) => [x.check + "|" + x.source, x]));
-    return (s.calibHidden || []).map((f) => {
-      const src = f.source || "formal", w = why.get(f.check + "|" + src);
-      return {
-        check: f.check,
-        severity: f.severity,
-        seq: f.seq,
-        message: f.message,
-        source: src,
-        precision: w ? w.precision : null,
-        verdicts: w ? w.n : null,
-        verdict: s.verdicts[fkey(f)] || null
-      };
-    });
-  }
+  var modelOf = (f) => LensReport.modelOf(f);
   function hiddenMd(rows, sev) {
     if (!rows.length) return [];
     const high = rows.filter((f) => f.severity === "high"), rest = rows.length - high.length;
@@ -542,28 +526,7 @@
     ];
   }
   function reportObj(s) {
-    return {
-      schema: "sessionlens/finding@1",
-      session: s.name,
-      task: s.task,
-      profile: s.profile,
-      created: s.created,
-      verdict: Lens.verdict(s.findings),
-      metrics: s.metrics,
-      spec: s.specParsed,
-      findings: s.findings.map((f) => ({
-        check: f.check,
-        severity: f.severity,
-        seq: f.seq,
-        message: f.message,
-        evidence: f.evidence || null,
-        source: f.source || "formal",
-        ...modelOf(f),
-        verdict: s.verdicts[fkey(f)] || null
-      })),
-      hiddenByCalibration: hiddenRows(s),
-      dropped: s.dropped || []
-    };
+    return LensReport.json(s);
   }
   function highWithoutVerdict(s) {
     return s.findings.filter((f) => f.severity === "high" && !s.verdicts[fkey(f)]);
