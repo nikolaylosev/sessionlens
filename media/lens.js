@@ -1837,13 +1837,38 @@
       }
     }
     const lines = [];
+    /* A Shell call the CLI moved to the background when it ran past its timeout (backgroundReason, 30 s in CI; a test
+       run waiting for an element does): its exit code 0 and its stdout are only what it had by then. The agent's
+       await of its shellId (awaitToolCall: complete, exitCode) and a read of the CLI's file of its output
+       (terminals/<shellId>.txt) give the real ones (0.1.132). Without either the result is unknown, not green. */
+    const late = {};
+    for (const r of recs) {
+      const c = r.call,
+        ok = c && c.result && typeof c.result === "object" && c.result.success;
+      if (!ok || typeof ok !== "object") continue;
+      if (c.kind === "awaitToolCall" && ok.complete && ok.complete.taskId != null) {
+        const code = Number(ok.complete.exitCode);
+        if (Number.isInteger(code)) (late[String(ok.complete.taskId)] ||= {}).exitCode = code;
+      }
+      const term = c.kind === "readToolCall" && /[\\/]terminals[\\/](\d+)\.txt$/.exec(String((c.args && c.args.path) || ""));
+      if (term && typeof ok.content === "string") (late[term[1]] ||= {}).output = ok.content;
+    }
     for (const r of recs) {
       if (!r.call) {
         lines.push(JSON.stringify(r));
         continue;
       }
       const c = r.call;
-      const [as, input, result, tur, isError, name] = cursorStreamCall(c.kind, c.args, c.result);
+      let [as, input, result, tur, isError, name] = cursorStreamCall(c.kind, c.args, c.result);
+      const bg = c.kind === "shellToolCall" && c.result && c.result.success && c.result.success.backgroundReason ? c.result.success : null;
+      if (bg) {
+        const l = late[String(bg.shellId)] || {};
+        if (l.output == null && l.exitCode == null) result = null;
+        else {
+          if (l.output != null) result = l.output;
+          if (l.exitCode != null) isError = l.exitCode !== 0;
+        }
+      }
       const id = "cursor-" + names.length;
       names.push(name);
       lines.push(JSON.stringify({ type: "assistant", timestamp: c.ts, message: { role: "assistant", content: [{ type: "tool_use", id, name: as, input }] } }));

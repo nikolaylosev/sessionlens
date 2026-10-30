@@ -554,7 +554,10 @@ flowchart TD
   Code's own stream-json has `tool_use` blocks and an init with `tools`), and `fromCursorStreamJson` rewrites the calls
   in the Claude Code shape for `fromClaudeJsonl`: an edit's `beforeFullFileContent`/`afterFullFileContent` become
   `toolUseResult` (a new file is a write), a shell call's output and exit code the `tool_result`, a read's content its
-  text. The output is in the file, so no database is read. A run with no result keeps `output_missing`. An
+  text. The output is in the file, so no database is read. A run with no result keeps `output_missing`. A shell call
+  the CLI moved to the background past its timeout (`backgroundReason`, 30 s in CI) takes its exit code from the
+  agent's `awaitToolCall` of its `shellId` and its output from a read of `terminals/<shellId>.txt` (since 0.1.132);
+  with neither it has no result. An
   `mcpToolCall` is `mcp__<server>__<toolName>`, the server from `serverIdentifier`, `providerIdentifier` or the start
   of `name` (since 0.1.125; with none of them, the tool's name as before).
 - A JSONL file with tool calls that gave no event at all (`Lens.unreadToolCalls`) is imported only after the reviewer
