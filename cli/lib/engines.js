@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const MEDIA = path.join(__dirname, "..", "..", "media");
+const MEDIA = require("./media");
 // the global each file defines on a page; the ESLint bundles are plain scripts and define theirs themselves
 const GLOBAL = {
   "tree-sitter.js": "TreeSitter",
@@ -21,14 +21,22 @@ const GLOBAL = {
   "lint-python.js": "LensLintPython",
   "lint-robot.js": "LensLintRobot",
 };
+// the .wasm files the tree-sitter engines and Ruff boot from (extension.js's WASM_ASSETS; scripts/pack-cli.js packs them)
+const WASM = {
+  core: "tree-sitter.wasm",
+  java: "tree-sitter-java.wasm",
+  csharp: "tree-sitter-c_sharp.wasm",
+  python: "tree-sitter-python.wasm",
+  ruff: "ruff.wasm",
+};
 // what a tree-sitter engine's boot() needs: on a page the webview URIs (lint.js BOOT_OPTS), here the files themselves
 const BOOT = {
-  java: (dir) => ({ locateCore: () => path.join(dir, "tree-sitter.wasm"), javaWasmUrl: path.join(dir, "tree-sitter-java.wasm") }),
-  csharp: (dir) => ({ locateCore: () => path.join(dir, "tree-sitter.wasm"), csharpWasmUrl: path.join(dir, "tree-sitter-c_sharp.wasm") }),
+  java: (dir) => ({ locateCore: () => path.join(dir, WASM.core), javaWasmUrl: path.join(dir, WASM.java) }),
+  csharp: (dir) => ({ locateCore: () => path.join(dir, WASM.core), csharpWasmUrl: path.join(dir, WASM.csharp) }),
   python: (dir) => ({
-    locateCore: () => path.join(dir, "tree-sitter.wasm"),
-    pythonWasmUrl: path.join(dir, "tree-sitter-python.wasm"),
-    ruffWasmBytes: fs.readFileSync(path.join(dir, "ruff.wasm")),
+    locateCore: () => path.join(dir, WASM.core),
+    pythonWasmUrl: path.join(dir, WASM.python),
+    ruffWasmBytes: fs.readFileSync(path.join(dir, WASM.ruff)),
   }),
 };
 
@@ -72,4 +80,4 @@ function loadEngine(language, { dir = MEDIA } = {}) {
   return loaded[key];
 }
 
-module.exports = { loadEngine };
+module.exports = { loadEngine, WASM };

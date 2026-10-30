@@ -1,5 +1,7 @@
 *.vsix
 node_modules/
+# the CLI's npm package, built by scripts/pack-cli.js
+/dist/
 .vscode-test/
 # Local notes (the TODO, phase plans, PR notes, smoke checklists) live in local/: never committed, and .vscodeignore
 # leaves them out of the .vsix by the same rule. The names below are where such notes lived before.

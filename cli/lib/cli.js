@@ -13,7 +13,7 @@ const { parseArgs } = require("node:util");
 const { loadEngine } = require("./engines");
 const report = require("./report");
 
-const MEDIA = path.join(__dirname, "..", "..", "media");
+const MEDIA = require("./media");
 const Lens = require(path.join(MEDIA, "lens.js"));
 const LensRules = require(path.join(MEDIA, "rules.js"));
 const LensAnalyze = require(path.join(MEDIA, "analyze.js"));

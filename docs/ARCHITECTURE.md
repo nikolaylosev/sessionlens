@@ -168,12 +168,15 @@ src/webview/          the panel's source, bundled by esbuild into media/app.js (
 test/                 node --test: unit, DOM (jsdom + fake vscode), snapshots in test/__snapshots__
 test-integration/     a real VS Code (@vscode/test-electron)
 perf/                 performance runs and snapshot generators
-cli/                  the command-line tool (phase 11, in progress; not in the .vsix)
+cli/                  the command-line tool, npm package sessionlens-cli (phase 11; not in the .vsix)
+  package.json        "private": scripts/pack-cli.js builds the package to publish (dist/cli), with media/ in it
+  README.md           the package's page on npm
   bin/sessionlens.js  the command; hands the process to lib/cli.js
   lib/cli.js          sessionlens analyze <log> --profile <name>: flags, reading the files, the analysis, exit codes
   lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)
+  lib/media.js        where the core is: the package's own media/, or the repository's
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
-scripts/              build-webview.js, check-vsix.js, release-notes.js
+scripts/              build-webview.js, check-vsix.js, release-notes.js, pack-cli.js (the CLI's npm package)
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX)
 ```
 

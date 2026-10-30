@@ -46,6 +46,7 @@ module.exports = [
       "media/cursor-hook.js",
       "*.vsix",
       ".vscode-test/**",
+      "dist/**", // the CLI's npm package, built from cli/ and media/ by scripts/pack-cli.js
     ],
   },
   js.configs.recommended,

@@ -7,6 +7,7 @@ package-lock.json
 PR-*.md
 perf/**
 cli/**
+dist/**
 .github/**
 eslint.config.js
 .prettierrc.json

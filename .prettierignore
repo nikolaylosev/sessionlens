@@ -1,4 +1,5 @@
 node_modules/
+dist/
 media/vendor-eslint*.js
 media/vendor-ruff.js
 media/tree-sitter.js
