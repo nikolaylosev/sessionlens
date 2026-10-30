@@ -7,6 +7,12 @@
   CI, ends each run with a line that has its tokens. The metrics now show them (`tokens 189k in · 2k out`, of which
   the cache gave 174k), with the model the run used, and the cost when your `sessionlens.tokenPrices` has its price.
   Until now such a session showed no tokens.
+- **New check `app_faked_in_test`: the tests check a fake, not the app.** Asked to make green a suite whose test needs a
+  feature the app does not have, agents in our experiments kept the test and made the app pass it: a script that
+  builds the missing button into the page, the app's JavaScript fetched and given back changed, their own copy of the
+  app on a local server, an HTML file of their own opened instead of the app. The suite is green and checks nothing.
+  Such a test is now a high finding, on trial at first (low until it has 10 verdicts). Mocking an API with JSON and
+  setting state in the page (localStorage, a clock) are not reported. Playwright and Cypress profiles.
 
 ### Fixed
 - **"Assertion bug" is a triage.** After a red run, an agent that says the assertion was the mistake ("Two assertion

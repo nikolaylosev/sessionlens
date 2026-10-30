@@ -43,7 +43,10 @@ test("the registry: trial is true or absent, and a trial check is one calibratio
   const trial = Object.entries(LensChecks.CHECKS).filter(([, c]) => "trial" in c);
   assert.deepEqual(
     trial.map(([k, c]) => [k, c.trial]),
-    [["empty_result_unverified", true]],
+    [
+      ["empty_result_unverified", true],
+      ["app_faked_in_test", true],
+    ],
   );
   for (const [k, c] of trial) {
     assert.notEqual(c.calibrate, false, k);
