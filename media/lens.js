@@ -559,7 +559,7 @@
           passed: p ? +p[1] : 0,
           failed: (f ? +f[1] : 0) + (fl ? +fl[1] : 0),
           errors: 0,
-          failed_names: [...out.matchAll(/^\s*(?:\d+\)|[✘✕×])\s*\[[^\]]*\]\s*›\s*([^\n]+)/gm)].map((x) => x[1].trim()).slice(0, 20),
+          failed_names: playwrightFailed(out),
         };
       return null;
     },
@@ -626,6 +626,19 @@
     if (!out) return null;
     if (/did not complete within its \d+s timeout and was moved to the background/i.test(out)) return null;
     return (runners[cfg.test_runner] || runners.auto)(out);
+  }
+
+  /* The tests a Playwright run failed: the list reporter's line of each ("  ✘  1 [chromium] › a.spec.ts:3:5 › title (5.6s)")
+     and the heading of its error ("  1) [chromium] › a.spec.ts:3:5 › title ─────"). Until 0.1.132 only the heading
+     matched, with its rule of ─ in the name, and a line with its index after ✘ did not. Once each, in order. */
+  function playwrightFailed(out) {
+    const names = [...out.matchAll(/^\s*(?:\d+\)|[✘✕×](?:\s+\d+)?)\s*\[[^\]]*\]\s*›\s*([^\n]+)/gm)].map((x) =>
+      x[1]
+        .replace(/\s*\(\d+(?:\.\d+)?m?s\)\s*$/, "")
+        .replace(/\s*[─━]{2,}\s*$/, "")
+        .trim(),
+    );
+    return [...new Set(names.filter(Boolean))].slice(0, 20);
   }
 
   // ---------- assert comparison (regex, per profile) ----------
