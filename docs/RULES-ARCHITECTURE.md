@@ -625,6 +625,12 @@ core of the page. `api`, `mobile`, `any`, `go` have no engine.
 - At the end, a window event `sl:engine-ready` or `sl:engine-failed`
   (`detail: { language, state }`).
 - Without WASM URIs a tree-sitter engine is not booted and `ensure()` reports it as `"failed"`.
+- **In Node** (the CLI, phase 11) `cli/lib/engines.js` does what `ensure()` does on a page: `loadEngine(language)` runs
+  the same files of `ENGINE_FILES` in the process (the ESLint bundles as scripts, the others as modules set as their
+  globals; Robot's parser too), boots a tree-sitter engine from the `.wasm` files on disk and Python with Ruff, once
+  per process, and reports `"ready"`, `"none"` or `"failed"` with the reason (Python without Ruff is `"failed"` there).
+  `LensLint.run()` then finds the engine as a global. The tests load the engines through it too
+  (`perf/snapshot-lint.js`).
 
 **Who calls it.** `app.js`: `needEngine(profile)` waits for `ensure()` before
 **every** `analyze()` — import, the background pass, `ensureFresh`, the spec,

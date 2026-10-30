@@ -167,6 +167,8 @@ src/webview/          the panel's source, bundled by esbuild into media/app.js (
 test/                 node --test: unit, DOM (jsdom + fake vscode), snapshots in test/__snapshots__
 test-integration/     a real VS Code (@vscode/test-electron)
 perf/                 performance runs and snapshot generators
+cli/                  the command-line tool (phase 11, in progress; not in the .vsix)
+  lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)
 scripts/              build-webview.js, check-vsix.js, release-notes.js
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX)
 ```
