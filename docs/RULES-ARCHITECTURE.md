@@ -786,7 +786,7 @@ Rules and ⚙ Settings reach it when the Sessions tab is shown again and on a `k
 the one-line summary, also the `title` of the profile name in `#hdr`. The list options: `name — profile_desc_<name>`. All output goes through
 `esc()`; a check's rule text is the `title` attribute.
 
-## 9. The full table of checks at v0.1.130 (65 of them)
+## 9. The full table of checks at v0.1.132 (66 of them)
 
 The reference is `media/checks.js`; this table is a readable copy of it and of `LensLint.RULE_MAPS` (the "Source"
 column), kept by hand: no test compares them, so a new check adds its row here too (§12).
@@ -833,6 +833,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | hardcoded_base_url | code | medium | regex (lens.js) |
 | test_shadowed | code | high | engine only: Ruff F811 on a `test_…` name (Python, 0.1.129) |
 | empty_result_unverified | code | medium (on trial: low until it has 10 verdicts, §5.2) | regex (lens.js), 0.1.130 |
+| app_faked_in_test | code | high (on trial: low until it has 10 verdicts, §5.2) | regex (lens.js), 0.1.132: qa-ts and qa-cypress |
 | status_only_assert | api | medium | regex (lens.js) |
 | mocked_service | api | medium | regex (lens.js) |
 | no_negative_cases | api | medium | regex (lens.js) |

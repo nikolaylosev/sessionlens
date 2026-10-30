@@ -606,6 +606,13 @@
         "Do not mock the API under test. Call the real service (or a real test instance); mock only its downstream dependencies, and say so in the test.",
       r_test_shadowed:
         "Give every test a name of its own. In Python a second def with the same name replaces the first: pytest collects only the last one, so the first test never runs, and nothing says so.",
+      r_app_faked:
+        "A test checks the real app. Never build, patch or replace what the app does to make a test pass: no script that adds to the page what the app lacks, no route that answers the app's own page or code, no copy of the app and no page of your own. If the app cannot pass a test, leave it failing and report the app's defect. Mocking an external API is fine.",
+      app_faked: "{file}: the tests check a fake, not the app — {how}",
+      app_faked_dom: "a script in the page builds what the app shows ({line})",
+      app_faked_route: "the app's own page or code is answered with other content ({line})",
+      app_faked_page: "the tests open a page of their own ({line})",
+      app_faked_server: "a server of its own serves the app ({line})",
       r_empty_result:
         "An empty result proves something only when the same call can return something. Next to a test that expects nothing, keep one where the same query, filter or endpoint returns at least one item: else a broken query, a wrong filter or an empty test database passes too.",
       empty_result:

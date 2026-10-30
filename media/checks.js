@@ -321,6 +321,15 @@
       sources: ["regex"],
       trial: true,
     },
+    // a test that builds the app it checks: DOM injected into the page, the app's page or code answered, a page of its own (0.1.132)
+    app_faked_in_test: {
+      group: "code",
+      severity: "high",
+      ruleKey: "r_app_faked",
+      good: "leave the test failing and report that the app has no Undo; mock only an external API (route.fulfill with JSON)",
+      sources: ["regex"],
+      trial: true,
+    },
     // ---- api ----
     status_only_assert: {
       group: "api",
