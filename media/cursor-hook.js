@@ -1693,7 +1693,7 @@ var require_lens = __commonJS({
               passed: p ? +p[1] : 0,
               failed: (f ? +f[1] : 0) + (fl ? +fl[1] : 0),
               errors: 0,
-              failed_names: [...out.matchAll(/^\s*(?:\d+\)|[✘✕×])\s*\[[^\]]*\]\s*›\s*([^\n]+)/gm)].map((x) => x[1].trim()).slice(0, 20)
+              failed_names: playwrightFailed(out)
             };
           return null;
         },
@@ -1754,6 +1754,12 @@ var require_lens = __commonJS({
         if (!out) return null;
         if (/did not complete within its \d+s timeout and was moved to the background/i.test(out)) return null;
         return (runners[cfg.test_runner] || runners.auto)(out);
+      }
+      function playwrightFailed(out) {
+        const names = [...out.matchAll(/^\s*(?:\d+\)|[✘✕×](?:\s+\d+)?)\s*\[[^\]]*\]\s*›\s*([^\n]+)/gm)].map(
+          (x) => x[1].replace(/\s*\(\d+(?:\.\d+)?m?s\)\s*$/, "").replace(/\s*[─━]{2,}\s*$/, "").trim()
+        );
+        return [...new Set(names.filter(Boolean))].slice(0, 20);
       }
       function blocksByTest(src, pat) {
         if (!pat) return { "<file>": src };

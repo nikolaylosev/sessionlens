@@ -12,6 +12,10 @@
 - **"Assertion bug" is a triage.** After a red run, an agent that says the assertion was the mistake ("Two assertion
   bugs: the counter should be …", "wrong assertion", "the tests are wrong", "неверная проверка") has said whose error
   it is; such a session got a high "Edited right after a failure with no triage". Found on a Cursor agent in CI.
+- **The failed tests of a Playwright run, from every line that names them.** Only the heading of each error was read
+  ("1) [chromium] › … ─────"), with its rule in the name; the reporter's own line ("✘  1 [chromium] › … (5.6s)") was
+  not. So when the output was cut before the errors, SessionLens did not know which tests had failed, and "Edited
+  right after a failure" could not tell a later green run of just those tests from a run of others.
 - **A test whose title has a quote in it is a test.** A JavaScript or TypeScript test's title could hold no quote at
   all: `test('TODO-01: the counter reads "1 todo left"', …)`, `it("keeps the user's cart", …)` or
   `test('can\'t log in', …)` was no test. So a specification's requirements named in such titles had "no test" (a
