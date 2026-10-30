@@ -8,7 +8,7 @@
    the verdict (see LensReport.json); color: ANSI colours in the terminal text. */
 const path = require("path");
 
-const MEDIA = path.join(__dirname, "..", "..", "media");
+const MEDIA = require("./media");
 const I18N = require(path.join(MEDIA, "i18n.js"));
 const LensReport = require(path.join(MEDIA, "report.js"));
 const T = (k, v) => I18N.t(k, v);

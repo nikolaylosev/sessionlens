@@ -31,6 +31,7 @@ It is built for sessions in which an agent writes or fixes automated tests, but 
 - [Model providers](#model-providers)
 - [Commands and VS Code settings](#commands-and-vs-code-settings)
 - [Install](#install)
+- [Command line and CI](#command-line-and-ci)
 - [Your data](#your-data)
 - [Found a false finding?](#found-a-false-finding)
 - [License](#license)
@@ -602,6 +603,20 @@ From a `.vsix` file (each [GitHub release](https://github.com/nikolaylosev/sessi
    reloaded keeps running the previous version, and some buttons may do nothing until it is.
 
 To build it from source, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Command line and CI
+
+Since 0.1.133 the same checks run without an editor, from the npm package
+[`sessionlens-cli`](cli/README.md). Use it to review an agent's session in a terminal, or in CI right after the agent
+worked:
+
+```
+npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --md >> "$GITHUB_STEP_SUMMARY"
+```
+
+It reads the same logs as the extension and runs the same lint engines. It prints text, Markdown for a CI job's
+summary, or the Report .json, and it uses no network. By default it never fails a build; add `--fail-on red` when you
+trust its reports. It has no verdicts and no model review yet. Its options are in [cli/README.md](cli/README.md).
 
 ## Your data
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.133
+
+### Added
+- **SessionLens on the command line and in CI.** The npm package `sessionlens-cli` runs the same checks and lint
+  engines as the extension on a session log: `npx sessionlens-cli analyze agent.jsonl --profile qa-ts`. It prints
+  text, Markdown for a CI job's summary (`--md`) or the Report .json (`--json`), takes your team's `rules.json`
+  (`--rules`) and a specification (`--spec`), and uses no network. With `--ci`, findings that only say where the
+  session ran (nobody approved a plan, nobody gave a specification) are listed as context and do not colour the
+  verdict. By default it never fails a build; `--fail-on red` or `--fail-on yellow` makes it exit with 1. It has no
+  verdicts and no model review yet. Node.js 22 or newer.
+
 ## 0.1.132
 
 ### Added

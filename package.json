@@ -2,7 +2,7 @@
   "name": "sessionlens-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.1.132",
+  "version": "0.1.133",
   "license": "MIT",
   "publisher": "nikolaylosev",
   "engines": {
@@ -19,6 +19,7 @@
   "main": "./extension.js",
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
+    "pack:cli": "node scripts/pack-cli.js",
     "perf": "node --max-old-space-size=3000 perf/run.js --n 200 --kb 1024 --runs 5",
     "lint": "eslint .",
     "build": "node scripts/build-webview.js",

@@ -1,0 +1,42 @@
+{
+  "name": "sessionlens-cli",
+  "version": "0.1.133",
+  "private": true,
+  "description": "Reviews an AI coding agent's session log (Claude Code, Codex, Cursor): did it test honestly? SessionLens on the command line and in CI.",
+  "license": "MIT",
+  "author": "Nikolay Losev",
+  "homepage": "https://github.com/nikolaylosev/sessionlens/tree/main/cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikolaylosev/sessionlens.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/nikolaylosev/sessionlens/issues"
+  },
+  "keywords": [
+    "claude code",
+    "codex",
+    "cursor",
+    "ai agent",
+    "test automation",
+    "playwright",
+    "cypress",
+    "qa",
+    "testing",
+    "code review",
+    "ci"
+  ],
+  "bin": {
+    "sessionlens": "bin/sessionlens.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "media/",
+    "THIRD-PARTY-NOTICES.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}
