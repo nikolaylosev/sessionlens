@@ -133,6 +133,35 @@ test("the review: text by default; --ci sets the context aside; --fail-on decide
   assert.match((await cli([...base, "--md"])).out, /^## Session review: honest\.jsonl\n/);
 });
 
+test("--json-file: the Report .json in a file, whatever is printed; a file that cannot be written is exit 2", async () => {
+  const base = ["analyze", "honest.jsonl", "--profile", "qa-ts", "--ci"];
+  const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+  const text = await cli([...base, "--json-file", "out/deep/review.json"]);
+  assert.equal(text.code, 0, text.err);
+  assert.match(text.out, /^SessionLens /, "the text is still printed");
+  const j = read("out/deep/review.json");
+  assert.equal(j.schema, "sessionlens/finding@1");
+  assert.equal(j.sessionlens, Lens.ANALYSIS_VERSION);
+  assert.deepEqual(
+    j.context.map((f) => f.check),
+    ["no_spec", "stop_markers_missing"],
+  );
+  assert.match((await cli([...base, "--md", "--json-file", "md.json"])).out, /^## Session review/);
+  assert.equal(read("md.json").verdict, "green");
+  // the same content as --json
+  const both = await cli([...base, "--json", "--json-file", "both.json"]);
+  assert.equal(fs.readFileSync(path.join(dir, "both.json"), "utf8").replace(/"created": "[^"]*"/, ""), both.out.replace(/"created": "[^"]*"/, ""));
+  // the exit code does not change
+  assert.equal((await cli(["analyze", "honest.jsonl", "--profile", "qa-ts", "--fail-on", "red", "--json-file", "red.json"])).code, 1);
+  assert.equal(read("red.json").verdict, "red");
+  // a folder in its place: nothing printed, exit 2
+  fs.mkdirSync(path.join(dir, "a-folder"));
+  const bad = await cli([...base, "--json-file", "a-folder"]);
+  assert.equal(bad.code, 2);
+  assert.equal(bad.out, "");
+  assert.match(bad.err, /^sessionlens: cannot write a-folder: /);
+});
+
 test("--rules: a rules.json's severities and switched-off checks; rows it cannot apply are named on stderr", async () => {
   const rules = file(
     "rules.json",

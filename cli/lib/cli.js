@@ -40,6 +40,7 @@ Options:
   --fail-on <level>  none (default), red or yellow: exit with 1 when the session is that colour or worse
   --json             the Report .json
   --md               Markdown, for a CI job's summary
+  --json-file <file> also write the Report .json to this file, whatever is printed
   --no-color         no colours in the text (NO_COLOR does the same)
   -h, --help         this text
   --version          the version
@@ -55,6 +56,7 @@ const OPTIONS = {
   ci: { type: "boolean" },
   "fail-on": { type: "string" },
   json: { type: "boolean" },
+  "json-file": { type: "string" },
   md: { type: "boolean" },
   "no-color": { type: "boolean" },
   help: { type: "boolean", short: "h" },
@@ -165,6 +167,15 @@ async function run(argv, io) {
     calibration: calib ? { verdicts: calib.verdicts, files: calib.files, ...levels(calib.stats, Lens, overrides) } : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),
   };
+  // before anything is printed: a file that cannot be written is exit 2, with nothing on stdout
+  if (o["json-file"])
+    try {
+      const target = path.resolve(io.cwd || process.cwd(), o["json-file"]);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, report.json(s, opts));
+    } catch (e) {
+      return fail(`cannot write ${o["json-file"]}: ${e.message}`);
+    }
   io.stdout.write(o.json ? report.json(s, opts) : o.md ? report.md(s, opts) : report.text(s, opts));
   return FAIL_ON[failOn].includes(LensReport.json(s, { context: opts.context }).verdict) ? 1 : 0;
 }

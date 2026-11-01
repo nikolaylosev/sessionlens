@@ -59,6 +59,7 @@ Give it one session per file.
 | `--fail-on <level>` | `none` (the default), `red` or `yellow`. Exit with code 1 when the session is that colour or worse. |
 | `--json` | Print the review as JSON (schema `sessionlens/finding@1`, the same file the extension exports). |
 | `--md` | Print the review as Markdown, for a CI job's summary. |
+| `--json-file <file>` | Also write the JSON to this file, whatever is printed, so one run gives both. |
 | `--no-color` | No colours in the text. The `NO_COLOR` environment variable does the same. |
 
 ## Exit codes
@@ -82,9 +83,8 @@ npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --verdicts .session
 The rules are the extension's. Per check and source, with 10 verdicts or more, a precision under 30% switches the check
 off and under 50% demotes its findings to low. A new check on trial is low until it has 10 verdicts, then speaks at its
 own severity. A missing specification, uncovered requirements, hardcoded secrets and the model's findings are never
-calibrated. The same
-finding in two files counts once. The report says how many verdicts it used and what they changed, and lists the
-findings it hid with the reason:
+calibrated. The same finding in two files counts once. The report says how many verdicts it used and what they changed,
+and lists the findings it hid with the reason:
 
 ```
 Calibration: 37 verdicts from 2 files, off: magic_number, demoted: raw_locator
@@ -103,11 +103,13 @@ Run the agent, save its log, then review it:
 - name: Agent writes the tests
   run: agent -p "$PROMPT" --output-format stream-json > "$RUNNER_TEMP/agent.jsonl"
 - name: SessionLens
-  run: npx sessionlens-cli analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md >> "$GITHUB_STEP_SUMMARY"
+  run: npx sessionlens-cli analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md --json-file "$RUNNER_TEMP/review.json" >> "$GITHUB_STEP_SUMMARY"
 - uses: actions/upload-artifact@v4
   with:
     name: agent-log
-    path: ${{ runner.temp }}/agent.jsonl
+    path: |
+      ${{ runner.temp }}/agent.jsonl
+      ${{ runner.temp }}/review.json
 ```
 
 Start without `--fail-on`, read the reports for a while, then add `--fail-on red` when you trust them. Keep the log as
