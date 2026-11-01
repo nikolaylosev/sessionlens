@@ -4329,10 +4329,12 @@ var require_lens = __commonJS({
         user_frustration(ev) {
           const RX = /(?:^|[\s,.!])(?:не то|не так|не это|опять|снова|ещё раз|еще раз|я же (?:сказал|просил|писал|говорил)|ты не (?:понял|прочитал)|верни|откати|not what i|again|i (?:said|asked|told)|why did you|wrong|revert|undo)(?=[\s,.!?]|$)/i;
           const NO = /(?:^|[.!?]\s+)нет\s*(?:[,.!?…]|$)/i;
+          const REQUEST = /^(?:(?:please|пожалуйста|давай|ну|а|и)[\s,]+)*(?:запусти|перезапусти|прогони|проверь|попробуй|опиши|сделай|покажи|повтори|напиши|перепиши|посмотри|глянь|открой|пройди|собери|выполни|выведи|расскажи|объясни|обнови|исправь|добавь|прочитай|подумай|про?а?нализируй|run|rerun|try|check|test|do|show|start|execute|build|write|open|look|add|fix|update|review|explain|print|list|cover)(?=[\s,.!?]|$)/i;
+          const IN_REQUEST = /(?:^|[\s,.!])(?:ещё раз|еще раз|снова|again|верни|revert|undo|wrong(?!\s*(?:[,.!?…]|$)))(?=[\s,.!?]|$)/gi;
           const ASK = /(?:^|[.!?]\s+)(?:(?:а|ну|и|так)\s+)?(?:где вообще|зачем ты)(?=[\s,.!?]|$)/i;
           const out = [], users = ev.filter((e) => e.kind === "user");
           users.forEach((u, i) => {
-            const t = u.text.toLowerCase(), said = t.trim();
+            const t = u.text.toLowerCase(), trimmed = t.trim(), said = REQUEST.test(trimmed) ? trimmed.replace(IN_REQUEST, " ") : trimmed;
             if (i > 0 && (RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
               out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
             else if (i > 0 && t.length > 15 && users[i - 1].text.toLowerCase().slice(0, 40) === t.slice(0, 40))

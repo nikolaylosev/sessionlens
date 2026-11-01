@@ -12,6 +12,10 @@
 ### Fixed
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
+- **"Run it again" and "Add a test for a wrong password" are requests, not frustration.** "запусти ещё раз", "try again",
+  "Test the undo button" and "Напиши тест: верни 404" were a medium "User frustration signal". In a message that opens
+  with a request, "again", "ещё раз", "снова", "undo", "revert" and "верни" no longer count, and "wrong" only where a
+  clause ends. "Why again?", "Верни как было", "You edited the wrong file" and "сделай ещё раз, не то" still do.
 - **"Passing", "should pass" and "проходит" are about the tests only when the sentence says so.** "Запрос проходит через
   прокси", "I am passing the token" and "The dashboard is all green" were a high "Claims tests pass". A sentence now
   counts when it names the tests, a name in quotes stands before the phrase, or nothing else is in it ("Now passing.",

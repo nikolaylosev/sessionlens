@@ -84,7 +84,7 @@ test("the first message is no frustration signal: it is the task", () => {
       cfg,
     );
   assert.deepEqual(frustration(msgs(["user", first])), []);
-  assert.equal(frustration(msgs(["user", "Write the tests"], ["assistant", "Done."], ["user", "run them again"])).length, 1, "after a step: as before");
+  assert.equal(frustration(msgs(["user", "Write the tests"], ["assistant", "Done."], ["user", "again?"])).length, 1, "after a step: as before");
 });
 
 test("a session imported before with such a user message asks to be imported again (IMPORT_GEN 11)", () => {

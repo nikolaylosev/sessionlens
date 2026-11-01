@@ -3902,13 +3902,22 @@
       const RX =
         /(?:^|[\s,.!])(?:не то|не так|не это|опять|снова|ещё раз|еще раз|я же (?:сказал|просил|писал|говорил)|ты не (?:понял|прочитал)|верни|откати|not what i|again|i (?:said|asked|told)|why did you|wrong|revert|undo)(?=[\s,.!?]|$)/i;
       const NO = /(?:^|[.!?]\s+)нет\s*(?:[,.!?…]|$)/i;
+      /* "запусти ещё раз", "Попробуй с Gemini ещё раз", "run it again" ask for something, and "Add a test for a wrong
+         password", "Test the undo button", "Напиши тест: верни 404" name what to test (0.1.135): in a message that opens
+         with a request these words are no signal, and "wrong" only where a clause ends ("Run it again, this is wrong").
+         "ещё раз" alone, "Why again?", "Верни как было", "You edited the wrong file" and "сделай ещё раз, не то" still
+         are. */
+      const REQUEST =
+        /^(?:(?:please|пожалуйста|давай|ну|а|и)[\s,]+)*(?:запусти|перезапусти|прогони|проверь|попробуй|опиши|сделай|покажи|повтори|напиши|перепиши|посмотри|глянь|открой|пройди|собери|выполни|выведи|расскажи|объясни|обнови|исправь|добавь|прочитай|подумай|про?а?нализируй|run|rerun|try|check|test|do|show|start|execute|build|write|open|look|add|fix|update|review|explain|print|list|cover)(?=[\s,.!?]|$)/i;
+      const IN_REQUEST = /(?:^|[\s,.!])(?:ещё раз|еще раз|снова|again|верни|revert|undo|wrong(?!\s*(?:[,.!?…]|$)))(?=[\s,.!?]|$)/gi;
       // a question to the agent opens the message or a sentence: "Проверь, где вообще показывается корзина" is a task
       const ASK = /(?:^|[.!?]\s+)(?:(?:а|ну|и|так)\s+)?(?:где вообще|зачем ты)(?=[\s,.!?]|$)/i;
       const out = [],
         users = ev.filter((e) => e.kind === "user");
       users.forEach((u, i) => {
         const t = u.text.toLowerCase(),
-          said = t.trim(); // the phrases from its first word; the repeat compares the text as it was, as before
+          trimmed = t.trim(), // the phrases from its first word; the repeat compares the text as it was, as before
+          said = REQUEST.test(trimmed) ? trimmed.replace(IN_REQUEST, " ") : trimmed;
         // the first message is the task, no reaction to the agent: "…and run the tests again" (0.1.130)
         if (i > 0 && (RX.test(said) || NO.test(said) || ASK.test(said)) && t.length < 400)
           out.push(F("user_frustration", "medium", u.seq, T("frustration", { text: clip(u.text.trim(), 100) })));
