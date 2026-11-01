@@ -43,7 +43,8 @@ jobs:
         run: agent -p "$PROMPT" --force --output-format stream-json > "$RUNNER_TEMP/agent.jsonl"
 
       # --ci: nobody approved the agent's plan here, so that finding is context, not part of the verdict.
-      # Add --spec <file> if you have a specification, and --fail-on red once you trust the reports.
+      # Add --spec <file> if you have a specification, --verdicts <folder> if your reviewers keep their exported verdicts
+      # in the repository, and --fail-on red once you trust the reports.
       # sessionlens-cli@0.1 is the latest 0.1.x release.
       - name: SessionLens reviews the session
         if: always()

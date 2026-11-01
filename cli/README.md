@@ -52,6 +52,7 @@ Give it one session per file.
 | `--profile <name>` | Required. The kind of project: `qa-ts` (Playwright), `qa-cypress`, `qa-detox`, `qa-python`, `qa-java`, `qa-c#`, `qa-api`, `qa-mobile`, `qa-robot`, `qa-generic`. It picks the checks and the lint engine. |
 | `--spec <file>` | The specification the tests should cover. With it, SessionLens checks which requirements have a test. |
 | `--rules <file>` | A `rules.json` exported from the Rules tab of the extension: your team's severities and switched-off checks. |
+| `--verdicts <path>` | Your reviewers' verdicts: a `verdicts.json` exported from the Calibration tab of the extension, or a folder of them. Can be given several times. See [Calibration](#calibration). |
 | `--ci` | For a session that ran in CI. Nobody was there to approve the agent's plan, so `stop_markers_missing` (code written without a plan) is listed as context and does not count in the verdict. Without `--spec`, nobody could give a specification either, so `no_spec` is context too. |
 | `--fail-on <level>` | `none` (the default), `red` or `yellow`. Exit with code 1 when the session is that colour or worse. |
 | `--json` | Print the review as JSON (schema `sessionlens/finding@1`, the same file the extension exports). |
@@ -65,6 +66,32 @@ Give it one session per file.
 | 0 | The review is written. This is the default whatever the verdict, so that adding SessionLens to a pipeline never blocks it by itself. |
 | 1 | `--fail-on` matched the verdict. |
 | 2 | SessionLens could not do its work: a file it cannot read, no profile or an unknown one, a log with no steps, a lint engine that did not load. The reason is on stderr. |
+
+## Calibration
+
+A check that your reviewers keep rejecting should stop speaking in CI too. Mark findings as right or wrong in the
+extension (open the log you kept from CI with **Choose file**), export them with **Export verdicts.json** on the
+Calibration tab, and keep the file in your repository, one per reviewer:
+
+```
+npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --verdicts .sessionlens/verdicts/
+```
+
+The rules are the extension's. Per check and source, with 10 verdicts or more, a precision under 30% switches the check
+off and under 50% demotes its findings to low. A new check on trial is low until it has 10 verdicts, then speaks at its
+own severity. A missing specification, uncovered requirements, hardcoded secrets and the model's findings are never
+calibrated. The same
+finding in two files counts once. The report says how many verdicts it used and what they changed, and lists the
+findings it hid with the reason:
+
+```
+Calibration: 37 verdicts from 2 files, off: magic_number, demoted: raw_locator
+…
+Hidden by calibration: magic_number (precision 20% over 15 verdicts)
+```
+
+With `--fail-on`, the verdict after calibration decides. A check you ticked on by hand on the Rules tab is not carried
+by `rules.json`, so here its verdicts can still switch it off.
 
 ## In GitHub Actions
 
@@ -89,7 +116,6 @@ A complete workflow with a Cursor agent, ready to copy into `.github/workflows/`
 
 ## What it does not do yet
 
-- No verdicts and no calibration: every check speaks at its default severity. A new check "on trial" is low.
 - No model review: the checks that ask a language model run only in the extension.
 
 ## License

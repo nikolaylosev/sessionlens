@@ -2,6 +2,13 @@
 
 ## 0.1.135
 
+### Added
+- **`--verdicts` in the CLI: your reviewers' verdicts calibrate the checks in CI.** Give it a `verdicts.json` exported
+  from the Calibration tab, or a folder of them, one per reviewer. The rules are the extension's: with 10 verdicts or
+  more, a check with a precision under 30% is off and one under 50% is low; a check on trial speaks at its own severity
+  once it has 10. The report says how many verdicts it used and what they changed, and lists what it hid with the
+  reason. Before, every check spoke at its default severity in CI.
+
 ### Fixed
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.

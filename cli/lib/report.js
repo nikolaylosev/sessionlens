@@ -4,8 +4,9 @@
    reused for --md: it is built around verdicts (it waits for one on every high finding and lists confirmed, rejected
    and undecided findings), and a CI run has none; the headline lines are the panel's own strings.
 
-   opts: { version, file, context, color }. context (--ci): a Set of check names set aside as context, not counted in
-   the verdict (see LensReport.json); color: ANSI colours in the terminal text. */
+   opts: { version, file, context, color, calibration }. context (--ci): a Set of check names set aside as context, not
+   counted in the verdict (see LensReport.json); color: ANSI colours in the terminal text; calibration (--verdicts):
+   { verdicts, files, off, demoted }, how many verdicts calibrated the checks and which they switched off or demoted. */
 const path = require("path");
 
 const MEDIA = require("./media");
@@ -35,6 +36,20 @@ const tokens = (u) =>
     req: Number.isInteger(u.requests) ? ", " + T("m_tokens_req", { n: u.requests }) : "",
   });
 
+// "37 verdicts from 2 files, off: weak_assert, demoted: magic_number"
+function calibrationLine(c) {
+  const n = (x, one) => `${x} ${one}${x === 1 ? "" : "s"}`;
+  return [
+    `${n(c.verdicts, "verdict")} from ${n(c.files, "file")}`,
+    c.off.length ? `off: ${c.off.join(", ")}` : "",
+    c.demoted.length ? `demoted: ${c.demoted.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+// why calibration hid a finding, as the panel's PR report says it
+const whyHidden = (f) => (f.precision != null ? T("md_hidden_why", { p: Math.round(f.precision * 100), n: f.verdicts }) : "");
+
 // the parts both outputs show, from the Report .json
 function parts(s, opts) {
   const r = LensReport.json(s, { context: opts.context });
@@ -63,6 +78,7 @@ function parts(s, opts) {
     usage: s.usage ? tokens(s.usage) : "",
     spec,
     lint: s.lintNote || "",
+    calibration: opts.calibration ? calibrationLine(opts.calibration) : "",
     // the findings by severity, then in the order of the session
     findings: SEVERITIES.flatMap((sev) => r.findings.filter((f) => f.severity === sev)),
   };
@@ -81,13 +97,17 @@ function text(s, opts = {}) {
     ...(p.usage ? [p.usage] : []),
     plain(p.spec),
     ...(p.lint ? [`Lint: ${p.lint}`] : []),
+    ...(p.calibration ? [`Calibration: ${p.calibration}`] : []),
     "",
   ];
   const w = Math.max(0, ...p.findings.map((f) => f.check.length));
   for (const f of p.findings) out.push(`${paint(c, f.severity, f.severity.padEnd(6))}  ${f.check.padEnd(w)}  ${step(f).padEnd(4)}  ${f.message}`);
   if (!p.findings.length) out.push(paint(c, "dim", "No findings."));
   if (p.r.context && p.r.context.length) out.push("", paint(c, "dim", `Context, not counted in CI: ${p.r.context.map((f) => f.check).join(", ")}`));
-  if (p.r.hiddenByCalibration.length) out.push("", paint(c, "dim", `Hidden by calibration: ${p.r.hiddenByCalibration.length}`));
+  if (p.r.hiddenByCalibration.length) {
+    const rows = p.r.hiddenByCalibration.map((f) => `${f.check}${whyHidden(f) ? ` (${whyHidden(f)})` : ""}`);
+    out.push("", paint(c, "dim", `Hidden by calibration: ${[...new Set(rows)].join(", ")}`));
+  }
   return out.join("\n") + "\n";
 }
 
@@ -97,14 +117,28 @@ const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 function md(s, opts = {}) {
   const p = parts(s, opts);
   const line = (f) => `- ${ICON[f.severity]} **${T("sev_" + f.severity)}** ${esc(f.message)}${f.seq >= 0 ? ` _(seq ${f.seq})_` : ""} · \`${f.check}\``;
-  const out = [T("md_title", { t: esc(p.title) }), "", p.verdict, ...(p.usage ? [p.usage] : []), p.spec, ...(p.lint ? [`**Lint:** ${esc(p.lint)}`] : []), ""];
+  const out = [
+    T("md_title", { t: esc(p.title) }),
+    "",
+    p.verdict,
+    ...(p.usage ? [p.usage] : []),
+    p.spec,
+    ...(p.lint ? [`**Lint:** ${esc(p.lint)}`] : []),
+    ...(p.calibration ? [`**Calibration:** ${esc(p.calibration)}`] : []),
+    "",
+  ];
   out.push(`### Findings: ${p.count}`, ...(p.findings.length ? p.findings.map(line) : ["None."]), "");
   if (p.r.context && p.r.context.length) out.push("### Context, not counted in CI", ...p.r.context.map(line), "");
-  if (p.r.hiddenByCalibration.length) out.push(T("md_hidden"), ...p.r.hiddenByCalibration.map(line), "");
+  if (p.r.hiddenByCalibration.length) out.push(T("md_hidden"), ...p.r.hiddenByCalibration.map((f) => line(f) + (whyHidden(f) ? ` · ${whyHidden(f)}` : "")), "");
   out.push(`_${footer(opts)}_`);
   return out.join("\n") + "\n";
 }
 
-const json = (s, opts = {}) => JSON.stringify({ ...LensReport.json(s, { context: opts.context }), sessionlens: opts.version || null }, null, 1) + "\n";
+const json = (s, opts = {}) =>
+  JSON.stringify(
+    { ...LensReport.json(s, { context: opts.context }), sessionlens: opts.version || null, ...(opts.calibration ? { calibration: opts.calibration } : {}) },
+    null,
+    1,
+  ) + "\n";
 
 module.exports = { text, md, json };
