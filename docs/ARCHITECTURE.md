@@ -176,6 +176,7 @@ cli/                  the command-line tool, npm package sessionlens-cli (phase 
   lib/cli.js          sessionlens analyze <log> --profile <name>: flags, reading the files, the analysis, exit codes
   lib/engines.js      the lint engines in Node: loadEngine(language) (RA §7)
   lib/media.js        where the core is: the package's own media/, or the repository's
+  lib/verdicts.js     --verdicts: exported verdicts as the counts Lens.calibrate() reads (RA §5.2)
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
 scripts/              build-webview.js, check-vsix.js, release-notes.js, pack-cli.js (the CLI's npm package)
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX + npm)

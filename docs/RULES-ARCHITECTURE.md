@@ -403,7 +403,11 @@ Walk-through:
   review (Wilson interval, decay of old verdicts, a team's shared `calibration.json`, a noise budget, showing part
   of an off check's findings) wait for data from several reviewers.
 - **A check ticked on by hand** on the Rules tab (`ruleOverrides[check].enabled === true`, which the
-  checkbox writes) is never hidden by calibration. A check merely left at its default is.
+  checkbox writes) is never hidden by calibration. A check merely left at its default is. `rules.json` does not carry
+  the tick: `toJson` writes `enabled: true` for every edited rule, so `fromJson` reads only `false`.
+- **In the CLI** (`--verdicts`, `cli/lib/verdicts.js`, since 0.1.135) the same `calibrate()` runs on counts made from
+  exported `verdicts.json` files: per check and source, one count per finding (check, source, session, step, the start
+  of its text), as `Lens.sessionSummary` counts them in the panel. Without the flag the counts are empty.
 - **What the UI shows** (since v0.1.112): the Calibration table has one row per check and source, with the
   status `calibrate()` really applies (`Lens.isCalibrated(check, source)`; "not calibrated" with the reason
   as a tooltip for the model, the facts of the spec, imported findings and a `calibrate: false` check; "on by hand" for an off pair the

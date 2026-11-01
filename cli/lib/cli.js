@@ -1,8 +1,8 @@
 "use strict";
 /* sessionlens analyze (phase 11, step 4): one agent session log → the review, in the terminal, as Markdown for a CI
    job's summary or as the Report .json. The same analysis as the panel (media/analyze.js) with the lint engine of the
-   profile's language (cli/lib/engines.js); no verdicts, so calibration stays at its defaults and a check on trial is
-   low. No network: nothing leaves the machine.
+   profile's language (cli/lib/engines.js). Without --verdicts, calibration stays at its defaults and a check on trial
+   is low; with it, the panel's own thresholds on the team's verdicts. No network: nothing leaves the machine.
 
    run(argv, io) → the exit code. io: { stdout, stderr, env, isTTY, cwd }, so tests run it without a process.
    0: the report is written (whatever its colour, unless --fail-on); 1: --fail-on matched the session's colour;
@@ -12,6 +12,7 @@ const path = require("path");
 const { parseArgs } = require("node:util");
 const { loadEngine } = require("./engines");
 const report = require("./report");
+const { readVerdicts, levels } = require("./verdicts");
 
 const MEDIA = require("./media");
 const Lens = require(path.join(MEDIA, "lens.js"));
@@ -32,6 +33,8 @@ Options:
   --profile <name>   the project's profile (required): ${Lens.PROFILES.join(", ")}
   --spec <file>      the specification the tests should cover
   --rules <file>     a rules.json exported from the Rules tab of the editor extension
+  --verdicts <path>  a verdicts.json exported from the Calibration tab, or a folder of them, to calibrate the checks;
+                     can be given several times
   --ci               stop_markers_missing (and no_spec, without --spec) are context, not counted in the verdict
   --fail-on <level>  none (default), red or yellow: exit with 1 when the session is that colour or worse
   --json             the Report .json
@@ -47,6 +50,7 @@ const OPTIONS = {
   profile: { type: "string" },
   spec: { type: "string" },
   rules: { type: "string" },
+  verdicts: { type: "string", multiple: true },
   ci: { type: "boolean" },
   "fail-on": { type: "string" },
   json: { type: "boolean" },
@@ -109,6 +113,14 @@ async function run(argv, io) {
       return fail(`${o.rules} is not a rules.json: ${e.message}`);
     }
 
+  let calib = null;
+  if (o.verdicts)
+    try {
+      calib = readVerdicts(o.verdicts, io.cwd || process.cwd());
+    } catch (e) {
+      return fail(e.message);
+    }
+
   const cfg = Lens.profile(o.profile);
   const res = Lens.importAny(files.log, cfg, {});
   const convs = Array.isArray(res) && res.length && res[0].events ? res : [{ events: res }];
@@ -133,13 +145,14 @@ async function run(argv, io) {
     dropped: [],
     usage: Lens.usageOf(files.log, {}) || undefined,
   };
-  LensAnalyze.analyze(s, { settings: {}, overrides });
+  LensAnalyze.analyze(s, { settings: {}, overrides, calibStats: calib ? calib.stats : undefined });
   if (s.lintPending) return fail("the lint engine was still loading");
 
   const opts = {
     version: Lens.ANALYSIS_VERSION,
     file,
     context: o.ci ? ciContext(!!files.spec) : null,
+    calibration: calib ? { verdicts: calib.verdicts, files: calib.files, ...levels(calib.stats, Lens, overrides) } : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),
   };
   io.stdout.write(o.json ? report.json(s, opts) : o.md ? report.md(s, opts) : report.text(s, opts));
