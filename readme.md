@@ -8,7 +8,7 @@
 
 SessionLens is built for QA automation (AQA) engineers who write autotests with Claude Code, Codex or Cursor's Agent. It reviews what the agent actually did in a session: reads the transcript, flags where the agent went wrong, lets you record a verdict on each finding, and turns the findings you confirm into rules for `CLAUDE.md`, `AGENTS.md` (read by Codex and Cursor) or Cursor's `.cursor/rules/sessionlens.mdc`.
 
-It runs in VS Code and in Cursor, VSCodium and other editors that install extensions from [Open VSX](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode).
+It runs in VS Code and in Cursor, VSCodium and other editors that install extensions from [Open VSX](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode). The same checks run [on the command line and in CI](#command-line-and-ci).
 
 It is built for sessions in which an agent writes or fixes automated tests, but the process checks work for any coding session.
 

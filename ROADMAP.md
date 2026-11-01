@@ -1,6 +1,6 @@
 # SessionLens roadmap
 
-This is how we see SessionLens developing, as of version 0.1.130 (October 2026). There are no dates, and the order
+This is how we see SessionLens developing, as of version 0.1.135 (November 2026). There are no dates, and the order
 can change with feedback. To suggest something, please
 [open an issue](https://github.com/nikolaylosev/sessionlens/issues).
 
@@ -9,8 +9,8 @@ can change with feedback. To suggest something, please
 SessionLens reviews the transcript of a Claude Code, Codex or Cursor Agent session and shows what the agent actually
 did, e.g. tests that never ran, assertions weakened after a failure, or deleted tests. You give a verdict on each
 finding, calibration quiets the checks that are often wrong on your sessions, and confirmed findings become rules for
-`CLAUDE.md`, `AGENTS.md` or Cursor's `.cursor/rules/sessionlens.mdc`. It runs in VS Code, Cursor and VSCodium.
-Everything runs locally, and the extension is still experimental.
+`CLAUDE.md`, `AGENTS.md` or Cursor's `.cursor/rules/sessionlens.mdc`. It runs in VS Code, Cursor and VSCodium, and on
+the command line and in CI. Everything runs locally, and it is all still experimental.
 
 Cursor support came in 0.1.121: Cursor Agent transcripts from the editor and the CLI (with the output of the agent's
 commands, read from Cursor's own databases on your machine), the CLI's `stream-json` log, a rules file for Cursor, and
@@ -37,21 +37,23 @@ subscription's limits it used. A specification can use the IDs of a test managem
 the agent's own test plan or document of test cases can become the specification with one click. New checks start
 on trial, as low findings, until reviewers have judged them.
 
+0.1.132 adds a check for tests that check a fake instead of the app, an agent's way out when the app lacks what a test
+asks for, found by running agents in CI ourselves. It also reads test runs of the Cursor CLI that go on past its
+timeout.
+
+0.1.133 brings the same checks to the terminal and to CI with the npm package `sessionlens-cli`: text, Markdown for a CI
+job's summary or JSON, an optional exit code to fail a build, and a ready example for GitHub Actions. 0.1.135 lets your
+reviewers' verdicts calibrate the checks there too.
+
 SessionLens looks at the agent's session, while pull request review tools look at the final diff. We plan new checks
 around process mistakes that only the session shows.
 
 ## Now
 
-- Test 0.1.130 by hand in real VS Code and Cursor, the Cursor hook on Windows too, and ship fixes as patch releases.
+- Try the command line tool on real CI runs, test the Cursor hook on Windows, and ship fixes as patch releases.
 - Tune checks based on [false finding reports](https://github.com/nikolaylosev/sessionlens/issues/new?template=false-finding.yml).
 
-## Next: command line tool and CI
-
-- `sessionlens analyze <transcript>` in the terminal, with JSON, Markdown and SARIF output and an exit code for CI,
-  published on npm as `sessionlens-cli`. The VS Code panel and the tool share the same analysis code.
-- A ready example for GitHub Actions, a standalone HTML report, and an optional chat notification.
-
-## After that: starter rules and a Cursor plugin
+## Next: starter rules and a Cursor plugin
 
 - Starter rules for each profile on the Calibration tab: rules for `CLAUDE.md`, `AGENTS.md` or Cursor before you have
   confirmed findings of your own, built from the same rule book the checks use, so a rule and its check never drift
@@ -61,6 +63,8 @@ around process mistakes that only the session shows.
 
 ## Later
 
+- More of the command line tool: SARIF output, a standalone HTML report, an optional chat notification, and ready
+  examples for agents other than Cursor's.
 - Cursor on Windows and Linux (tested on macOS only so far), and Cloud Agent runs once they leave a file on your
   machine.
 - Precision per model on the Calibration tab, and calibration thresholds per source, once there are enough verdicts.
