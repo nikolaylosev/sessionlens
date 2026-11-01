@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.135
+
+### Fixed
+- **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
+  into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
+
 ## 0.1.134
 
 ### Fixed

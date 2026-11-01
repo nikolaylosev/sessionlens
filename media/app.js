@@ -889,7 +889,8 @@ ${en.raw}`).join("\n\n\n");
   async function exportVerdicts() {
     const rows = [];
     await fetchSessions(
-      metas().map((m) => m.id),
+      // the demo is made up: its verdicts do not count for calibration (calibStatsBySource), here or where the file goes
+      metas().filter((m) => !isDemo(m)).map((m) => m.id),
       (s) => {
         const hidden = new Set(s.calibHidden || []);
         for (const f of [...s.findings, ...s.calibHidden || []]) {
