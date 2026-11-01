@@ -9,9 +9,10 @@ const os = require("os");
 const path = require("path");
 const { bootHost, openPage } = require("./host-panel");
 const { createStore } = require("../store.js");
-const { load } = require("./helpers");
+const { load, M } = require("./helpers");
 
 const { Lens } = load();
+const LensDemo = require(M("demo-session.js"));
 const cfg = Lens.profile("qa-ts");
 const at = "2026-10-01T00:00:00.000Z";
 const EVENTS = [{ seq: 1, kind: "write", file: "e2e/a.spec.ts", new_content: "test('a', async ({ page }) => {\n  await page.waitForTimeout(3000);\n});\n" }];
@@ -68,6 +69,17 @@ test("Export verdicts.json writes the verdicts of hidden findings too, marked hi
     ].sort(),
   );
   assert.deepEqual(p.errors, []);
+  p.close();
+});
+
+test("Export verdicts.json leaves out the demo session: it does not count for calibration, here or where the file goes", async () => {
+  const demo = Object.assign(session(), { id: LensDemo.ID, name: LensDemo.NAME });
+  const { p } = await host([session(), demo]);
+  p.document.querySelector("#export-verdicts").dispatchEvent(new p.window.MouseEvent("click", { bubbles: true }));
+  await until(() => p.sent.some((m) => m.type === "save:file"));
+  const rows = JSON.parse(p.sent.find((m) => m.type === "save:file").payload.content);
+  assert.deepEqual([...new Set(rows.map((r) => r.session))], ["round trip"]);
+  assert.equal(rows.length, 2);
   p.close();
 });
 

@@ -764,7 +764,10 @@ export function renderSkillResults(openId) {
 export async function exportVerdicts() {
   const rows = [];
   await fetchSessions(
-    metas().map((m) => m.id),
+    // the demo is made up: its verdicts do not count for calibration (calibStatsBySource), here or where the file goes
+    metas()
+      .filter((m) => !isDemo(m))
+      .map((m) => m.id),
     (s) => {
       // with the findings an "off" check hides (calibHidden): their verdicts are what keep the check off (0.1.116)
       const hidden = new Set(s.calibHidden || []);
