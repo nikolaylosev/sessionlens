@@ -203,7 +203,7 @@ Editing **never changes what a check looks for**. It changes wording, loudness a
 
 ### Sharing the rule book
 
-- **Export rules.json** saves your edits (schema `sessionlens/rules@1`). Keep the file in your repository so the whole team uses the same wording and severities.
+- **Export rules.json** saves your edits (schema `sessionlens/rules@1`), and since 0.1.135 the checks you ticked on by hand (`onByHand`), which calibration does not hide. Keep the file in your repository so the whole team uses the same wording and severities.
 - **Import rules.json** loads such a file.
 - **Reset to defaults** discards every edit.
 

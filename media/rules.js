@@ -70,14 +70,22 @@
       .filter(([, v]) => v && v.enabled === false)
       .map(([k]) => k);
 
+  /* A check ticked on by hand (enabled: true, which calibration never hides) is onByHand (0.1.135): `enabled` cannot say
+     it, it is true in every row of an edited rule. A row with nothing else edited holds only that: the text and the
+     severity in it would become edits on import, and a severity by hand outranks a check's trial. */
   function toJson(overrides) {
+    const onByHand = (check) => ((overrides || {})[check] || {}).enabled === true;
     return JSON.stringify(
       {
         schema: "sessionlens/rules@1",
         updated: new Date().toISOString(),
         rules: book(overrides)
-          .filter((r) => r.edited)
-          .map(({ check, rule, good, severity, enabled }) => ({ check, rule, good, severity, enabled })),
+          .filter((r) => r.edited || onByHand(r.check))
+          .map(({ check, rule, good, severity, enabled, edited }) => ({
+            check,
+            ...(edited ? { rule, good, severity, enabled } : {}),
+            ...(onByHand(check) ? { onByHand: true } : {}),
+          })),
       },
       null,
       1,
@@ -107,6 +115,7 @@
       if (SEVERITIES.includes(r.severity)) out.severity = r.severity;
       else if (r.severity !== undefined && r.severity !== null && r.severity !== "") ignored.push({ index, check: r.check, reason: "bad_severity" });
       if (r.enabled === false) out.enabled = false;
+      else if (r.onByHand === true) out.enabled = true;
     });
     return { overrides, ignored };
   }

@@ -12,6 +12,9 @@
 ### Fixed
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
+- **`rules.json` keeps a check you ticked on by hand.** Calibration never hides such a check, but the tick was lost in
+  the file, so on another machine, or in the CLI with `--rules`, the verdicts could switch the check off. Export the
+  file again to carry it. A file from an older version is read as before.
 
 ## 0.1.134
 
