@@ -12,6 +12,9 @@
 ### Fixed
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
+- **"Run it again" is a request, not frustration.** "запусти ещё раз", "Попробуй с Gemini ещё раз" and "try again" were
+  a medium "User frustration signal". In a message that opens with a request, "again", "ещё раз" and "снова" no longer
+  count; "Why again?" and "сделай ещё раз, не то" still do.
 - **"Passing" and "проходит" are about the tests only when the sentence says so.** "Запрос проходит через прокси" or "I
   am passing the token" was a high "Claims tests pass". A sentence now counts when it names the tests, a name in quotes
   stands before the word, or nothing else is in it ("Now passing."). A test named without quotes ("seed проходит") no
