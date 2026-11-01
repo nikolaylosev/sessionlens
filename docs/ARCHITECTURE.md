@@ -142,6 +142,7 @@ media/                everything the webview loads (also required by Node tests)
   analyze.js          the analysis of one session: every track joined, calibration, Rules overrides; shared by the
                       panel and the CLI (RA §3)
   report.js           the Report .json (sessionlens/finding@1), shared by the panel's export and the CLI's --json
+  claude-subagents.js a Claude Code session's subagent files; Node only, shared by the host and the CLI
   ai.js               model review: providers table, prompts, tasks, verify, queue
   segment.js          model-based segmentation of a session
   dialogs.js          in-page dialogs (the webview has no modal dialogs)
@@ -469,7 +470,7 @@ flowchart TD
   **Subagents** (since 0.1.127): the steps of an agent the session started with the `Agent` tool (Playwright's planner,
   generator and healer, Explore…) are in `<session>/subagents/agent-<id>.jsonl`, with `agent-<id>.meta.json` (its
   `agentType`) next to it; the session's own file has only the `Agent` call and its answer. When **Choose file** picks
-  `<session>.jsonl`, the host adds them (`claudeSubagents()` in `extension.js`, `Lens.joinSubagents`): a line
+  `<session>.jsonl`, the host and the CLI add them (`claudeSubagents()` in `media/claude-subagents.js`, `Lens.joinSubagents`): a line
   `{"type":"sessionlens-subagent",agentId,agentType}` before each file. `fromClaudeJsonl` then puts every record in the
   order of its `timestamp` (stable; only when a record has `isSidechain: true`), marks a subagent's step with
   `agent: <agentType>` ("subagent" without a meta file), and skips the main agent's prompt to a subagent (a sidechain

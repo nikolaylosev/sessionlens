@@ -4,7 +4,8 @@
    reused for --md: it is built around verdicts (it waits for one on every high finding and lists confirmed, rejected
    and undecided findings), and a CI run has none; the headline lines are the panel's own strings.
 
-   opts: { version, file, context, color, calibration }. context (--ci): a Set of check names set aside as context, not
+   opts: { version, file, subagents, context, color, calibration }. subagents: how many subagent files the session has
+   with it; context (--ci): a Set of check names set aside as context, not
    counted in the verdict (see LensReport.json); color: ANSI colours in the terminal text; calibration (--verdicts):
    { verdicts, files, off, demoted }, how many verdicts calibrated the checks and which they switched off or demoted. */
 const path = require("path");
@@ -47,6 +48,7 @@ function calibrationLine(c) {
     .filter(Boolean)
     .join(", ");
 }
+const subagentsLine = (n) => `${n} ${n === 1 ? "file" : "files"} read with the session`;
 // why calibration hid a finding, as the panel's PR report says it
 const whyHidden = (f) => (f.precision != null ? T("md_hidden_why", { p: Math.round(f.precision * 100), n: f.verdicts }) : "");
 
@@ -96,6 +98,7 @@ function text(s, opts = {}) {
     p.count,
     ...(p.usage ? [p.usage] : []),
     plain(p.spec),
+    ...(opts.subagents ? [`Subagents: ${subagentsLine(opts.subagents)}`] : []),
     ...(p.lint ? [`Lint: ${p.lint}`] : []),
     ...(p.calibration ? [`Calibration: ${p.calibration}`] : []),
     "",
@@ -123,6 +126,7 @@ function md(s, opts = {}) {
     p.verdict,
     ...(p.usage ? [p.usage] : []),
     p.spec,
+    ...(opts.subagents ? [`**Subagents:** ${subagentsLine(opts.subagents)}`] : []),
     ...(p.lint ? [`**Lint:** ${esc(p.lint)}`] : []),
     ...(p.calibration ? [`**Calibration:** ${esc(p.calibration)}`] : []),
     "",
@@ -136,7 +140,12 @@ function md(s, opts = {}) {
 
 const json = (s, opts = {}) =>
   JSON.stringify(
-    { ...LensReport.json(s, { context: opts.context }), sessionlens: opts.version || null, ...(opts.calibration ? { calibration: opts.calibration } : {}) },
+    {
+      ...LensReport.json(s, { context: opts.context }),
+      sessionlens: opts.version || null,
+      ...(opts.subagents ? { subagents: opts.subagents } : {}),
+      ...(opts.calibration ? { calibration: opts.calibration } : {}),
+    },
     null,
     1,
   ) + "\n";
