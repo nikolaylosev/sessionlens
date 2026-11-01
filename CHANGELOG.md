@@ -20,6 +20,9 @@
   прокси", "I am passing the token" and "The dashboard is all green" were a high "Claims tests pass". A sentence now
   counts when it names the tests, a name in quotes stands before the phrase, or nothing else is in it ("Now passing.",
   "All pass."). A test named without quotes ("seed проходит") no longer counts on its own.
+- **What an MCP app sends in a Codex session is not the user repeating a request.** Codex writes the same line in the
+  person's place for each such message, and it was a medium "User repeated the same request". A session that has it
+  offers **Import again**.
 - **`rules.json` keeps a check you ticked on by hand.** Calibration never hides such a check, but the tick was lost in
   the file, so on another machine, or in the CLI with `--rules`, the verdicts could switch the check off. Export the
   file again to carry it. A file from an older version is read as before.

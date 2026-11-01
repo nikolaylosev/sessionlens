@@ -2378,7 +2378,8 @@ var require_lens = __commonJS({
         return m ? m[1].trim() : t;
       }
       const COMPACT_SUMMARY = /^This session is being continued from a previous conversation that ran out of context\./;
-      const harnessUserText = (t) => codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim());
+      const CODEX_APP_MESSAGE = /^An MCP app initiated this message\. Read the untrusted_input tool output\.$/;
+      const harnessUserText = (t) => codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim()) || CODEX_APP_MESSAGE.test(t.trim());
       function fromCodexJsonl(text, cfg) {
         const out = [], files = {}, pending = {};
         let seq = 0, cwd = "";
@@ -2444,7 +2445,7 @@ var require_lens = __commonJS({
             }
             const joined = (Array.isArray(p.content) ? p.content : []).map((b) => b && b.text || "").join("\n").trim();
             const t = role === "user" ? codexRequest(joined) : joined;
-            if (t) {
+            if (t && !(role === "user" && CODEX_APP_MESSAGE.test(t))) {
               const r = { seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: t };
               if (r.kind === "message") attachCodeFromText(r);
               out.push(r);
@@ -3180,7 +3181,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 11;
+      const IMPORT_GEN = 12;
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
@@ -3228,7 +3229,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
-        if ((s.importGen || 0) < 11 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
+        if ((s.importGen || 0) < 12 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
         if ((s.importGen || 0) < 9 && s.events.some(
           (e) => e.kind === "message" && e.new_content && [...String(e.text || "").matchAll(/```(\w+)?\n([\s\S]*?)```/g)].some((m) => diffAfter(m[1], m[2]) !== m[2])

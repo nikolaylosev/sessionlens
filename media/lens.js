@@ -1430,7 +1430,10 @@
     return m ? m[1].trim() : t;
   }
   const COMPACT_SUMMARY = /^This session is being continued from a previous conversation that ran out of context\./;
-  const harnessUserText = (t) => codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim());
+  // Codex's stand-in for a message an MCP app sent, in the person's place (0.1.135): the same each time, "repeated"
+  const CODEX_APP_MESSAGE = /^An MCP app initiated this message\. Read the untrusted_input tool output\.$/;
+  const harnessUserText = (t) =>
+    codexRequest(t.trim()) !== t.trim() || COMPACT_SUMMARY.test(t.trim()) || CURSOR_OWN_QUERY.test(t.trim()) || CODEX_APP_MESSAGE.test(t.trim());
   function fromCodexJsonl(text, cfg) {
     const out = [],
       files = {},
@@ -1512,7 +1515,7 @@
           .join("\n")
           .trim();
         const t = role === "user" ? codexRequest(joined) : joined;
-        if (t) {
+        if (t && !(role === "user" && CODEX_APP_MESSAGE.test(t))) {
           const r = { seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: t };
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
@@ -2469,8 +2472,9 @@
      10: a Cursor session's calls of Playwright's test agents with their arguments: the generator's file and code, the
         planner's plan (0.1.130).
      11: a user message without the text Codex's editor extension wraps it in, Claude Code's summary of a compacted
-        conversation or Cursor's own query after a background task (0.1.130). */
-  const IMPORT_GEN = 11;
+        conversation or Cursor's own query after a background task (0.1.130).
+     12: no user message for what an MCP app sent in a Codex session (0.1.135). */
+  const IMPORT_GEN = 12;
   /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
@@ -2564,8 +2568,8 @@
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
     if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
-    // a user message that is Codex's, Claude Code's or Cursor's own text, or wrapped in it (0.1.130)
-    if ((s.importGen || 0) < 11 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
+    // a user message that is Codex's, Claude Code's or Cursor's own text, or wrapped in it (0.1.130, 0.1.135)
+    if ((s.importGen || 0) < 12 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
     // a message with a diff, whose removed lines were read as code (0.1.127)

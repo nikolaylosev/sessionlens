@@ -50,6 +50,27 @@ test("Codex: the request is the message, not the wrapper of the editor extension
   assert.deepEqual(frustration(ev), [], "no request repeated");
 });
 
+// 0.1.135, the shape of a real session: Codex's stand-in for a message an MCP app sent, the same each time
+const APP_MESSAGE = "An MCP app initiated this message. Read the untrusted_input tool output.";
+test("Codex: what an MCP app sent is no message of the person, and not the same request repeated", () => {
+  const text = [
+    META,
+    codexUser("Lay out today's spread"),
+    codexSays("Opening the app."),
+    codexUser(APP_MESSAGE),
+    codexSays("Done."),
+    codexUser(APP_MESSAGE),
+    codexSays("Done again."),
+    // the person's own words that mention it stay
+    codexUser("What does 'An MCP app initiated this message' mean?"),
+  ].join("\n");
+  const ev = Lens.importAny(text, cfg);
+  assert.deepEqual(users(ev), ["Lay out today's spread", "What does 'An MCP app initiated this message' mean?"]);
+  assert.deepEqual(frustration(ev), []);
+  // the same words from the agent are its own
+  assert.equal(Lens.importAny([META, codexUser("Go"), codexSays(APP_MESSAGE)].join("\n"), cfg).filter((e) => e.kind === "message").length, 1);
+});
+
 test("Claude Code's summary of a compacted conversation and Cursor's own query are no messages of the person", () => {
   const summary = "This session is being continued from a previous conversation that ran out of context. The summary below covers…";
   const claude = [
@@ -87,11 +108,13 @@ test("the first message is no frustration signal: it is the task", () => {
   assert.equal(frustration(msgs(["user", "Write the tests"], ["assistant", "Done."], ["user", "again?"])).length, 1, "after a step: as before");
 });
 
-test("a session imported before with such a user message asks to be imported again (IMPORT_GEN 11)", () => {
+test("a session imported before with such a user message asks to be imported again (IMPORT_GEN 12)", () => {
   const s = (text, importGen = 10) => ({ profile: "qa-ts", importGen, events: [{ seq: 0, kind: "user", text }] });
   assert.equal(Lens.needsReimport(s("# Context from my IDE setup:\n\n## Active file: a.ts\n\n## My request:\nAdd a test")), true);
   assert.equal(Lens.needsReimport(s("This session is being continued from a previous conversation that ran out of context. More.")), true);
   assert.equal(Lens.needsReimport(s("Briefly inform the user about the task result and perform any follow-up actions (if needed).")), true);
+  assert.equal(Lens.needsReimport(s(APP_MESSAGE, 11)), true);
+  assert.equal(Lens.needsReimport(s("Add a test", 11)), false);
   assert.equal(Lens.needsReimport(s("Add a test")), false);
   assert.equal(Lens.needsReimport(s("# Context from my IDE setup:\n\n## My request:\nAdd a test", Lens.IMPORT_GEN)), false);
 });
