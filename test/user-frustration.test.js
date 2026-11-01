@@ -1,7 +1,8 @@
 "use strict";
 /* user_frustration: a short user message that sounds like a correction, or the same request sent twice (the first 40
    characters). English and Russian. What must not count: a long dump, a new request that only shares a word, a phrase
-   inside another word, and since 0.1.135 "again" in a message that opens with a request. */
+   inside another word, and since 0.1.135 "again" or what to test ("a wrong password", "the undo button") in a message
+   that opens with a request. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -40,7 +41,7 @@ test("a Russian correction, and a repeat of the first 40 characters", () => {
 
 /* 0.1.135: "ещё раз", "снова" and "again" in a message that opens with a request ask for something. From the owner's
    sessions: "запусти еще раз", "Попробуй с Gemini ещё раз", "опиши кейс ещё раз". */
-test("again in a request is no signal; again alone, or a correction beside it, still is", () => {
+test("again and what to test in a request are no signal; alone, or a correction beside them, they still are", () => {
   const signal = (text) => [`medium: User frustration signal: “${text}” — the agent misunderstood the task a step earlier`];
   for (const text of [
     "запусти еще раз",
@@ -55,6 +56,18 @@ test("again in a request is no signal; again alone, or a correction beside it, s
     "please run the tests again",
     "Check the login page again.",
     "запусти снова, ещё раз",
+    // the owner's sessions: the verbs "выведи" and "проанализируй", with its typo
+    "выведи полный план еще раз",
+    "Пронализируй тесты еще раз после изменений",
+    "Проанализируй тесты ещё раз",
+    // what to test, not a reaction
+    "Add a test for a wrong password",
+    "Write a test that a wrong email shows an error",
+    "Проверь вход с wrong паролем",
+    "Add a test for the undo button",
+    "Test the revert button on the settings page",
+    "Напиши тест: верни 404 на неизвестный id",
+    "Fix the undo test",
   ])
     assert.deepEqual(found(["Write the tests", text]), [], text);
   for (const text of [
@@ -72,6 +85,16 @@ test("again in a request is no signal; again alone, or a correction beside it, s
     "проверь, опять упало",
     // a word that only starts like a request
     "Trying again",
+    // a correction, not what to test
+    "Верни как было",
+    "Revert that",
+    "Undo it",
+    "You edited the wrong file",
+    "Wrong test",
+    "Wrong!",
+    "Fix it, this is wrong",
+    "Check it again, that is wrong!",
+    "Check the login page, wrong.",
   ])
     assert.deepEqual(found(["Write the tests", text]), signal(text), text);
   // the same request twice is still a repeat
