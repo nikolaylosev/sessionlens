@@ -222,7 +222,7 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 
 | Check | Default | Raised when |
 |---|---|---|
-| `pass_claim_without_run` | High | The agent says tests pass with no test run before it, while the last run was red, or after it changed code or a test since the last run. A sentence about a build, the types or a linter passing is no claim about the tests |
+| `pass_claim_without_run` | High | The agent says tests pass with no test run before it, while the last run was red, or after it changed code or a test since the last run. A sentence about a build, the types or a linter passing is no claim about the tests, and "passing", "should pass", "all green" or "проходит" count only when the sentence names the tests, a name in quotes stands before them, or nothing else is in it (0.1.135) |
 | `fix_after_fail_without_triage` | High | The agent edits right after a failure without saying whether it is a product bug, a test bug or a spec defect. In plain words counts too, in English and Russian ("Test problem", "typo in the test", "application defect", since 0.1.132 "assertion bug", "wrong assertion", "неверная проверка"); a cause named without whose error it is ("due to…", "because…") is medium |
 | `tests_never_run` | High | Tests were written but never executed |
 | `scope_creep` | Medium | A file was edited that is not in the plan |

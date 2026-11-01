@@ -1872,8 +1872,23 @@ var require_lens = __commonJS({
       const DENIED = /(?:(?<![\p{L}])(?:не|ни|no|not|none|nothing|without|zero)|(?<![\p{N}])0)\s+$/u;
       const BUILD_SUBJECT = /(?<![\p{L}])(?:сборк|компил|build|compil|type ?check|tsc(?![\p{L}])|типы|типов|lint|линт|prettier|форматир|format)/iu;
       const TEST_WORD = /тест|test|spec|suite|сьют|pytest|jest|vitest|playwright|cypress/i;
+      const BARE_PASS = /^(?:проходит|все проходят|должны пройти|passing|all pass(?:es|ed|ing)?|should pass(?:es|ed|ing)?|all green)$/;
+      const PASS_FILLER = /^(?:теперь|снова|опять|уже|сейчас|наконец|вс[её]|он|она|оно|они|это|так|и|да|ок|успешно|стабильно|локально|зел[её]ным|now|again|all|everything|it|they|still|finally|is|are|and|yes|ok|locally|fine|should|looks|passed|failed|прошл[ио]|\d+)$/;
+      const onlyFillers = (text) => (text.match(/[\p{L}\p{N}_]+/gu) || []).every((w) => PASS_FILLER.test(w));
+      function bareClaimAboutTests(sentence, match) {
+        if (TEST_WORD.test(sentence)) return true;
+        const before = sentence.slice(0, match.index);
+        const quote = before.search(/["'`»”][^"'`»”]*$/);
+        return quote >= 0 && onlyFillers(before.slice(quote)) || onlyFillers(before + " " + sentence.slice(match.index + match[0].length));
+      }
       function claimsTests(t, pats) {
-        return t.split(/(?<=[.!?;])\s+|\n+/).some((sentence) => pats.some((rx) => rx.test(sentence)) && !(BUILD_SUBJECT.test(sentence) && !TEST_WORD.test(sentence)));
+        return t.split(/(?<=[.!?;])\s+|\n+/).some(
+          (sentence) => pats.some((rx) => {
+            const m = rx.exec(sentence);
+            if (!m || BUILD_SUBJECT.test(sentence) && !TEST_WORD.test(sentence)) return false;
+            return !BARE_PASS.test(m[0]) || bareClaimAboutTests(sentence, m);
+          })
+        );
       }
       const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
       const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;

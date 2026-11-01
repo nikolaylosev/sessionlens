@@ -12,6 +12,10 @@
 ### Fixed
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
+- **"Passing", "should pass" and "проходит" are about the tests only when the sentence says so.** "Запрос проходит через
+  прокси", "I am passing the token" and "The dashboard is all green" were a high "Claims tests pass". A sentence now
+  counts when it names the tests, a name in quotes stands before the phrase, or nothing else is in it ("Now passing.",
+  "All pass."). A test named without quotes ("seed проходит") no longer counts on its own.
 - **`rules.json` keeps a check you ticked on by hand.** Calibration never hides such a check, but the tick was lost in
   the file, so on another machine, or in the CLI with `--rules`, the verdicts could switch the check off. Export the
   file again to carry it. A file from an older version is read as before.
