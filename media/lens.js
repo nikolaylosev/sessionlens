@@ -773,13 +773,14 @@
      names the tests too ("сборка и тесты проходят"). On the owner's sessions 3 such findings. */
   const BUILD_SUBJECT = /(?<![\p{L}])(?:сборк|компил|build|compil|type ?check|tsc(?![\p{L}])|типы|типов|lint|линт|prettier|форматир|format)/iu;
   const TEST_WORD = /тест|test|spec|suite|сьют|pytest|jest|vitest|playwright|cypress/i;
-  /* "проходит" or "passing" alone says nothing of what passes (0.1.135): "Багаж проходит корректно", "Запрос проходит
-     через прокси", "I am passing the token". It is about the tests when the sentence names them, when a name in quotes
-     stands before it ('"Add a todo" проходит'), or when nothing else is in the sentence ("Теперь проходит.", "Now
-     passing."). A test named without quotes ("seed проходит") is not told from "багаж проходит". */
-  const BARE_PASS = /^(?:проходит|passing)$/;
+  /* A phrase that does not name the tests says nothing of what passes (0.1.135): "Багаж проходит корректно", "Запрос
+     проходит через прокси", "I am passing the token", "The token should pass through the proxy", "The dashboard is all
+     green". It is about the tests when the sentence names them, when a name in quotes stands before it ('"Add a todo"
+     проходит'), or when nothing else is in the sentence ("Теперь проходит.", "Now passing.", "All pass."). A test named
+     without quotes ("seed проходит") is not told from "багаж проходит". */
+  const BARE_PASS = /^(?:проходит|все проходят|должны пройти|passing|all pass(?:es|ed|ing)?|should pass(?:es|ed|ing)?|all green)$/;
   const PASS_FILLER =
-    /^(?:теперь|снова|опять|уже|сейчас|наконец|вс[её]|он|она|оно|это|так|и|да|ок|успешно|стабильно|локально|зел[её]ным|now|again|all|everything|it|still|finally|is|are|and|yes|ok|locally|fine)$/;
+    /^(?:теперь|снова|опять|уже|сейчас|наконец|вс[её]|он|она|оно|они|это|так|и|да|ок|успешно|стабильно|локально|зел[её]ным|now|again|all|everything|it|they|still|finally|is|are|and|yes|ok|locally|fine|should|looks|passed|failed|прошл[ио]|\d+)$/;
   const onlyFillers = (text) => (text.match(/[\p{L}\p{N}_]+/gu) || []).every((w) => PASS_FILLER.test(w));
   function bareClaimAboutTests(sentence, match) {
     if (TEST_WORD.test(sentence)) return true;

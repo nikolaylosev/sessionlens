@@ -15,10 +15,10 @@
 - **"Run it again" is a request, not frustration.** "запусти ещё раз", "Попробуй с Gemini ещё раз" and "try again" were
   a medium "User frustration signal". In a message that opens with a request, "again", "ещё раз" and "снова" no longer
   count; "Why again?" and "сделай ещё раз, не то" still do.
-- **"Passing" and "проходит" are about the tests only when the sentence says so.** "Запрос проходит через прокси" or "I
-  am passing the token" was a high "Claims tests pass". A sentence now counts when it names the tests, a name in quotes
-  stands before the word, or nothing else is in it ("Now passing."). A test named without quotes ("seed проходит") no
-  longer counts on its own.
+- **"Passing", "should pass" and "проходит" are about the tests only when the sentence says so.** "Запрос проходит через
+  прокси", "I am passing the token" and "The dashboard is all green" were a high "Claims tests pass". A sentence now
+  counts when it names the tests, a name in quotes stands before the phrase, or nothing else is in it ("Now passing.",
+  "All pass."). A test named without quotes ("seed проходит") no longer counts on its own.
 - **`rules.json` keeps a check you ticked on by hand.** Calibration never hides such a check, but the tick was lost in
   the file, so on another machine, or in the CLI with `--rules`, the verdicts could switch the check off. Export the
   file again to carry it. A file from an older version is read as before.

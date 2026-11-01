@@ -5,7 +5,7 @@
    until 0.1.119). Since 0.1.121 the 6 steps leave out the ones that change no code: reads, searches, other tools (a
    browser, MCP), git and other commands. Since 0.1.129 also a claim after a green run when a code, test or runner config
    file changed after it and nothing ran since; a note or a doc changed after it does not count. Since 0.1.135 a bare
-   "проходит" or "passing" counts only about the tests. */
+   "проходит", "passing", "should pass", "all pass", "all green" and the like count only about the tests. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -158,9 +158,9 @@ test("a claim phrase counts only as whole words; an English one may end in -es, 
     assert.deepEqual(found([["say", claim]]), [NO_RUN], claim);
 });
 
-/* 0.1.135: "проходит" or "passing" alone is about the tests when the sentence names them, a name in quotes stands before
-   it, or nothing else is in the sentence. Found in Codex sessions: "багаж проходит корректно". */
-test("a bare проходит or passing: a claim only about the tests", () => {
+/* 0.1.135: a phrase that does not name the tests is about them when the sentence names them, a name in quotes stands
+   before it, or nothing else is in the sentence. Found in Codex sessions: "багаж проходит корректно". */
+test("a phrase that does not name the tests: a claim only about the tests", () => {
   for (const text of [
     "Багаж проходит корректно.",
     "Поведение при ошибке проходит как ожидалось.",
@@ -169,6 +169,12 @@ test("a bare проходит or passing: a claim only about the tests", () => {
     "I am passing the token to the fixture.",
     "Passing a string here avoids the cast.",
     "Значение проходит, а не падает",
+    "The token should pass through the proxy.",
+    "The value should pass validation on the server.",
+    "Запрос должны пройти все проверки сервера.",
+    "Все проходят через авторизацию.",
+    "All pass through the gateway.",
+    "The dashboard is all green in Grafana.",
   ])
     assert.deepEqual(found([["say", text]]), [], text);
   for (const text of [
@@ -187,6 +193,13 @@ test("a bare проходит or passing: a claim only about the tests", () => {
     "Все проходят.",
     "All pass.",
     "Everything should pass.",
+    "They should all pass.",
+    "Должны пройти.",
+    "All green.",
+    "Looks all green now.",
+    "I will run the tests, they should pass.",
+    "The login spec is all green.",
+    "12 passed, 0 failed, all green.",
     "Все тесты проходят, багаж тоже.",
   ])
     assert.deepEqual(found([["say", text]]), [NO_RUN], text);
@@ -195,8 +208,9 @@ test("a bare проходит or passing: a claim only about the tests", () => {
   assert.deepEqual(found([["say", 'Passing "x" to the fixture.']]), []);
   // a quote, then another subject: the quoted name is not what passes
   assert.deepEqual(found([["say", 'Поле "x" затем запрос проходит.']]), []);
-  // a build all green is still no claim about the tests, with a longer phrase too
+  // a build all green is still no claim about the tests, with a longer phrase or a name in quotes too
   assert.deepEqual(found([["say", "The build is all green."]]), []);
+  assert.deepEqual(found([["say", 'Сборка "web" проходит.']]), []);
 });
 
 test("a run whose output the transcript does not have (output_missing, a Cursor import): unknown, not reported (0.1.121)", () => {
