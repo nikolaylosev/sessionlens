@@ -48,9 +48,7 @@ jobs:
       # sessionlens-cli@0.1 is the latest 0.1.x release.
       - name: SessionLens reviews the session
         if: always()
-        run: |
-          npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md >> "$GITHUB_STEP_SUMMARY"
-          npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --json > "$RUNNER_TEMP/review.json"
+        run: npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md --json-file "$RUNNER_TEMP/review.json" >> "$GITHUB_STEP_SUMMARY"
 
       # Keep the log: open it in the SessionLens extension (Choose file) to mark each finding as right or wrong.
       - name: Keep the log and the review

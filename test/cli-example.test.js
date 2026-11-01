@@ -38,21 +38,20 @@ test("every SessionLens command of the example is one the CLI accepts", async ()
       J({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }),
     ].join("\n");
     fs.writeFileSync(path.join(dir, "agent.jsonl"), log);
-    const lines = text.split("\n").filter((l) => /^\s+npx -y sessionlens-cli@/.test(l));
-    assert.equal(lines.length, 2);
-    for (const line of lines) {
-      // npx -y sessionlens-cli@0.1 <args> > or >> <file>
-      const args = line
-        .replace(/^.*?sessionlens-cli@\S+\s+/, "")
-        .replace(/\s*>>?\s*\S+$/, "")
-        .replace(/"\$RUNNER_TEMP\/agent\.jsonl"/, "agent.jsonl")
-        .split(/\s+/);
-      let out = "",
-        err = "";
-      const code = await run(args, { stdout: { write: (t) => (out += t) }, stderr: { write: (t) => (err += t) }, env: {}, isTTY: false, cwd: dir });
-      assert.equal(code, 0, `${line}\n${err}`);
-      assert.ok(out.length > 0, line);
-    }
+    const lines = text.split("\n").filter((l) => /npx -y sessionlens-cli@/.test(l));
+    assert.equal(lines.length, 1, "one run gives the summary and the JSON");
+    // npx -y sessionlens-cli@0.1 <args> >> <file>
+    const args = lines[0]
+      .replace(/^.*?sessionlens-cli@\S+\s+/, "")
+      .replace(/\s*>>?\s*\S+$/, "")
+      .replace(/"\$RUNNER_TEMP\/(\S+?)"/g, "$1")
+      .split(/\s+/);
+    let out = "",
+      err = "";
+    const code = await run(args, { stdout: { write: (t) => (out += t) }, stderr: { write: (t) => (err += t) }, env: {}, isTTY: false, cwd: dir });
+    assert.equal(code, 0, `${lines[0]}\n${err}`);
+    assert.match(out, /^## Session review/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "review.json"), "utf8")).schema, "sessionlens/finding@1");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

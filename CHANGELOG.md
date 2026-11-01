@@ -8,6 +8,8 @@
   more, a check with a precision under 30% is off and one under 50% is low; a check on trial speaks at its own severity
   once it has 10. The report says how many verdicts it used and what they changed, and lists what it hid with the
   reason. Before, every check spoke at its default severity in CI.
+- **`--json-file <file>` in the CLI.** It writes the Report .json to a file whatever is printed, so one run gives both the
+  Markdown for a CI job's summary and the JSON.
 
 ### Fixed
 - **The CLI reads a Claude Code session's subagents.** Their steps, such as those of Playwright's planner, generator and
