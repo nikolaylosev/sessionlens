@@ -237,8 +237,12 @@ Line by line:
 function toJson(overrides) {
   return JSON.stringify({
     schema: "sessionlens/rules@1", updated: new Date().toISOString(),
-    rules: book(overrides).filter(r => r.edited)
-      .map(({ check, rule, good, severity, enabled }) => ({ check, rule, good, severity, enabled })),
+    rules: book(overrides).filter(r => r.edited || onByHand(r.check))
+      .map(({ check, rule, good, severity, enabled, edited }) => ({
+        check,
+        ...(edited ? { rule, good, severity, enabled } : {}),
+        ...(onByHand(check) ? { onByHand: true } : {}), // enabled: true in the overrides; `enabled` here is true in every edited row
+      })),
   }, null, 1);
 }
 ```
@@ -403,8 +407,8 @@ Walk-through:
   review (Wilson interval, decay of old verdicts, a team's shared `calibration.json`, a noise budget, showing part
   of an off check's findings) wait for data from several reviewers.
 - **A check ticked on by hand** on the Rules tab (`ruleOverrides[check].enabled === true`, which the
-  checkbox writes) is never hidden by calibration. A check merely left at its default is. `rules.json` does not carry
-  the tick: `toJson` writes `enabled: true` for every edited rule, so `fromJson` reads only `false`.
+  checkbox writes) is never hidden by calibration. A check merely left at its default is. `rules.json` carries the tick
+  as `onByHand: true` (since 0.1.135), so the panel and the CLI's `--rules` agree.
 - **In the CLI** (`--verdicts`, `cli/lib/verdicts.js`, since 0.1.135) the same `calibrate()` runs on counts made from
   exported `verdicts.json` files: per check and source, one count per finding (check, source, session, step, the start
   of its text), as `Lens.sessionSummary` counts them in the panel. Without the flag the counts are empty.

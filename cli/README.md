@@ -90,8 +90,8 @@ Calibration: 37 verdicts from 2 files, off: magic_number, demoted: raw_locator
 Hidden by calibration: magic_number (precision 20% over 15 verdicts)
 ```
 
-With `--fail-on`, the verdict after calibration decides. A check you ticked on by hand on the Rules tab is not carried
-by `rules.json`, so here its verdicts can still switch it off.
+With `--fail-on`, the verdict after calibration decides. A check you ticked on by hand on the Rules tab stays on, when
+your `rules.json` (`--rules`) was exported from 0.1.135 or later.
 
 ## In GitHub Actions
 
