@@ -19,6 +19,7 @@ const Lens = require(path.join(MEDIA, "lens.js"));
 const LensRules = require(path.join(MEDIA, "rules.js"));
 const LensAnalyze = require(path.join(MEDIA, "analyze.js"));
 const LensReport = require(path.join(MEDIA, "report.js"));
+const { claudeSubagents } = require(path.join(MEDIA, "claude-subagents.js"));
 
 /* In CI nobody can approve a plan, and nobody can be asked for a specification: these describe where the session ran,
    not how the agent worked. With --spec, no_spec is a finding again: it then says the file has no requirements. */
@@ -121,13 +122,21 @@ async function run(argv, io) {
       return fail(e.message);
     }
 
+  // a Claude Code session's subagents lie next to its file: their steps are part of the session, as in the panel
+  const subagents = claudeSubagents(path.resolve(io.cwd || process.cwd(), file));
+  const text = subagents.length ? Lens.joinSubagents(files.log, subagents) : files.log;
+
   const cfg = Lens.profile(o.profile);
-  const res = Lens.importAny(files.log, cfg, {});
+  const res = Lens.importAny(text, cfg, {});
   const convs = Array.isArray(res) && res.length && res[0].events ? res : [{ events: res }];
   if (convs.length > 1) return fail(`${file} holds ${convs.length} conversations; give the CLI one session per file`);
   const events = convs[0].events || [];
   if (!events.length) return fail(`${file}: no steps read; is it a session log of Claude Code, Codex or Cursor?`);
-  if (Lens.unreadToolCalls(files.log, events))
+  if (Lens.subagentsMissing({ events }))
+    io.stderr.write(
+      `sessionlens: ${file}: the session started subagents and their files are not next to it (<session>/subagents/); the review misses their steps\n`,
+    );
+  if (Lens.unreadToolCalls(text, events))
     io.stderr.write(`sessionlens: ${file}: its tool calls are in a format SessionLens does not read; the review has only the messages\n`);
 
   const engine = await loadEngine(Lens.lintLanguage(cfg));
@@ -143,7 +152,7 @@ async function run(argv, io) {
     verdicts: {},
     spec: files.spec || "",
     dropped: [],
-    usage: Lens.usageOf(files.log, {}) || undefined,
+    usage: Lens.usageOf(text, {}) || undefined,
   };
   LensAnalyze.analyze(s, { settings: {}, overrides, calibStats: calib ? calib.stats : undefined });
   if (s.lintPending) return fail("the lint engine was still loading");
@@ -151,6 +160,7 @@ async function run(argv, io) {
   const opts = {
     version: Lens.ANALYSIS_VERSION,
     file,
+    subagents: subagents.length,
     context: o.ci ? ciContext(!!files.spec) : null,
     calibration: calib ? { verdicts: calib.verdicts, files: calib.files, ...levels(calib.stats, Lens, overrides) } : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),

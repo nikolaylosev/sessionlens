@@ -17,7 +17,7 @@ const LensLint = require(path.join(MEDIA, "lint.js"));
 const { WASM } = require(path.join(root, "cli", "lib", "engines.js"));
 
 // the core: what media/analyze.js, media/report.js and the CLI require, with what those require in turn
-const CORE = ["i18n.js", "checks.js", "lens.js", "lint.js", "rules.js", "spec.js", "analyze.js", "report.js"];
+const CORE = ["i18n.js", "checks.js", "lens.js", "lint.js", "rules.js", "spec.js", "analyze.js", "report.js", "claude-subagents.js"];
 // the engines: every file of every language (lint.js's ENGINE_FILES), Robot's parser and the .wasm files
 const ENGINES = [...new Set(Object.values(LensLint.ENGINE_FILES).flatMap((e) => e.js)), "lint-robot.js", ...Object.values(WASM)];
 

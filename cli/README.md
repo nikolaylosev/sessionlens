@@ -36,7 +36,9 @@ asked for one. The verdict is Red when there is a high finding, Yellow when ther
 
 ## Which log to give it
 
-- **Claude Code:** the session's `.jsonl` file in `~/.claude/projects/<project>/`.
+- **Claude Code:** the session's `.jsonl` file in `~/.claude/projects/<project>/`. Its subagents, such as Playwright's
+  planner, generator and healer, are in the `<session>/subagents/` folder next to it, and are read with it. If you copy
+  the log, as a CI artifact for example, copy that folder too, or the review misses their steps.
 - **Codex:** the `rollout-*.jsonl` file in `~/.codex/sessions/`.
 - **Cursor Agent CLI:** the output of `agent -p --output-format stream-json`, saved to a file.
 - **Cursor in the editor:** the `.jsonl` file in `~/.cursor/projects/<workspace>/agent-transcripts/`. This file has

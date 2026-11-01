@@ -9,6 +9,7 @@ const CursorHooks = require("./cursor-hooks.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
 const I18N = require("./media/i18n.js");
+const { claudeSubagents } = require("./media/claude-subagents.js"); // shared with the CLI
 const Secrets = require("./secrets.js");
 const { createProviderCall, validUrl } = require("./providers.js");
 const V = require("./validate.js");
@@ -334,36 +335,6 @@ function isDir(p) {
   } catch {
     return false;
   }
-}
-
-/* The subagents of a Claude Code session file <dir>/<id>.jsonl: <dir>/<id>/subagents/agent-<agentId>.jsonl, each with
-   agent-<agentId>.meta.json ({ agentType, description, … }). [] when there is no such folder; a file that cannot be read
-   is left out. Lens.joinSubagents puts them into the session's text. */
-function claudeSubagents(file) {
-  if (!/\.jsonl$/i.test(file)) return [];
-  const dir = path.join(file.replace(/\.jsonl$/i, ""), "subagents");
-  let names;
-  try {
-    names = fs.readdirSync(dir).filter((n) => /^agent-[\w-]+\.jsonl$/.test(n));
-  } catch {
-    return [];
-  }
-  const out = [];
-  for (const n of names.sort()) {
-    const agentId = n.replace(/^agent-|\.jsonl$/g, "");
-    let meta = {};
-    try {
-      meta = JSON.parse(fs.readFileSync(path.join(dir, `agent-${agentId}.meta.json`), "utf8")) || {};
-    } catch {
-      /* no meta: the agent's type stays unknown */
-    }
-    try {
-      out.push({ agentId, agentType: typeof meta.agentType === "string" ? meta.agentType : "", text: fs.readFileSync(path.join(dir, n), "utf8") });
-    } catch {
-      /* unreadable: left out */
-    }
-  }
-  return out;
 }
 
 // API keys (phase 2): SecretStorage + host-side provider calls. Set up in activate(); `ready` is the one-time

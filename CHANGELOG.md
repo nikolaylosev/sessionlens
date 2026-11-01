@@ -10,6 +10,10 @@
   reason. Before, every check spoke at its default severity in CI.
 
 ### Fixed
+- **The CLI reads a Claude Code session's subagents.** Their steps, such as those of Playwright's planner, generator and
+  healer, lie in a folder next to the session's file. The extension read them and the CLI did not: on one real session it
+  saw 6 edits of 38 and 7 findings of 14, with no word about it. It now reads them and says so, and warns when a session
+  started subagents and their files are not there.
 - **Export verdicts.json leaves out the demo session.** Its verdicts never counted for calibration here, but they went
   into the file, and on another machine they could count. Export the file again if you marked findings of the demo.
 - **"Run it again" and "Add a test for a wrong password" are requests, not frustration.** "запусти ещё раз", "try again",
