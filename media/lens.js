@@ -773,10 +773,28 @@
      names the tests too ("сборка и тесты проходят"). On the owner's sessions 3 such findings. */
   const BUILD_SUBJECT = /(?<![\p{L}])(?:сборк|компил|build|compil|type ?check|tsc(?![\p{L}])|типы|типов|lint|линт|prettier|форматир|format)/iu;
   const TEST_WORD = /тест|test|spec|suite|сьют|pytest|jest|vitest|playwright|cypress/i;
+  /* "проходит" or "passing" alone says nothing of what passes (0.1.135): "Багаж проходит корректно", "Запрос проходит
+     через прокси", "I am passing the token". It is about the tests when the sentence names them, when a name in quotes
+     stands before it ('"Add a todo" проходит'), or when nothing else is in the sentence ("Теперь проходит.", "Now
+     passing."). A test named without quotes ("seed проходит") is not told from "багаж проходит". */
+  const BARE_PASS = /^(?:проходит|passing)$/;
+  const PASS_FILLER =
+    /^(?:теперь|снова|опять|уже|сейчас|наконец|вс[её]|он|она|оно|это|так|и|да|ок|успешно|стабильно|локально|зел[её]ным|now|again|all|everything|it|still|finally|is|are|and|yes|ok|locally|fine)$/;
+  const onlyFillers = (text) => (text.match(/[\p{L}\p{N}_]+/gu) || []).every((w) => PASS_FILLER.test(w));
+  function bareClaimAboutTests(sentence, match) {
+    if (TEST_WORD.test(sentence)) return true;
+    const before = sentence.slice(0, match.index);
+    const quote = before.search(/["'`»”][^"'`»”]*$/);
+    return (quote >= 0 && onlyFillers(before.slice(quote))) || onlyFillers(before + " " + sentence.slice(match.index + match[0].length));
+  }
   function claimsTests(t, pats) {
-    return t
-      .split(/(?<=[.!?;])\s+|\n+/)
-      .some((sentence) => pats.some((rx) => rx.test(sentence)) && !(BUILD_SUBJECT.test(sentence) && !TEST_WORD.test(sentence)));
+    return t.split(/(?<=[.!?;])\s+|\n+/).some((sentence) =>
+      pats.some((rx) => {
+        const m = rx.exec(sentence);
+        if (!m || (BUILD_SUBJECT.test(sentence) && !TEST_WORD.test(sentence))) return false;
+        return !BARE_PASS.test(m[0]) || bareClaimAboutTests(sentence, m);
+      }),
+    );
   }
   const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
   // a document, not code: a readme, a TODO, notes (edit_churn and fix_after_fail_without_triage leave it out)
