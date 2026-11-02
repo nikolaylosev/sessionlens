@@ -46,7 +46,13 @@ export function initCalibration() {
       r.spec && r.spec.n
         ? T("md_spec", {
             n: r.spec.n,
-            unc: s.coverage ? T("md_unc", { list: s.coverage.uncovered.length ? s.coverage.uncovered.join(", ") : T("md_none") }) : "",
+            // requirements the parser numbered have no IDs a test can name: their coverage is not checked (LensSpec.checks)
+            unc:
+              r.spec.hasIds === false
+                ? T("spec_auto")
+                : s.coverage
+                  ? T("md_unc", { list: s.coverage.uncovered.length ? s.coverage.uncovered.join(", ") : T("md_none") })
+                  : "",
           })
         : T("md_no_spec"),
       ``,
