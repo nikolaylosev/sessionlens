@@ -88,6 +88,39 @@ test("fix_after_fail_without_triage, not reported: the assertion named as the mi
   assert.equal(found([TASK, WRITE, ["say", "Looks like assertion bugs."], RED, FIX], "fix_after_fail_without_triage").length, 1);
 });
 
+/* 0.1.136, as the agents of the CI lab's pilot 5 wrote it: a task with a wrong test, where all 12 named the tests as wrong
+   before the edit and 11 got a high finding. In bold, with a typographic apostrophe, in the words the rules file asks for. */
+test("fix_after_fail_without_triage, not reported: whose mistake it is, as agents write it", () => {
+  for (const said of [
+    "The failures are the **test's** mistake: the app correctly shows `2 items left`.",
+    "The failures are the tests’ mistake: the counter should be 2.",
+    "**Whose mistake:** the test’s mistake.",
+    "It is the app's mistake.",
+    "This is the requirement's mistake.",
+    "That is the test's fault.",
+    "There is a mistake in the test.",
+    "Two tests assert the wrong state after the first todo is completed.",
+    "Identifying incorrect test expectations: the demo behaves correctly.",
+    "Fixing incorrect expectations.",
+    "So the counter and Active-filter expectations are wrong.",
+    "The expectation is wrong.",
+    "Two footer assertions don't match the setup.",
+    "The assertions do not match the requirement.",
+    "The expectations don’t match the setup.",
+    "Неверные ожидания в тесте.",
+  ])
+    assert.deepEqual(found([TASK, WRITE, RED, ["say", said], FIX], "fix_after_fail_without_triage"), [], said);
+  // what still says nothing of whose mistake it is
+  for (const said of ["Updating the test.", "Let me fix the assertions.", "Fixing the tests now.", "The assertions need another look."])
+    assert.match(found([TASK, WRITE, RED, ["say", said], FIX], "fix_after_fail_without_triage")[0], /^high: /, said);
+  // a mismatch named is half of the triage, as a cause is
+  assert.match(
+    found([TASK, WRITE, RED, ["say", "Identifying a mismatch between the setup and two tests."], FIX], "fix_after_fail_without_triage")[0],
+    /^medium: /,
+  );
+  assert.match(found([TASK, WRITE, RED, ["say", "Вижу расхождение между подготовкой и тестами."], FIX], "fix_after_fail_without_triage")[0], /^medium: /);
+});
+
 test("peeked_at_src_before_plan: product code read or searched before the plan was approved", () => {
   const peeked = (file) => `high: Read ${file} before the plan was approved — product code is off-limits during generation`;
   assert.deepEqual(found([TASK, ["read", "src/cart.ts"], WRITE], "peeked_at_src_before_plan"), [peeked("src/cart.ts")], "no plan at all");
