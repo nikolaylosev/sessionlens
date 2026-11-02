@@ -120,6 +120,13 @@ test("the review: text by default; --ci sets the context aside; --fail-on decide
     assert.match(empty.out, new RegExp(`\\nSpecification: ${name}: no requirements found\\n`));
     assert.match((await cli([...base, "--spec", name, "--md"])).out, new RegExp(`\\*\\*Specification:\\*\\* ${name}: no requirements found\\n`));
   }
+  // requirements with IDs have an "untested" list; lines the parser numbered have no IDs, so their coverage is not checked
+  const uncovered = await cli([...base, "--spec", file("two.md", "- R1. A todo can be added.\n- R2. A todo can be deleted.\n")]);
+  assert.match(uncovered.out, /\nSpecification: 2 requirements, untested: R2\n/);
+  const noIds = await cli([...base, "--spec", file("notes.md", "A todo can be added\nA todo can be deleted\n")]);
+  assert.match(noIds.out, /\nSpecification: 2 requirements · numbered automatically, coverage not checked\n/);
+  assert.doesNotMatch(noIds.out, /untested/);
+  assert.match((await cli([...base, "--spec", "notes.md", "--md"])).out, /\*\*Specification:\*\* 2 requirements · numbered automatically/);
   // no --spec at all: nothing to name
   assert.match(ci.out, /\nSpecification: not provided\n/);
   // the engine of the profile's language ran: its finding and the regex one are one, from ESLint
