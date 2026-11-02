@@ -100,7 +100,7 @@ with a single message, "Done.", also gets Green, so always look at `runs` and `e
 | `runs` | how many times the agent ran the tests |
 | `edits to green` | how many edits came before the first green run; `—` means there was no green run |
 | `Tokens` | the tokens used, when the log records them |
-| `Specification` | how many requirements the CLI read from `--spec`, or `not provided` |
+| `Specification` | how many requirements the CLI read from `--spec`, `<file>: no requirements found` if it read none, or `not provided` |
 | `Lint` | what the profile's linter found in the session's code |
 | `Subagents` | how many subagent files the CLI read with the session |
 | `Calibration` | how many verdicts the CLI used and what they changed |

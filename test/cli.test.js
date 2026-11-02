@@ -112,10 +112,16 @@ test("the review: text by default; --ci sets the context aside; --fail-on decide
   assert.match(spec.out, /Verdict: Green/);
   assert.match(spec.out, /Context, not counted in CI: stop_markers_missing\n/);
   assert.match((await cli([...base, "--spec", "spec.md"])).out, /Verdict: Yellow/);
-  // a specification file with nothing in it: no_spec says so, and counts
-  const empty = await cli([...base, "--ci", "--spec", "no-requirements.md", "--fail-on", "red"]);
-  assert.equal(empty.code, 1);
-  assert.match(empty.out, /\nhigh +no_spec /);
+  // a specification file with nothing in it, not even a blank line: no_spec says so, and counts
+  for (const name of ["no-requirements.md", file("zero-bytes.md", "")]) {
+    const empty = await cli([...base, "--ci", "--spec", name, "--fail-on", "red"]);
+    assert.equal(empty.code, 1, name);
+    assert.match(empty.out, /\nhigh +no_spec /, name);
+    assert.match(empty.out, new RegExp(`\\nSpecification: ${name}: no requirements found\\n`));
+    assert.match((await cli([...base, "--spec", name, "--md"])).out, new RegExp(`\\*\\*Specification:\\*\\* ${name}: no requirements found\\n`));
+  }
+  // no --spec at all: nothing to name
+  assert.match(ci.out, /\nSpecification: not provided\n/);
   // the engine of the profile's language ran: its finding and the regex one are one, from ESLint
   const sleepy = await cli(["analyze", "sleepy.jsonl", "--profile", "qa-ts", "--ci", "--fail-on", "red", "--json"]);
   assert.equal(sleepy.code, 1);
