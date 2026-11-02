@@ -71,7 +71,7 @@ test("text: one line per session, the totals, the checks by the sessions they sp
   assert.match(lines[0], /^SessionLens .* · qa-ts · all$/);
   assert.equal(lines[1], "2 sessions: 1 red, 0 yellow, 1 green");
   assert.equal(lines[3].replace(/ +/g, " "), "green 0 high, 0 medium, 0 low clean.jsonl");
-  assert.match(lines[4].replace(/ +/g, " "), new RegExp(`^red 1 high, 0 medium, \\d low ${path.join("sub", "sleepy.jsonl")}$`));
+  assert.match(lines[4].replace(/ +/g, " "), new RegExp(`^red 1 high, 0 medium, \\d low ${path.join("sub", "sleepy.jsonl").replace(/[\\.]/g, "\\$&")}$`));
   assert.ok(lines.includes("Checks, by the sessions they spoke in:"));
   assert.ok(
     lines.some((l) => /^ +1 {2}sleep_or_skip_added$/.test(l)),
