@@ -6,7 +6,8 @@
    ".ts",
    ".tsx",
    ".js",
-   ".mjs"
+   ".mjs",
+   ".cjs"
   ],
   "runners": [
    "jest",
@@ -246,7 +247,8 @@
     ".ts",
     ".tsx",
     ".js",
-    ".mjs"
+    ".mjs",
+    ".cjs"
    ],
    "notRead": [],
    "anyFile": false
@@ -267,7 +269,8 @@
    ".ts",
    ".tsx",
    ".js",
-   ".mjs"
+   ".mjs",
+   ".cjs"
   ],
   "runners": [
    "cypress run",
@@ -495,7 +498,8 @@
     ".ts",
     ".tsx",
     ".js",
-    ".mjs"
+    ".mjs",
+    ".cjs"
    ],
    "notRead": [],
    "anyFile": false
@@ -516,7 +520,8 @@
    ".ts",
    ".tsx",
    ".js",
-   ".mjs"
+   ".mjs",
+   ".cjs"
   ],
   "runners": [
    "detox test",
@@ -736,7 +741,8 @@
     ".ts",
     ".tsx",
     ".js",
-    ".mjs"
+    ".mjs",
+    ".cjs"
    ],
    "notRead": [],
    "anyFile": false
@@ -1432,6 +1438,7 @@
    ".tsx",
    ".js",
    ".mjs",
+   ".cjs",
    ".cs",
    ".go",
    ".feature",
@@ -1708,6 +1715,7 @@
     ".tsx",
     ".js",
     ".mjs",
+    ".cjs",
     ".cs",
     ".go",
     ".feature"
@@ -1735,6 +1743,7 @@
    ".tsx",
    ".js",
    ".mjs",
+   ".cjs",
    ".cs"
   ],
   "runners": [
@@ -1970,6 +1979,7 @@
     ".tsx",
     ".js",
     ".mjs",
+    ".cjs",
     ".cs"
    ],
    "notRead": [],

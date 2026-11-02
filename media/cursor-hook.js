@@ -1343,7 +1343,7 @@ var require_lens = __commonJS({
       const PROFILES = {
         "qa-ts": {
           language: "typescript",
-          code_ext: [".ts", ".tsx", ".js", ".mjs"],
+          code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
           test_runner: "jest",
           // `npm run test` takes the usual scripts too: npm run test:e2e, npm run test:ui (0.1.121; before, no run)
           test_runner_patterns: ["jest", "vitest", "npm test", "npm run test", "playwright test", "pnpm test", "pnpm run test", "yarn test", "yarn run test"],
@@ -1449,7 +1449,21 @@ var require_lens = __commonJS({
           // its Python files go to the Python engine (0.1.129): a test with no assertion, an exception swallowed
           lint_language: "python",
           lint_ext: [".py"],
-          code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cs", ".go", ".feature", ".postman_collection.json", ".postman_environment.json"],
+          code_ext: [
+            ".py",
+            ".java",
+            ".kt",
+            ".ts",
+            ".tsx",
+            ".js",
+            ".mjs",
+            ".cjs",
+            ".cs",
+            ".go",
+            ".feature",
+            ".postman_collection.json",
+            ".postman_environment.json"
+          ],
           test_runner: "auto",
           test_runner_patterns: [
             "pytest",
@@ -1558,7 +1572,7 @@ var require_lens = __commonJS({
            fire on Appium code written in Java/Python/TS/C#, so they are not repeated here. */
         "qa-mobile": {
           language: "mobile",
-          code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cs"],
+          code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".cs"],
           test_runner: "auto",
           test_runner_patterns: ["pytest", "npm test", "npm run test", "jest", "vitest", "mvn test", "mvn verify", "gradle test", "gradlew", "dotnet test"],
           src_dirs: ["src", "app"],
@@ -1589,7 +1603,7 @@ var require_lens = __commonJS({
         },
         "qa-cypress": {
           language: "cypress",
-          code_ext: [".ts", ".tsx", ".js", ".mjs"],
+          code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
           test_runner: "cypress",
           test_runner_patterns: ["cypress run", "cypress open", "npx cypress", "yarn cypress", "cypress:run", "npm test", "npm run test"],
           src_dirs: ["src", "app"],
@@ -1621,7 +1635,7 @@ var require_lens = __commonJS({
            lint.js — there is no regex fallback for those, same as raw_locator/positional_locator elsewhere. */
         "qa-detox": {
           language: "detox",
-          code_ext: [".ts", ".tsx", ".js", ".mjs"],
+          code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
           test_runner: "detox",
           test_runner_patterns: ["detox test", "npx detox test", "detox build", "e2e:test"],
           src_dirs: ["src", "app"],
@@ -3200,7 +3214,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 12;
+      const IMPORT_GEN = 13;
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
@@ -3248,6 +3262,8 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
+        if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
+          return true;
         if ((s.importGen || 0) < 12 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => /^(?:run_tests|run_other|git)$/.test(e.kind) && heredocWrites(e.cmd, "").length)) return true;
         if ((s.importGen || 0) < 9 && s.events.some(
@@ -4140,7 +4156,9 @@ var require_lens = __commonJS({
            MutationObserver), the app's page or JavaScript answered with their own (route.fulfill with HTML or code, or
            route.fetch patched), a copy of the app opened from a file or set as content, a server of their own. Mocking an
            API (route.fulfill with JSON) and setting state (localStorage, a clock, a cookie) are no fake. The last version
-           of each file of the tests: a test file, or a helper or fixture in the tests' folders. One finding per file. */
+           of each file of the tests: a test file, or a helper or fixture in the tests' folders. One finding per file.
+           Since 0.1.136 a server by a bare createServer imported from node's http, as pilot 5 of the lab found: on tasks it was
+           not written from, this check found 1 of 3 fakes (the third in a .cjs file, whose code the import did not keep). */
         app_faked_in_test(ev, cfg) {
           const INJECT = /\b(?:addInitScript|addScriptTag|evaluate|evaluateHandle|\$eval|\$\$eval)\s*\(/;
           const BUILDS = /\bdocument\.createElement\s*\(|\.(?:appendChild|insertAdjacentHTML|insertAdjacentElement)\s*\(|\.(?:innerHTML|outerHTML)\s*=(?!=)|\bnew\s+MutationObserver\b/;
@@ -4148,6 +4166,8 @@ var require_lens = __commonJS({
           const APP_BODY = /text\/html|javascript|<!doctype|<html|<body|\.html\b|\.m?js['"`]/i;
           const OWN_PAGE = /\bsetContent\s*\(|\bgoto\s*\(\s*[`'"](?:file:|data:text\/html)|\bpathToFileURL\s*\([\s\S]{0,200}?\.html|['"`]file:\/\/[^'"`\n]*\.html/;
           const OWN_SERVER = /\b(?:http|https)\.createServer\s*\(|\bexpress\s*\(\s*\)\s*;?|\.listen\s*\(\s*\d/;
+          const HTTP_MODULE = /['"](?:node:)?https?['"]/;
+          const BARE_SERVER = /\bcreateServer\s*\(/;
           const last = /* @__PURE__ */ new Map();
           for (const e of ev) {
             if (e.file && (e.kind === "write" || e.kind === "edit")) last.set(e.file, e);
@@ -4181,6 +4201,7 @@ var require_lens = __commonJS({
               }
             if (!how && OWN_PAGE.test(code)) how = T("app_faked_page", { line: line(OWN_PAGE) });
             if (!how && OWN_SERVER.test(code)) how = T("app_faked_server", { line: line(OWN_SERVER) });
+            if (!how && HTTP_MODULE.test(code) && BARE_SERVER.test(code)) how = T("app_faked_server", { line: line(BARE_SERVER) });
             if (how) out.push(F("app_faked_in_test", "high", e.seq, T("app_faked", { file, how })));
           }
           return out;
