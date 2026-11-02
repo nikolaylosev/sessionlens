@@ -90,6 +90,18 @@ test("the PR report names the hidden high findings and counts the rest; without 
   assert.deepEqual(none.json.hiddenByCalibration, []);
 });
 
+test("the PR report's specification line: requirements the parser numbered are not listed as untested", async () => {
+  const withSpec = (specParsed, coverage) => ({ ...session([], []), spec: "a specification", specParsed, coverage });
+  const noIds = await exported(withSpec({ n: 2, oos: 0, hasIds: false }, { uncovered: ["R1", "R2"], covered: {}, unlinked: [], tests: [], hasIds: false }));
+  assert.match(noIds.md, /\*\*Specification:\*\* 2 requirements · numbered automatically, coverage not checked\n/);
+  assert.doesNotMatch(noIds.md, /untested/);
+  const ids = await exported(withSpec({ n: 2, oos: 0, hasIds: true }, { uncovered: ["R2"], covered: {}, unlinked: [], tests: [], hasIds: true }));
+  assert.match(ids.md, /\*\*Specification:\*\* 2 requirements, untested: R2\n/);
+  // a session stored before 0.1.121 has no hasIds and reads as one with IDs, as in the review tab
+  const old = await exported(withSpec({ n: 1, oos: 0 }, { uncovered: ["R1"], covered: {}, unlinked: [], tests: [] }));
+  assert.match(old.md, /\*\*Specification:\*\* 1 requirement, untested: R1\n/);
+});
+
 test("the Sessions tree counts the hidden findings next to the shown ones", async () => {
   const h = await host(session([hiddenHigh, hiddenLow], SUPPRESSED));
   const [item] = await treeSessions(h.registered.trees.sessionlensSessionsTree);

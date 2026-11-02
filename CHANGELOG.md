@@ -15,6 +15,8 @@
 - **A specification without IDs has no "untested" list in the CLI.** SessionLens numbers the lines of such a file itself,
   and no test can name those numbers, so their coverage is not checked. The report still said `untested: R1, R2`. It now
   says `numbered automatically, coverage not checked`, as the panel does.
+- **The same in the panel's PR report.** It listed a specification's automatic numbers as untested, while the review tab
+  said their coverage is not checked. It now says what the review tab says.
 - **The CLI's hint names every way to give it a session.** A wrong command was told to give a log, with no word of a
   folder or `--latest`.
 
