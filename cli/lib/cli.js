@@ -153,7 +153,8 @@ async function run(argv, io) {
 
   const base = {
     version: Lens.ANALYSIS_VERSION,
-    context: o.ci ? ciContext(!!files.spec) : null,
+    context: o.ci ? ciContext(!!o.spec) : null,
+    specFile: o.spec,
     calibration: calib ? { verdicts: calib.verdicts, files: calib.files, ...levels(calib.stats, Lens, overrides) } : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),
   };

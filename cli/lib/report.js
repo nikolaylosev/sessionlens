@@ -4,7 +4,8 @@
    reused for --md: it is built around verdicts (it waits for one on every high finding and lists confirmed, rejected
    and undecided findings), and a CI run has none; the headline lines are the panel's own strings.
 
-   opts: { version, file, subagents, noToolCalls, context, color, calibration }. subagents: how many subagent files the
+   opts: { version, file, specFile, subagents, noToolCalls, context, color, calibration }. specFile: the --spec given;
+   subagents: how many subagent files the
    session has with it; noToolCalls: the log has only messages, so the verdict says nothing about the tests; context
    (--ci): a Set of check names set aside as context, not counted in the verdict (see LensReport.json); color: ANSI
    colours in the terminal text; calibration (--verdicts):
@@ -65,7 +66,9 @@ function parts(s, opts) {
           n: r.spec.n,
           unc: s.coverage ? T("md_unc", { list: s.coverage.uncovered.length ? s.coverage.uncovered.join(", ") : T("md_none") }) : "",
         })
-      : T("md_no_spec");
+      : opts.specFile
+        ? `**Specification:** ${esc(opts.specFile)}: no requirements found`
+        : T("md_no_spec");
   return {
     r,
     title: r.task || (opts.file ? path.basename(opts.file) : r.session) || "",

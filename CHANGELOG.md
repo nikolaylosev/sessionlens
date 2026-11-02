@@ -9,6 +9,9 @@
 - **The CLI says when a log has no tool calls.** A log with only messages, such as one from an agent that stopped early,
   got a Green review with nothing to say it had seen no work. The verdict stays as it was, and stderr, the report and the
   JSON (`noToolCalls`) now say so.
+- **An empty `--spec` file is not a missing one.** With `--ci`, a file of 0 bytes was taken for no `--spec` at all, so
+  `no_spec` did not count in the verdict, unlike a file with only blank lines. And the report said `Specification: not
+  provided` about a file you gave. It now names the file and says it found no requirements.
 
 ## 0.1.136
 
