@@ -18,7 +18,7 @@ in it stay on your machine.
 
 ```
 $ npx sessionlens-cli analyze agent.jsonl --profile qa-ts
-SessionLens 0.1.132 · qa-ts · agent.jsonl
+SessionLens 0.1.x · qa-ts · agent.jsonl
 Verdict: Red · profile qa-ts · reads 13, edits 1, Read:Edit 13, runs 2, edits to green 1
 3 high, 1 medium, 0 low
 Tokens: 177k in (82% from the cache), 2k out.
