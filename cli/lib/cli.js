@@ -14,7 +14,7 @@ const { parseArgs } = require("node:util");
 const { loadEngine } = require("./engines");
 const report = require("./report");
 const { readVerdicts, levels } = require("./verdicts");
-const { latestSession } = require("./find-session");
+const { latestSession, sessionFiles } = require("./find-session");
 
 const MEDIA = require("./media");
 const Lens = require(path.join(MEDIA, "lens.js"));
@@ -30,6 +30,7 @@ const FAIL_ON = { none: [], red: ["red"], yellow: ["red", "yellow"] };
 
 const USAGE = `Usage: sessionlens analyze <log> --profile <name> [options]
        sessionlens analyze --latest --profile <name> [options]
+       sessionlens analyze <folder> --profile <name> [options]   every session in it, with a summary
 
 Reviews an AI agent's session log (Claude Code, Codex, Cursor) for how the agent worked on the tests.
 
@@ -98,19 +99,26 @@ async function run(argv, io) {
   if (!FAIL_ON[failOn]) return fail(`--fail-on is none, red or yellow, not "${failOn}"`);
   if (o.json && o.md) return fail("--json and --md: one output at a time");
 
+  const cwd = io.cwd || process.cwd();
   let file = given;
   if (o.latest) {
-    const cwd = io.cwd || process.cwd();
     const found = latestSession(cwd, io.home || os.homedir());
     if (!found) return fail(`no session of Claude Code, Codex or Cursor found for ${cwd}; give the log's path`);
     file = found.file;
     io.stderr.write(`sessionlens: the latest session here, ${found.agent}: ${file}\n`);
   }
+  const isFolder = (() => {
+    try {
+      return fs.statSync(path.resolve(cwd, file)).isDirectory();
+    } catch {
+      return false;
+    }
+  })();
+  if (isFolder && o.spec) return fail("--spec is for one session: a folder's sessions have tasks of their own");
 
-  const read = (p) => fs.readFileSync(path.resolve(io.cwd || process.cwd(), p), "utf8");
+  const read = (p) => fs.readFileSync(path.resolve(cwd, p), "utf8");
   const files = {};
   for (const [key, p] of [
-    ["log", file],
     ["spec", o.spec],
     ["rules", o.rules],
   ])
@@ -134,63 +142,100 @@ async function run(argv, io) {
   let calib = null;
   if (o.verdicts)
     try {
-      calib = readVerdicts(o.verdicts, io.cwd || process.cwd());
+      calib = readVerdicts(o.verdicts, cwd);
     } catch (e) {
       return fail(e.message);
     }
 
-  // a Claude Code session's subagents lie next to its file: their steps are part of the session, as in the panel
-  const subagents = claudeSubagents(path.resolve(io.cwd || process.cwd(), file));
-  const text = subagents.length ? Lens.joinSubagents(files.log, subagents) : files.log;
-
   const cfg = Lens.profile(o.profile);
-  const res = Lens.importAny(text, cfg, {});
-  const convs = Array.isArray(res) && res.length && res[0].events ? res : [{ events: res }];
-  if (convs.length > 1) return fail(`${file} holds ${convs.length} conversations; give the CLI one session per file`);
-  const events = convs[0].events || [];
-  if (!events.length) return fail(`${file}: no steps read; is it a session log of Claude Code, Codex or Cursor?`);
-  if (Lens.subagentsMissing({ events }))
-    io.stderr.write(
-      `sessionlens: ${file}: the session started subagents and their files are not next to it (<session>/subagents/); the review misses their steps\n`,
-    );
-  if (Lens.unreadToolCalls(text, events))
-    io.stderr.write(`sessionlens: ${file}: its tool calls are in a format SessionLens does not read; the review has only the messages\n`);
-
   const engine = await loadEngine(Lens.lintLanguage(cfg));
   if (engine.state === "failed") return fail(`the ${Lens.lintLanguage(cfg)} lint engine did not load: ${engine.error}`);
 
-  const s = {
-    name: path.basename(file),
-    task: "",
-    profile: cfg.profile,
-    created: new Date().toISOString(),
-    events,
-    findings: [],
-    verdicts: {},
-    spec: files.spec || "",
-    dropped: [],
-    usage: Lens.usageOf(text, {}) || undefined,
-  };
-  LensAnalyze.analyze(s, { settings: {}, overrides, calibStats: calib ? calib.stats : undefined });
-  if (s.lintPending) return fail("the lint engine was still loading");
-
-  const opts = {
+  const base = {
     version: Lens.ANALYSIS_VERSION,
-    file,
-    subagents: subagents.length,
     context: o.ci ? ciContext(!!files.spec) : null,
     calibration: calib ? { verdicts: calib.verdicts, files: calib.files, ...levels(calib.stats, Lens, overrides) } : null,
     color: !!io.isTTY && !o["no-color"] && !(io.env && io.env.NO_COLOR),
   };
-  // before anything is printed: a file that cannot be written is exit 2, with nothing on stdout
-  if (o["json-file"])
+
+  /* One log → { s, opts } with its session analyzed, or { reason } when it cannot be reviewed. */
+  const review = (log) => {
+    let raw;
     try {
-      const target = path.resolve(io.cwd || process.cwd(), o["json-file"]);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, report.json(s, opts));
+      raw = read(log);
     } catch (e) {
-      return fail(`cannot write ${o["json-file"]}: ${e.message}`);
+      return { reason: `cannot read ${log}: ${e.code === "ENOENT" ? "no such file" : e.message}` };
     }
+    // a Claude Code session's subagents lie next to its file: their steps are part of the session, as in the panel
+    const subagents = claudeSubagents(path.resolve(cwd, log));
+    const text = subagents.length ? Lens.joinSubagents(raw, subagents) : raw;
+    const res = Lens.importAny(text, cfg, {});
+    const convs = Array.isArray(res) && res.length && res[0].events ? res : [{ events: res }];
+    if (convs.length > 1) return { reason: `${log} holds ${convs.length} conversations; give the CLI one session per file` };
+    const events = convs[0].events || [];
+    if (!events.length) return { reason: `${log}: no steps read; is it a session log of Claude Code, Codex or Cursor?` };
+    if (Lens.subagentsMissing({ events }))
+      io.stderr.write(
+        `sessionlens: ${log}: the session started subagents and their files are not next to it (<session>/subagents/); the review misses their steps\n`,
+      );
+    if (Lens.unreadToolCalls(text, events))
+      io.stderr.write(`sessionlens: ${log}: its tool calls are in a format SessionLens does not read; the review has only the messages\n`);
+    const s = {
+      name: path.basename(log),
+      task: "",
+      profile: cfg.profile,
+      created: new Date().toISOString(),
+      events,
+      findings: [],
+      verdicts: {},
+      spec: files.spec || "",
+      dropped: [],
+      usage: Lens.usageOf(text, {}) || undefined,
+    };
+    LensAnalyze.analyze(s, { settings: {}, overrides, calibStats: calib ? calib.stats : undefined });
+    if (s.lintPending) return { reason: "the lint engine was still loading" };
+    return { s, opts: { ...base, file: log, subagents: subagents.length } };
+  };
+
+  // before anything is printed: a file that cannot be written is exit 2, with nothing on stdout
+  const writeJson = (content) => {
+    if (!o["json-file"]) return null;
+    try {
+      const target = path.resolve(cwd, o["json-file"]);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, content);
+      return null;
+    } catch (e) {
+      return `cannot write ${o["json-file"]}: ${e.message}`;
+    }
+  };
+
+  if (isFolder) {
+    const logs = sessionFiles(path.resolve(cwd, file));
+    if (!logs.length) return fail(`${file}: no .jsonl logs in this folder`);
+    const sessions = [],
+      skipped = [];
+    for (const full of logs) {
+      const rel = path.relative(path.resolve(cwd, file), full);
+      const r = review(full);
+      if (r.reason) skipped.push({ file: rel, reason: r.reason.split(full).join(rel) });
+      else sessions.push({ s: r.s, opts: { ...r.opts, file: rel } });
+    }
+    if (!sessions.length) return fail(`${file}: none of its ${logs.length} logs could be reviewed: ${skipped[0].reason}`);
+    const opts = { ...base, folder: file, profile: cfg.profile };
+    const error = writeJson(report.summaryJson(sessions, skipped, opts));
+    if (error) return fail(error);
+    io.stdout.write(
+      o.json ? report.summaryJson(sessions, skipped, opts) : o.md ? report.summaryMd(sessions, skipped, opts) : report.summaryText(sessions, skipped, opts),
+    );
+    return sessions.some(({ s }) => FAIL_ON[failOn].includes(LensReport.json(s, { context: base.context }).verdict)) ? 1 : 0;
+  }
+
+  const r = review(file);
+  if (r.reason) return fail(r.reason);
+  const { s, opts } = r;
+  const error = writeJson(report.json(s, opts));
+  if (error) return fail(error);
   io.stdout.write(o.json ? report.json(s, opts) : o.md ? report.md(s, opts) : report.text(s, opts));
   return FAIL_ON[failOn].includes(LensReport.json(s, { context: opts.context }).verdict) ? 1 : 0;
 }

@@ -5,7 +5,7 @@
    - Cursor: ~/.cursor/projects/<the same, without the leading dash>/agent-transcripts/<id>/<id>.jsonl
    - Codex: ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl, one folder for all, each naming its cwd on its first line
 
-   latestSession(cwd, home) → { file, agent } of the file changed last, or null. */
+   latestSession(cwd, home) → { file, agent } of the file changed last, or null. sessionFiles(folder): the logs in a folder. */
 const fs = require("fs");
 const path = require("path");
 
@@ -85,4 +85,19 @@ function latestSession(cwd, home) {
   return found.sort((a, b) => changed(b.file) - changed(a.file))[0] || null;
 }
 
-module.exports = { latestSession };
+/* A folder's logs, in its subfolders too, in order of their paths. A subagent's file is part of its session, and Cursor's
+   compaction folder holds no session. */
+function sessionFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    for (const x of list(dir)) {
+      if (x.isDirectory()) {
+        if (x.name !== "subagents" && x.name !== "compaction" && x.name !== "node_modules") walk(path.join(dir, x.name));
+      } else if (x.isFile() && x.name.endsWith(".jsonl")) out.push(path.join(dir, x.name));
+    }
+  };
+  walk(root);
+  return out.sort();
+}
+
+module.exports = { latestSession, sessionFiles };
