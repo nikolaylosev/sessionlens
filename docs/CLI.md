@@ -216,7 +216,8 @@ or `REQ-12`:
 ```
 
 The `Specification` line of the report says how many requirements the CLI recognized. If the number is not what you
-expected, check the format of the file. `--spec` works with one session, so you can't give it with a folder.
+expected, check the format of the file. In a file without IDs, the CLI numbers the lines itself and can't check coverage,
+because no test can name those numbers, so the line says `numbered automatically, coverage not checked`. `--spec` works with one session, so you can't give it with a folder.
 
 ### `--rules`: your team's rules
 

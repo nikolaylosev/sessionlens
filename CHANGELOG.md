@@ -12,6 +12,9 @@
 - **An empty `--spec` file is not a missing one.** With `--ci`, a file of 0 bytes was taken for no `--spec` at all, so
   `no_spec` did not count in the verdict, unlike a file with only blank lines. And the report said `Specification: not
   provided` about a file you gave. It now names the file and says it found no requirements.
+- **A specification without IDs has no "untested" list in the CLI.** SessionLens numbers the lines of such a file itself,
+  and no test can name those numbers, so their coverage is not checked. The report still said `untested: R1, R2`. It now
+  says `numbered automatically, coverage not checked`, as the panel does.
 
 ## 0.1.136
 
