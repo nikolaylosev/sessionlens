@@ -8,11 +8,13 @@
    0: the report is written (whatever its colour, unless --fail-on); 1: --fail-on matched the session's colour;
    2: the CLI could not do its work (a file, the profile, a log it cannot read, an engine that did not load). */
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { parseArgs } = require("node:util");
 const { loadEngine } = require("./engines");
 const report = require("./report");
 const { readVerdicts, levels } = require("./verdicts");
+const { latestSession } = require("./find-session");
 
 const MEDIA = require("./media");
 const Lens = require(path.join(MEDIA, "lens.js"));
@@ -27,10 +29,12 @@ const ciContext = (hasSpec) => new Set(hasSpec ? ["stop_markers_missing"] : ["no
 const FAIL_ON = { none: [], red: ["red"], yellow: ["red", "yellow"] };
 
 const USAGE = `Usage: sessionlens analyze <log> --profile <name> [options]
+       sessionlens analyze --latest --profile <name> [options]
 
 Reviews an AI agent's session log (Claude Code, Codex, Cursor) for how the agent worked on the tests.
 
 Options:
+  --latest           the newest session of Claude Code, Codex or Cursor that worked in this folder, instead of <log>
   --profile <name>   the project's profile (required): ${Lens.PROFILES.join(", ")}
   --spec <file>      the specification the tests should cover
   --rules <file>     a rules.json exported from the Rules tab of the editor extension
@@ -52,6 +56,7 @@ const OPTIONS = {
   profile: { type: "string" },
   spec: { type: "string" },
   rules: { type: "string" },
+  latest: { type: "boolean" },
   verdicts: { type: "string", multiple: true },
   ci: { type: "boolean" },
   "fail-on": { type: "string" },
@@ -83,14 +88,24 @@ async function run(argv, io) {
     io.stdout.write(Lens.ANALYSIS_VERSION + "\n");
     return 0;
   }
-  const [command, file, ...rest] = args.positionals;
-  if (command !== "analyze" || !file || rest.length)
+  const [command, given, ...rest] = args.positionals;
+  if (command !== "analyze" || (!given && !o.latest) || rest.length)
     return fail(`expected: sessionlens analyze <log> --profile <name>\nRun sessionlens --help for the options.`);
+  if (given && o.latest) return fail("a log or --latest: one of them");
   if (!o.profile) return fail(`--profile is required: ${Lens.PROFILES.join(", ")}`);
   if (!Lens.PROFILES.includes(o.profile)) return fail(`unknown profile "${o.profile}": ${Lens.PROFILES.join(", ")}`);
   const failOn = o["fail-on"] || "none";
   if (!FAIL_ON[failOn]) return fail(`--fail-on is none, red or yellow, not "${failOn}"`);
   if (o.json && o.md) return fail("--json and --md: one output at a time");
+
+  let file = given;
+  if (o.latest) {
+    const cwd = io.cwd || process.cwd();
+    const found = latestSession(cwd, io.home || os.homedir());
+    if (!found) return fail(`no session of Claude Code, Codex or Cursor found for ${cwd}; give the log's path`);
+    file = found.file;
+    io.stderr.write(`sessionlens: the latest session here, ${found.agent}: ${file}\n`);
+  }
 
   const read = (p) => fs.readFileSync(path.resolve(io.cwd || process.cwd(), p), "utf8");
   const files = {};
