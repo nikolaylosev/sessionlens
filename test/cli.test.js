@@ -64,7 +64,7 @@ test("--help, --version, and what the CLI cannot do: exit 2 with the reason", as
   assert.match(help.out, /qa-ts, qa-cypress/);
   assert.deepEqual(await cli(["--version"]), { code: 0, out: Lens.ANALYSIS_VERSION + "\n", err: "" });
   const errors = {
-    "sessionlens: expected: sessionlens analyze <log>": ["honest.jsonl"],
+    "sessionlens: expected: sessionlens analyze <log | folder | --latest> --profile <name>": ["honest.jsonl"],
     "--profile is required": ["analyze", "honest.jsonl"],
     'unknown profile "qa-rust"': ["analyze", "honest.jsonl", "--profile", "qa-rust"],
     '--fail-on is none, red or yellow, not "blue"': ["analyze", "honest.jsonl", "--profile", "qa-ts", "--fail-on", "blue"],
