@@ -169,6 +169,32 @@ test("Python and Java", () => {
   );
 });
 
+/* 0.1.136, an agent tidying its own new test in the CI lab's pilot 5: a `.not` text check goes while an exact check of the
+   same element stays. It said nothing more. The other shapes are still fewer assertions. */
+test("a .not text check gone beside an exact check of the same element is no weakening; anything else still is", () => {
+  const cfg = Lens.profile("qa-ts");
+  const body = (...lines) => `test('a', async ({ page }) => {\n${lines.map((l) => "  " + l).join("\n")}\n});\n`;
+  const removed = (a, b) => Lens.compareAsserts(body(...a), body(...b), cfg, "a.spec.ts").removed.length;
+  const EXACT = "await expect(titles).toHaveText(['Buy milk']);";
+  const NOT = "await expect(titles).not.toHaveText(['Walk']);";
+  assert.equal(removed([EXACT, NOT], [EXACT]), 0, "toHaveText");
+  assert.equal(removed([EXACT, "await expect(titles).not.toContainText('Walk');"], [EXACT]), 0, "toContainText");
+  assert.equal(removed(["await expect(titles).toHaveCount(1);", NOT], ["await expect(titles).toHaveCount(1);"]), 0, "toHaveCount");
+  assert.equal(removed([EXACT, NOT, "await expect(titles).not.toHaveText(['Read']);"], [EXACT]), 0, "two of them");
+  // another element: the exact check says nothing of it
+  assert.equal(removed([EXACT, "await expect(banner).not.toContainText('Error');"], [EXACT]), 1, "another element");
+  // no exact check left, or only a .not one
+  assert.equal(removed([NOT, "await expect(titles).toBeVisible();"], ["await expect(titles).toBeVisible();"]), 1, "a weak check left");
+  assert.equal(removed([NOT, "await expect(titles).not.toHaveCount(0);"], ["await expect(titles).not.toHaveCount(0);"]), 1, "a .not check left");
+  // what goes is no .not text check
+  assert.equal(removed([EXACT, "await expect(titles).toHaveCount(1);"], [EXACT]), 1, "an exact check goes");
+  assert.equal(removed([EXACT, "await expect(titles).not.toBeVisible();"], [EXACT]), 1, "a .not check of another kind");
+  // the same line twice, one gone: as before
+  assert.equal(removed([EXACT, EXACT], [EXACT]), 1, "a duplicate");
+  // beside a .not check, another one goes too
+  assert.equal(removed([EXACT, NOT, "await expect(other).toHaveCount(1);"], [EXACT]), 1, "and one more");
+});
+
 test("an assertion commented out counts as removed: TypeScript, Java, C#, Cypress (0.1.120)", () => {
   const removed = (file, test) => [`high: ${file}: ${test} — fewer assertions (2 → 1)`];
   const two = ts("  expect(a).toBe(1);\n  expect(b).toBe(2);");

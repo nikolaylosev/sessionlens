@@ -2025,6 +2025,12 @@ var require_lens = __commonJS({
         }
         return out;
       }
+      const NOT_TEXT = /\.not\.to(?:Contain|Have)Text\s*\(/;
+      const EXACT = /\.to(?:HaveText|HaveCount)\s*\(/;
+      function onlyRedundantNotsGone(before, after) {
+        const gone = before.filter((l) => !after.includes(l));
+        return gone.length > 0 && gone.every((l) => NOT_TEXT.test(l) && after.some((k) => EXACT.test(k) && !/\.not\./.test(k) && subjectOf(k) === subjectOf(l)));
+      }
       function compareAsserts(oldSrc, newSrc, cfg, file) {
         if (!cfg.assert_line_patterns) return null;
         oldSrc = commentLinesBlanked(oldSrc, file);
@@ -2044,7 +2050,7 @@ var require_lens = __commonJS({
           if (nb == null) continue;
           const oa = asserts(ob), na = asserts(nb);
           const moved = (nb.match(PO_ASSERT_CALLS) || []).length > (ob.match(PO_ASSERT_CALLS) || []).length;
-          if (na.length < oa.length && !moved) res.removed.push({ test: name, before: oa.length, after: na.length });
+          if (na.length < oa.length && !moved && !onlyRedundantNotsGone(oa, na)) res.removed.push({ test: name, before: oa.length, after: na.length });
           for (let i = 0; i < Math.min(oa.length, na.length); i++) {
             for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
               if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i]) && (!(opt && opt.sameSubject) || subjectOf(oa[i]) === subjectOf(na[i]))) {
