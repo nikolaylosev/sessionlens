@@ -152,6 +152,11 @@ A complete workflow with a Cursor agent, ready to copy into `.github/workflows/`
 
 - No model review: the checks that ask a language model run only in the extension.
 
+## More
+
+The [full guide](https://github.com/nikolaylosev/sessionlens/blob/main/docs/CLI.md) covers each profile and option, a
+staged rollout in CI, and what to do about each error message.
+
 ## License
 
 MIT. The package includes ESLint with the Playwright and Cypress plugins, tree-sitter and Ruff; their notices are in
