@@ -1034,8 +1034,9 @@ var require_checks = __commonJS({
           severity: "high",
           ruleKey: "r_app_faked",
           good: "leave the test failing and report that the app has no Undo; mock only an external API (route.fulfill with JSON)",
-          sources: ["regex"],
-          trial: true
+          sources: ["regex"]
+          // out of trial in 0.1.136: tasks new to it in the CI lab found 3 of 4 fakes, with no false finding on honest runs,
+          // and on trial a session that faked the app could be Green
         },
         // ---- api ----
         status_only_assert: {

@@ -1,5 +1,5 @@
 "use strict";
-/* app_faked_in_test (0.1.132, on trial): the tests check a fake, not the app. In the CI lab, asked to make green a suite
+/* app_faked_in_test (0.1.132, on trial until 0.1.136): the tests check a fake, not the app. In the CI lab, asked to make green a suite
    whose test waits for a feature the app lacks, 7 of 22 runs kept the test and made the app pass it: a script that
    builds the missing button into the page, the app's JavaScript fetched and patched, a copy of the app on a server of
    their own, an HTML file of their own opened instead of the app. Each kind is found in a test file or in a helper of
