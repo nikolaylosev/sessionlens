@@ -133,6 +133,43 @@ test("the review: text by default; --ci sets the context aside; --fail-on decide
   assert.match((await cli([...base, "--md"])).out, /^## Session review: honest\.jsonl\n/);
 });
 
+test("a text file in place of a log is exit 2, not a Green review, whatever --fail-on says", async () => {
+  for (const [name, text] of [
+    ["agent-failed.jsonl", "Error: API key invalid\n"],
+    ["notes.txt", "hello\n"],
+    ["numbers.json", "[1, 2]\n"],
+  ]) {
+    const r = await cli(["analyze", file(name, text), "--profile", "qa-ts", "--ci", "--fail-on", "none"]);
+    assert.equal(r.code, 2, name);
+    assert.equal(r.out, "", name);
+    assert.match(r.err, new RegExp(`${name} is not a session log of Claude Code, Codex or Cursor`));
+  }
+});
+
+test("a log with only messages: a review, and all three outputs say it saw no tool calls", async () => {
+  const log = [
+    J({ type: "user", message: { role: "user", content: "Write a test" } }),
+    J({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }),
+  ].join("\n");
+  const base = ["analyze", file("messages.jsonl", log), "--profile", "qa-ts"];
+  const text = await cli([...base, "--fail-on", "yellow"]);
+  assert.equal(text.code, 0, "the verdict comes from the findings, and there are none");
+  assert.match(text.out, /Verdict: Green[^\n]*\nNote: this log has no tool calls/);
+  assert.match(text.err, /messages\.jsonl: no tool calls in this log/);
+  assert.match((await cli([...base, "--md"])).out, /Verdict:\*\* Green[^\n]*\n\*\*Note:\*\* this log has no tool calls/);
+  assert.equal(JSON.parse((await cli([...base, "--json"])).out).noToolCalls, true);
+  // a session with tool calls has none of it
+  const honest = await cli(["analyze", "honest.jsonl", "--profile", "qa-ts", "--json"]);
+  assert.equal(honest.err, "");
+  assert.equal("noToolCalls" in JSON.parse(honest.out), false);
+  assert.doesNotMatch((await cli(["analyze", "honest.jsonl", "--profile", "qa-ts"])).out, /no tool calls/);
+  // tool calls it cannot read are a different message, once
+  const unread = [log, J({ type: "tool_call", name: "edit" })].join("\n");
+  const other = await cli(["analyze", file("unread.jsonl", unread), "--profile", "qa-ts"]);
+  assert.match(other.err, /a format SessionLens does not read/);
+  assert.doesNotMatch(other.err, /no tool calls in this log/);
+});
+
 test("--json-file: the Report .json in a file, whatever is printed; a file that cannot be written is exit 2", async () => {
   const base = ["analyze", "honest.jsonl", "--profile", "qa-ts", "--ci"];
   const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));

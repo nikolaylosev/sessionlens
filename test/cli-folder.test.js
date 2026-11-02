@@ -115,6 +115,12 @@ test("what cannot be reviewed: skipped and named; none reviewable, no log, or --
   assert.equal(j.skipped[0].file, "empty.jsonl");
   assert.equal(j.totals.skipped, 1);
   assert.match((await cli("skip", "--md")).out, /### Skipped\n- empty\.jsonl: no steps read/);
+  // a text file in place of a log: skipped too, not a Green line in the summary
+  put("text/agent-failed.jsonl", "Error: API key invalid\n");
+  put("text/clean.jsonl", session(CLEAN));
+  const text = await cli("text", "--ci");
+  assert.equal(text.out.split("\n")[1], "1 session: 0 red, 0 yellow, 1 green, 1 skipped");
+  assert.match(text.out, /\nSkipped:\n {2}agent-failed\.jsonl is not a session log/);
   for (const [args, msg] of [
     [["none"], /none: none of its 1 logs could be reviewed: empty\.jsonl|none of its 1 logs could be reviewed/],
     [["nothing"], /nothing: no \.jsonl logs in this folder/],

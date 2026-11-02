@@ -59,6 +59,8 @@ test("the newest of each agent's sessions of this folder; other folders are left
 test("sessionlens analyze --latest: the review of that file, which it names; none, or a log as well, is exit 2", async () => {
   const log = [
     J({ type: "user", message: { role: "user", content: "Write a test" } }),
+    J({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "r", name: "Read", input: { file_path: "README.md" } }] } }),
+    J({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "r", content: "# App" }] } }),
     J({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }),
   ].join("\n");
   const newest = put(`.claude/projects/${SLUG}/newest.jsonl`, log);
