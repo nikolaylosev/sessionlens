@@ -2,6 +2,10 @@
 
 ## 0.1.136
 
+### Added
+- **`--latest` in the CLI.** `sessionlens analyze --latest --profile qa-ts` reviews the newest session of Claude Code, Codex
+  or Cursor that worked in this folder, so you no longer look for its file. It names the file it took.
+
 ### Changed
 - **`app_faked_in_test` is out of trial: high from the first session.** Until now it was low until it had 10 verdicts, so a
   session whose tests check a fake of the app could be Green. In our experiments, on tasks new to it, it found 3 of 4 fakes

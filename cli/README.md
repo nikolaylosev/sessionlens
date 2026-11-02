@@ -36,6 +36,14 @@ asked for one. The verdict is Red when there is a high finding, Yellow when ther
 
 ## Which log to give it
 
+In a project's folder, `--latest` finds it for you: the newest session of Claude Code, Codex or Cursor that worked there.
+
+```
+npx sessionlens-cli analyze --latest --profile qa-ts
+```
+
+The file it took is named on stderr and in the report. Otherwise, give its path:
+
 - **Claude Code:** the session's `.jsonl` file in `~/.claude/projects/<project>/`. Its subagents, such as Playwright's
   planner, generator and healer, are in the `<session>/subagents/` folder next to it, and are read with it. If you copy
   the log, as a CI artifact for example, copy that folder too, or the review misses their steps.
@@ -51,6 +59,7 @@ Give it one session per file.
 
 | Option | What it does |
 |---|---|
+| `--latest` | Instead of a log: the newest session of Claude Code, Codex or Cursor that worked in this folder. |
 | `--profile <name>` | Required. The kind of project: `qa-ts` (Playwright), `qa-cypress`, `qa-detox`, `qa-python`, `qa-java`, `qa-c#`, `qa-api`, `qa-mobile`, `qa-robot`, `qa-generic`. It picks the checks and the lint engine. |
 | `--spec <file>` | The specification the tests should cover. With it, SessionLens checks which requirements have a test. |
 | `--rules <file>` | A `rules.json` exported from the Rules tab of the extension: your team's severities and switched-off checks. |
