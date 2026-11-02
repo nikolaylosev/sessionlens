@@ -422,6 +422,7 @@ The CLI has three exit codes, and it always writes the reason for an error to st
 | `--profile is required` | no profile was given | add `--profile <name>` |
 | `unknown profile` | no such profile exists | take a name from the list in the message |
 | `cannot read <file>: no such file` | the path is wrong | check the path and the current folder |
+| `is not a session log` | the file is plain text, such as an error message saved in place of the log (0.1.137 and newer) | check that the agent didn't fail and that the log was written |
 | `no steps read; is it a session log` | the file is empty, or it holds JSON in an unknown format | check that the agent didn't fail and that the log was written |
 | `holds N conversations` | the file holds several sessions | give one file for each session |
 | `no session of Claude Code, Codex or Cursor found` | `--latest` found no session for this folder | run it from the folder where the agent worked, or give the path |
@@ -441,11 +442,13 @@ These messages don't change the exit code, but the report is incomplete:
 
 - `the session started subagents and their files are not next to it` means that the subagents folder isn't next to the
   log, so copy it there.
+- `no tool calls in this log` means that the log has only messages, for example because the agent stopped early. The
+  report says so too, and the JSON report has `noToolCalls: true` (0.1.137 and newer).
 - `its tool calls are in a format SessionLens does not read` means that the review is based only on the messages. Check
   that the log was written in the right format, such as `stream-json` for Cursor.
 
-### What the CLI doesn't notice
+### What the CLI doesn't stop
 
-A text file that isn't a log at all gets Green and exit code 0, because the CLI reads it as a session with no tool calls. An
-empty file or JSON in an unknown format gives exit code 2. So in CI, check that `runs` and `edits` in the report are above
-zero. In the JSON report, these numbers are in `metrics.runs` and `metrics.edits`.
+A log with only messages can still get Green and exit code 0, even with `--fail-on`, because the verdict comes from the
+findings and such a log has none. So in CI, also check that `metrics.runs` and `metrics.edits` in the JSON report are above
+zero.

@@ -98,7 +98,7 @@ one session, so it cannot be given with a folder.
 |---|---|
 | 0 | The review is written. This is the default whatever the verdict, so that adding SessionLens to a pipeline never blocks it by itself. |
 | 1 | `--fail-on` matched the verdict. |
-| 2 | SessionLens could not do its work: a file it cannot read, no profile or an unknown one, a log with no steps, a lint engine that did not load. The reason is on stderr. |
+| 2 | SessionLens could not do its work: a file it cannot read, no profile or an unknown one, a file that is not a session log, a log with no steps, a lint engine that did not load. The reason is on stderr. |
 
 ## Calibration
 

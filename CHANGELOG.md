@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.137
+
+### Fixed
+- **A file that is not a session log is an error in the CLI.** A text file in place of a log, such as an agent's error
+  message saved by `>`, got a Green review and exit code 0, even with `--fail-on`. It now gives exit code 2 and says why.
+  In a folder, it is listed as skipped. The panel still reads pasted text.
+- **The CLI says when a log has no tool calls.** A log with only messages, such as one from an agent that stopped early,
+  got a Green review with nothing to say it had seen no work. The verdict stays as it was, and stderr, the report and the
+  JSON (`noToolCalls`) now say so.
+
 ## 0.1.136
 
 ### Added

@@ -4,9 +4,10 @@
    reused for --md: it is built around verdicts (it waits for one on every high finding and lists confirmed, rejected
    and undecided findings), and a CI run has none; the headline lines are the panel's own strings.
 
-   opts: { version, file, subagents, context, color, calibration }. subagents: how many subagent files the session has
-   with it; context (--ci): a Set of check names set aside as context, not
-   counted in the verdict (see LensReport.json); color: ANSI colours in the terminal text; calibration (--verdicts):
+   opts: { version, file, subagents, noToolCalls, context, color, calibration }. subagents: how many subagent files the
+   session has with it; noToolCalls: the log has only messages, so the verdict says nothing about the tests; context
+   (--ci): a Set of check names set aside as context, not counted in the verdict (see LensReport.json); color: ANSI
+   colours in the terminal text; calibration (--verdicts):
    { verdicts, files, off, demoted }, how many verdicts calibrated the checks and which they switched off or demoted. */
 const path = require("path");
 
@@ -48,6 +49,7 @@ function calibrationLine(c) {
     .filter(Boolean)
     .join(", ");
 }
+const NO_TOOL_CALLS = "**Note:** this log has no tool calls, so the review saw no edits or test runs";
 const subagentsLine = (n) => `${n} ${n === 1 ? "file" : "files"} read with the session`;
 // why calibration hid a finding, as the panel's PR report says it
 const whyHidden = (f) => (f.precision != null ? T("md_hidden_why", { p: Math.round(f.precision * 100), n: f.verdicts }) : "");
@@ -95,6 +97,7 @@ function text(s, opts = {}) {
   const out = [
     paint(c, "bold", `${footer(opts)} · ${p.r.profile}${opts.file ? " · " + opts.file : ""}`),
     paint(c, p.r.verdict, plain(p.verdict)),
+    ...(opts.noToolCalls ? [plain(NO_TOOL_CALLS)] : []),
     p.count,
     ...(p.usage ? [p.usage] : []),
     plain(p.spec),
@@ -124,6 +127,7 @@ function md(s, opts = {}) {
     T("md_title", { t: esc(p.title) }),
     "",
     p.verdict,
+    ...(opts.noToolCalls ? [NO_TOOL_CALLS] : []),
     ...(p.usage ? [p.usage] : []),
     p.spec,
     ...(opts.subagents ? [`**Subagents:** ${subagentsLine(opts.subagents)}`] : []),
@@ -144,6 +148,7 @@ const json = (s, opts = {}) =>
       ...LensReport.json(s, { context: opts.context }),
       sessionlens: opts.version || null,
       ...(opts.subagents ? { subagents: opts.subagents } : {}),
+      ...(opts.noToolCalls ? { noToolCalls: true } : {}),
       ...(opts.calibration ? { calibration: opts.calibration } : {}),
     },
     null,

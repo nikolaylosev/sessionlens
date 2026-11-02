@@ -166,6 +166,9 @@ async function run(argv, io) {
     } catch (e) {
       return { reason: `cannot read ${log}: ${e.code === "ENOENT" ? "no such file" : e.message}` };
     }
+    // the panel reads pasted text as a conversation; here text in place of a log (an agent's error message, a log in
+    // another encoding) would be a Green review of nothing
+    if (Lens.transcriptOrigin(raw).agent === "text") return { reason: `${log} is not a session log of Claude Code, Codex or Cursor: it holds no JSON records` };
     // a Claude Code session's subagents lie next to its file: their steps are part of the session, as in the panel
     const subagents = claudeSubagents(path.resolve(cwd, log));
     const text = subagents.length ? Lens.joinSubagents(raw, subagents) : raw;
@@ -178,8 +181,10 @@ async function run(argv, io) {
       io.stderr.write(
         `sessionlens: ${log}: the session started subagents and their files are not next to it (<session>/subagents/); the review misses their steps\n`,
       );
+    const noToolCalls = events.every((e) => e.kind === "user" || e.kind === "message");
     if (Lens.unreadToolCalls(text, events))
       io.stderr.write(`sessionlens: ${log}: its tool calls are in a format SessionLens does not read; the review has only the messages\n`);
+    else if (noToolCalls) io.stderr.write(`sessionlens: ${log}: no tool calls in this log; the review has only the messages\n`);
     const s = {
       name: path.basename(log),
       task: "",
@@ -194,7 +199,7 @@ async function run(argv, io) {
     };
     LensAnalyze.analyze(s, { settings: {}, overrides, calibStats: calib ? calib.stats : undefined });
     if (s.lintPending) return { reason: "the lint engine was still loading" };
-    return { s, opts: { ...base, file: log, subagents: subagents.length } };
+    return { s, opts: { ...base, file: log, subagents: subagents.length, noToolCalls } };
   };
 
   // before anything is printed: a file that cannot be written is exit 2, with nothing on stdout
