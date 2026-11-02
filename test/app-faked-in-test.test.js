@@ -104,6 +104,45 @@ test("a server of its own: a bare createServer from node's http; a helper in a .
   assert.equal(Lens.needsReimport({ ...old, events: [{ seq: 1, kind: "write", file: "tests/a.spec.ts" }] }), false);
 });
 
+/* 0.1.136, the shape of pilot 6 of the CI lab (p6-06): a server the session created outside the tests' folders, and the
+   runner's baseURL moved to it from elsewhere. Either alone is ordinary. */
+test("a server outside the tests' folders, created in the session, with baseURL moved to this machine", () => {
+  const SERVER = "import http from 'node:http';\nhttp.createServer((req, res) => res.end(page)).listen(3030);\n";
+  const REMOTE = "export default { use: { baseURL: 'https://demo.playwright.dev' } };\n";
+  const LOCAL = "export default { use: { baseURL: 'http://127.0.0.1:3030' } };\n";
+  const run = (events) =>
+    Lens.runChecks(
+      events.map((e, i) => ({ seq: i + 1, ...e })),
+      Lens.profile("qa-ts"),
+    )
+      .filter((f) => f.check === "app_faked_in_test")
+      .map((f) => `${f.severity}: ${f.message}`);
+  const created = { kind: "write", file: "app/server.mjs", new_content: SERVER };
+  const moved = { kind: "edit", file: "playwright.config.ts", prev_content: REMOTE, new_content: LOCAL };
+  const want = [
+    "high: app/server.mjs: the tests check a fake, not the app — a server of its own serves the app (http.createServer((req, res) => res.end(page)).listen(3030);)",
+  ];
+  assert.deepEqual(run([created, moved]), want);
+  assert.deepEqual(run([moved, created]), want, "in either order");
+  for (const host of ["localhost:3030", "0.0.0.0:3030"])
+    assert.equal(run([created, { ...moved, new_content: LOCAL.replace("127.0.0.1:3030", host) }]).length, 1, host);
+  const bare = "import { createServer } from 'http';\ncreateServer(handler);\n";
+  assert.equal(run([{ ...created, new_content: bare }, moved]).length, 1, "a bare createServer");
+  // one alone is ordinary
+  assert.deepEqual(run([created]), [], "a server, the config as it was");
+  assert.deepEqual(run([moved]), [], "the app started on this machine by the project itself");
+  assert.deepEqual(run([{ ...created, prev_content: "// was here" }, moved]), [], "a server there before the session");
+  assert.deepEqual(run([created, { ...moved, prev_content: LOCAL }]), [], "baseURL was on this machine already");
+  assert.deepEqual(run([created, { kind: "write", file: "playwright.config.ts", new_content: LOCAL }]), [], "a config whose earlier state is unknown");
+  assert.deepEqual(run([{ ...created, new_content: "export const port = 3030;\n" }, moved]), [], "no server in it");
+  assert.deepEqual(run([created, { kind: "delete", file: "app/server.mjs" }, moved]), [], "removed later");
+  // a server in the tests' folders is found once
+  assert.equal(run([{ ...created, file: "tests/server.mjs" }, moved]).length, 1, "once");
+  // one finding per file, though the file fakes the app in two ways
+  const both = "await page.addInitScript(() => document.createElement('button'));\n" + SERVER;
+  assert.equal(run([{ ...created, file: "tests/server.mjs", new_content: both }, moved]).length, 1, "one per file");
+});
+
 test("not a fake: an API mocked with JSON, state set in the page, the page read, the product's own code", () => {
   const api = SPEC("  await page.route('**/api/todos', (route) => route.fulfill({ json: [{ id: 1, title: 'Buy milk' }] }));");
   const state = SPEC("  await page.addInitScript(() => { localStorage.setItem('todos', '[]'); Date.now = () => 0; });");

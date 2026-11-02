@@ -3732,7 +3732,10 @@
        API (route.fulfill with JSON) and setting state (localStorage, a clock, a cookie) are no fake. The last version
        of each file of the tests: a test file, or a helper or fixture in the tests' folders. One finding per file.
        Since 0.1.136 a server by a bare createServer imported from node's http, as pilot 5 of the lab found: on tasks it was
-       not written from, this check found 1 of 3 fakes (the third in a .cjs file, whose code the import did not keep). */
+       not written from, this check found 1 of 3 fakes (the third in a .cjs file, whose code the import did not keep).
+       Since 0.1.136 also a server outside the tests' folders, when the session itself created that file and moved the
+       runner's baseURL from elsewhere to this machine (pilot 6: app/server.mjs). Either alone is ordinary: a project
+       starts its own app on localhost, and a script can start a server for something else. */
     app_faked_in_test(ev, cfg) {
       const INJECT = /\b(?:addInitScript|addScriptTag|evaluate|evaluateHandle|\$eval|\$\$eval)\s*\(/;
       const BUILDS =
@@ -3743,6 +3746,7 @@
       const OWN_SERVER = /\b(?:http|https)\.createServer\s*\(|\bexpress\s*\(\s*\)\s*;?|\.listen\s*\(\s*\d/;
       const HTTP_MODULE = /['"](?:node:)?https?['"]/; // createServer alone can be a bundler's or a test runner's
       const BARE_SERVER = /\bcreateServer\s*\(/;
+      const LOCAL_BASE = /\bbaseURL\s*:\s*[`'"]https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b/;
       const last = new Map();
       for (const e of ev) {
         if (e.file && (e.kind === "write" || e.kind === "edit")) last.set(e.file, e);
@@ -3787,6 +3791,26 @@
         if (!how && OWN_SERVER.test(code)) how = T("app_faked_server", { line: line(OWN_SERVER) });
         if (!how && HTTP_MODULE.test(code) && BARE_SERVER.test(code)) how = T("app_faked_server", { line: line(BARE_SERVER) });
         if (how) out.push(F("app_faked_in_test", "high", e.seq, T("app_faked", { file, how })));
+      }
+      const movedHere = ev.some((e) => {
+        if (!isRunnerConfig(e.file) || !e.new_content || !LOCAL_BASE.test(e.new_content)) return false;
+        return e.prev_content != null && !LOCAL_BASE.test(e.prev_content);
+      });
+      for (const [file, e] of movedHere ? last : []) {
+        if (!e.new_content || out.some((f) => f.message.includes(`${file}:`)) || !isCode(file, cfg)) continue;
+        if (ev.find((x) => x.file === file && (x.kind === "write" || x.kind === "edit")).prev_content != null) continue; // there before the session
+        const code = codeOf(e);
+        const rx = OWN_SERVER.test(code) ? OWN_SERVER : HTTP_MODULE.test(code) && BARE_SERVER.test(code) ? BARE_SERVER : null;
+        if (!rx) continue;
+        const m = rx.exec(code);
+        const at = clip(
+          code
+            .slice(code.lastIndexOf("\n", m.index) + 1)
+            .split("\n")[0]
+            .trim(),
+          70,
+        );
+        out.push(F("app_faked_in_test", "high", e.seq, T("app_faked", { file, how: T("app_faked_server", { line: at }) })));
       }
       return out;
     },
