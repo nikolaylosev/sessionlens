@@ -5,6 +5,8 @@
 ### Added
 - **`--latest` in the CLI.** `sessionlens analyze --latest --profile qa-ts` reviews the newest session of Claude Code, Codex
   or Cursor that worked in this folder, so you no longer look for its file. It names the file it took.
+- **A folder of sessions in the CLI.** `sessionlens analyze <folder> --profile qa-ts` reviews every log in it: one line per
+  session, the totals, and how many sessions each check spoke in, as text, `--md` or `--json`.
 
 ### Changed
 - **`app_faked_in_test` is out of trial: high from the first session.** Until now it was low until it had 10 verdicts, so a

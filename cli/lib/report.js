@@ -150,4 +150,71 @@ const json = (s, opts = {}) =>
     1,
   ) + "\n";
 
-module.exports = { text, md, json };
+/* ---- a folder of sessions: one line each, the totals, and how many sessions each check spoke in ---- */
+function summary(sessions, skipped, opts) {
+  const rows = sessions.map(({ s, opts: o }) => {
+    const r = LensReport.json(s, { context: opts.context });
+    const count = Object.fromEntries(SEVERITIES.map((sev) => [sev, r.findings.filter((f) => f.severity === sev).length]));
+    return { file: o.file, verdict: r.verdict, ...count, checks: [...new Set(r.findings.map((f) => f.check))], report: r };
+  });
+  const by = (v) => rows.filter((r) => r.verdict === v).length;
+  const perCheck = {};
+  for (const r of rows) for (const c of r.checks) perCheck[c] = (perCheck[c] || 0) + 1;
+  const checks = Object.entries(perCheck)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([check, n]) => ({ check, sessions: n }));
+  const totals = { sessions: rows.length, red: by("red"), yellow: by("yellow"), green: by("green"), skipped: skipped.length };
+  const head = `${totals.sessions} session${totals.sessions === 1 ? "" : "s"}: ${totals.red} red, ${totals.yellow} yellow, ${totals.green} green${skipped.length ? `, ${skipped.length} skipped` : ""}`;
+  return { rows, checks, totals, head };
+}
+
+function summaryText(sessions, skipped, opts = {}) {
+  const { rows, checks, head } = summary(sessions, skipped, opts);
+  const c = !!opts.color;
+  const out = [paint(c, "bold", `${footer(opts)} · ${opts.profile} · ${opts.folder}`), head, ""];
+  for (const r of rows)
+    out.push(
+      `${paint(c, r.verdict, r.verdict.padEnd(6))}  ${SEVERITIES.map((sev) => `${r[sev]} ${sev}`)
+        .join(", ")
+        .padEnd(26)}  ${r.file}`,
+    );
+  if (checks.length) {
+    out.push("", "Checks, by the sessions they spoke in:");
+    for (const x of checks) out.push(`${String(x.sessions).padStart(5)}  ${x.check}`);
+  }
+  if (skipped.length) out.push("", "Skipped:", ...skipped.map((x) => `  ${x.reason}`));
+  return out.join("\n") + "\n";
+}
+
+function summaryMd(sessions, skipped, opts = {}) {
+  const { rows, checks, head } = summary(sessions, skipped, opts);
+  const out = [`## Sessions: ${esc(opts.folder)}`, "", head, "", "| Verdict | High | Medium | Low | Session |", "|---|---|---|---|---|"];
+  for (const r of rows) out.push(`| ${T("verdict_" + r.verdict)} | ${r.high} | ${r.medium} | ${r.low} | \`${esc(r.file)}\` |`);
+  if (checks.length) out.push("", "| Check | Sessions |", "|---|---|", ...checks.map((x) => `| \`${x.check}\` | ${x.sessions} |`));
+  if (skipped.length) out.push("", "### Skipped", ...skipped.map((x) => `- ${esc(x.reason)}`));
+  out.push("", `_${footer(opts)}_`);
+  return out.join("\n") + "\n";
+}
+
+const summaryJson = (sessions, skipped, opts = {}) => {
+  const { rows, checks, totals } = summary(sessions, skipped, opts);
+  return (
+    JSON.stringify(
+      {
+        schema: "sessionlens/summary@1",
+        sessionlens: opts.version || null,
+        profile: opts.profile,
+        folder: opts.folder,
+        totals,
+        checks,
+        sessions: rows.map(({ file, report: r }) => ({ file, ...r })),
+        skipped,
+        ...(opts.calibration ? { calibration: opts.calibration } : {}),
+      },
+      null,
+      1,
+    ) + "\n"
+  );
+};
+
+module.exports = { text, md, json, summaryText, summaryMd, summaryJson };

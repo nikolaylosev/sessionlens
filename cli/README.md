@@ -71,6 +71,27 @@ Give it one session per file.
 | `--json-file <file>` | Also write the JSON to this file, whatever is printed, so one run gives both. |
 | `--no-color` | No colours in the text. The `NO_COLOR` environment variable does the same. |
 
+## A folder of sessions
+
+Give a folder instead of a log, to review every `.jsonl` in it and in its subfolders. You get one line per session, the totals,
+and how many sessions each check spoke in:
+
+```
+$ npx sessionlens-cli analyze ~/.claude/projects/-Users-me-my-app --profile qa-ts
+12 sessions: 8 red, 0 yellow, 4 green
+
+green   0 high, 0 medium, 0 low     a1b2c3.jsonl
+red     2 high, 0 medium, 0 low     d4e5f6.jsonl
+…
+Checks, by the sessions they spoke in:
+    5  fix_after_fail_without_triage
+    4  test_deleted
+```
+
+`--md` makes it a table and `--json` a file with each session's whole review. With `--fail-on`, one session of that colour
+is enough for exit 1. A log that cannot be reviewed is listed as skipped; if none can be, the exit code is 2. `--spec` is for
+one session, so it cannot be given with a folder.
+
 ## Exit codes
 
 | Code | When |
