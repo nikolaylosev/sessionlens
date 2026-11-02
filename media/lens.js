@@ -954,6 +954,15 @@
     }
     return out;
   }
+  /* A `.not` check of an element's text goes while an exact one of the same element stays (0.1.136): the exact one says
+     it already. `expect(titles).not.toHaveText(['Walk the dog'])` beside `expect(titles).toHaveText(['Buy milk'])`, an
+     agent tidying its own new test in the CI lab's pilot 5, was a high "fewer assertions". */
+  const NOT_TEXT = /\.not\.to(?:Contain|Have)Text\s*\(/;
+  const EXACT = /\.to(?:HaveText|HaveCount)\s*\(/;
+  function onlyRedundantNotsGone(before, after) {
+    const gone = before.filter((l) => !after.includes(l));
+    return gone.length > 0 && gone.every((l) => NOT_TEXT.test(l) && after.some((k) => EXACT.test(k) && !/\.not\./.test(k) && subjectOf(k) === subjectOf(l)));
+  }
   // file: whose comments to read (the extension says which); none for code in a message
   function compareAsserts(oldSrc, newSrc, cfg, file) {
     if (!cfg.assert_line_patterns) return null;
@@ -983,7 +992,7 @@
       /* the assertions moved into a page object: the new test calls an expect…() method it did not call before (a
          rewrite to Page Object Model; the page object's own assertions are compared in its file, 0.1.127) */
       const moved = (nb.match(PO_ASSERT_CALLS) || []).length > (ob.match(PO_ASSERT_CALLS) || []).length;
-      if (na.length < oa.length && !moved) res.removed.push({ test: name, before: oa.length, after: na.length });
+      if (na.length < oa.length && !moved && !onlyRedundantNotsGone(oa, na)) res.removed.push({ test: name, before: oa.length, after: na.length });
       for (let i = 0; i < Math.min(oa.length, na.length); i++) {
         for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
           if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i]) && (!(opt && opt.sameSubject) || subjectOf(oa[i]) === subjectOf(na[i]))) {

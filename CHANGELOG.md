@@ -3,6 +3,9 @@
 ## 0.1.136
 
 ### Fixed
+- **Dropping a redundant `.not` check is not "fewer assertions".** `.not.toHaveText(…)` removed while an exact check of the
+  same element stays was a high `assert_weakened`, on agents tidying their own new tests. Another element, or no exact check
+  left, still counts.
 - **A test rewritten and then renamed is a test replaced.** An agent could give a failing test the body of another one,
   then rename it in a second edit, and the rename alone read as harmless. Edits with no test run between them now count as
   one change.
