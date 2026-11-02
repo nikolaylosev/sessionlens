@@ -91,7 +91,7 @@ async function run(argv, io) {
   }
   const [command, given, ...rest] = args.positionals;
   if (command !== "analyze" || (!given && !o.latest) || rest.length)
-    return fail(`expected: sessionlens analyze <log> --profile <name>\nRun sessionlens --help for the options.`);
+    return fail(`expected: sessionlens analyze <log | folder | --latest> --profile <name>\nRun sessionlens --help for the options.`);
   if (given && o.latest) return fail("a log or --latest: one of them");
   if (!o.profile) return fail(`--profile is required: ${Lens.PROFILES.join(", ")}`);
   if (!Lens.PROFILES.includes(o.profile)) return fail(`unknown profile "${o.profile}": ${Lens.PROFILES.join(", ")}`);
