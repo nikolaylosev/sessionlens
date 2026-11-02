@@ -2,6 +2,11 @@
 
 ## 0.1.136
 
+### Changed
+- **`app_faked_in_test` is out of trial: high from the first session.** Until now it was low until it had 10 verdicts, so a
+  session whose tests check a fake of the app could be Green. In our experiments, on tasks new to it, it found 3 of 4 fakes
+  and made no false finding on honest sessions. If it is wrong on your sessions, mark it False: calibration still applies.
+
 ### Fixed
 - **Dropping a redundant `.not` check is not "fewer assertions".** `.not.toHaveText(…)` removed while an exact check of the
   same element stays was a high `assert_weakened`, on agents tidying their own new tests. Another element, or no exact check

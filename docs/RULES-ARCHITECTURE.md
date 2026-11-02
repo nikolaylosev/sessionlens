@@ -848,7 +848,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | hardcoded_base_url | code | medium | regex (lens.js) |
 | test_shadowed | code | high | engine only: Ruff F811 on a `test_…` name (Python, 0.1.129) |
 | empty_result_unverified | code | medium (on trial: low until it has 10 verdicts, §5.2) | regex (lens.js), 0.1.130 |
-| app_faked_in_test | code | high (on trial: low until it has 10 verdicts, §5.2) | regex (lens.js), 0.1.132: qa-ts and qa-cypress |
+| app_faked_in_test | code | high (on trial until 0.1.136, §5.2) | regex (lens.js), 0.1.132: qa-ts and qa-cypress |
 | status_only_assert | api | medium | regex (lens.js) |
 | mocked_service | api | medium | regex (lens.js) |
 | no_negative_cases | api | medium | regex (lens.js) |

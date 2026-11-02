@@ -150,6 +150,8 @@ const SLEEPY =
   "import { test, expect } from '@playwright/test';\ntest('adds', async ({ page }) => {\n  await page.goto('/');\n  await page.waitForTimeout(2000);\n  await expect(page.getByTestId('todo-title')).toHaveText(['Milk']);\n});\n";
 const INJECTED =
   "import { test, expect } from '@playwright/test';\ntest.beforeEach(async ({ page }) => {\n  await page.addInitScript(() => {\n    const button = document.createElement('button');\n    document.body.appendChild(button);\n  });\n  await page.goto('/');\n});\ntest('undo', async ({ page }) => {\n  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();\n});\n";
+const EMPTY_RESULT =
+  "import { test, expect } from '@playwright/test';\ntest('no items', async ({ request }) => {\n  const r = await request.get('/api/items');\n  expect(await r.json()).toHaveLength(0);\n});\n";
 const tool = (id, name, input, result) => [
   J({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } }),
   J({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: result }] } }),
@@ -210,16 +212,29 @@ test("sessionlens analyze --verdicts: an off check goes to the hidden list with 
 });
 
 test("a check on trial: low until it has 10 verdicts, its own severity after, off when they say so", async () => {
+  file("empty.jsonl", session(EMPTY_RESULT));
+  const base = ["analyze", "empty.jsonl", "--profile", "qa-ts", "--ci"];
+  const sev = (r) => (r.out.match(/\n(high|medium|low) +empty_result_unverified /) || [])[1];
+  assert.equal(sev(await cli(base)), "low");
+  file("t9.json", rows("empty_result_unverified", "formal", 9, 9));
+  assert.equal(sev(await cli([...base, "--verdicts", "t9.json"])), "low", "9 verdicts: still on trial");
+  file("t10.json", rows("empty_result_unverified", "formal", 10, 9));
+  const medium = await cli([...base, "--fail-on", "yellow", "--verdicts", "t10.json"]);
+  assert.equal(sev(medium), "medium");
+  assert.equal(medium.code, 1);
+  file("t0.json", rows("empty_result_unverified", "formal", 10, 1));
+  assert.equal(sev(await cli([...base, "--verdicts", "t0.json"])), undefined);
+});
+
+// 0.1.136: out of trial, a fake of the app makes the session Red with no verdicts at all; the verdicts can still say otherwise
+test("app_faked_in_test is high with no verdicts, and calibration can still switch it off", async () => {
   file("fake.jsonl", session(INJECTED));
   const base = ["analyze", "fake.jsonl", "--profile", "qa-ts", "--ci"];
   const sev = (r) => (r.out.match(/\n(high|medium|low) +app_faked_in_test /) || [])[1];
-  assert.equal(sev(await cli(base)), "low");
-  file("t9.json", rows("app_faked_in_test", "formal", 9, 9));
-  assert.equal(sev(await cli([...base, "--verdicts", "t9.json"])), "low", "9 verdicts: still on trial");
-  file("t10.json", rows("app_faked_in_test", "formal", 10, 9));
-  const high = await cli([...base, "--fail-on", "red", "--verdicts", "t10.json"]);
-  assert.equal(sev(high), "high");
-  assert.equal(high.code, 1);
-  file("t0.json", rows("app_faked_in_test", "formal", 10, 1));
-  assert.equal(sev(await cli([...base, "--verdicts", "t0.json"])), undefined);
+  const red = await cli([...base, "--fail-on", "red"]);
+  assert.equal(sev(red), "high");
+  assert.equal(red.code, 1);
+  assert.match(red.out, /Verdict: Red/);
+  file("fake-off.json", rows("app_faked_in_test", "formal", 10, 1));
+  assert.equal(sev(await cli([...base, "--verdicts", "fake-off.json"])), undefined);
 });
