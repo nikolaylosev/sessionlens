@@ -4,7 +4,7 @@
    builds the missing button into the page, the app's JavaScript fetched and patched, a copy of the app on a server of
    their own, an HTML file of their own opened instead of the app. Each kind is found in a test file or in a helper of
    the tests; what must not count: mocking an API with JSON, setting state in the page, reading the page, the product's
-   own code, a file removed later, another profile. */
+   own code, a file removed later, another profile, a bundler's createServer. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { load } = require("./helpers");
@@ -64,6 +64,44 @@ test("the app's page or code answered with other content, a page or a server of 
   const server =
     "import * as http from 'node:http';\nexport function start() {\n  const server = http.createServer((req, res) => res.end(appHtml));\n  server.listen(0);\n}\n";
   assert.match(found([["tests/support/app-server.ts", server]])[0], /a server of its own serves the app/);
+});
+
+/* 0.1.136, the shapes of pilot 5 of the CI lab, on tasks the check was not written from: it found 1 of 3 fakes. A bare
+   createServer imported from node's http, and a helper in a .cjs file, whose code the import had not kept. */
+test("a server of its own: a bare createServer from node's http; a helper in a .cjs file, through a real import", () => {
+  const bare = (mod) =>
+    `import { createServer } from '${mod}';\nexport function start() {\n  const server = createServer((req, res) => res.end(page));\n  server.listen(port);\n}\n`;
+  assert.deepEqual(found([["tests/svgomg-server.ts", bare("node:http")]]), [
+    "high: tests/svgomg-server.ts: the tests check a fake, not the app — a server of its own serves the app (const server = createServer((req, res) => res.end(page));)",
+  ]);
+  assert.equal(found([["tests/server.ts", bare("http")]]).length, 1, "http");
+  assert.equal(found([["tests/server.ts", bare("node:https")]]).length, 1, "https");
+  // a bundler's createServer is not node's
+  assert.deepEqual(found([["tests/server.ts", bare("vite")]]), []);
+  // a .cjs helper: the import keeps its code, in every JS profile
+  const proxy = "const http = require('http');\nmodule.exports = () => http.createServer((req, res) => res.end(page));\n";
+  const log = (file) =>
+    [
+      JSON.stringify({ type: "user", message: { role: "user", content: "Make it green" } }),
+      JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "tool_use", id: "w", name: "Write", input: { file_path: file, content: proxy } }] },
+      }),
+      JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "w", content: "ok" }] } }),
+    ].join("\n");
+  for (const [profile, file] of [
+    ["qa-ts", "tests/support/proxy.cjs"],
+    ["qa-cypress", "cypress/support/proxy.cjs"],
+  ]) {
+    const cfg = Lens.profile(profile);
+    const fake = Lens.runChecks(Lens.importAny(log(file), cfg), cfg).filter((f) => f.check === "app_faked_in_test");
+    assert.equal(fake.length, 1, profile);
+  }
+  // stored before: its code was left out, so it asks to be imported again
+  const old = { profile: "qa-ts", importGen: 12, events: [{ seq: 1, kind: "write", file: "tests/support/proxy.cjs" }] };
+  assert.equal(Lens.needsReimport(old), true);
+  assert.equal(Lens.needsReimport({ ...old, importGen: Lens.IMPORT_GEN }), false);
+  assert.equal(Lens.needsReimport({ ...old, events: [{ seq: 1, kind: "write", file: "tests/a.spec.ts" }] }), false);
 });
 
 test("not a fake: an API mocked with JSON, state set in the page, the page read, the product's own code", () => {

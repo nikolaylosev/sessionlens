@@ -1627,7 +1627,7 @@ What the import keeps for them:
   transcript with edits and no files before and after them from Cursor's database (`cursorEditsMissing`; `reimport()`
   then asks for the file, like a session whose subagents are missing; since 0.1.130 also below generation 10, as the
   Cursor CLI's database gives them from what the agent read). The
-  new import adds a step for each such file and drops such messages, so the steps after them get new numbers. Generation 12, since 0.1.135: Codex's line for a message an MCP app sent.
+  new import adds a step for each such file and drops such messages, so the steps after them get new numbers. Generation 12, since 0.1.135: Codex's line for a message an MCP app sent. Generation 13, since 0.1.136: a `.cjs` file written with its code left out.
   The session's tab then shows
   **Import again** (`reimport()` in `src/webview/review.js`). It parses `source_text`, or a file picked again when
   the transcript was too large to keep (400 KB), into the same session (`Lens.pickConversation()` takes the session's

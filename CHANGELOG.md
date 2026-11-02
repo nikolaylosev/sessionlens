@@ -3,6 +3,10 @@
 ## 0.1.136
 
 ### Fixed
+- **`.cjs` files are code.** The import left out what an agent wrote into a `.cjs` file, as it did not for `.mjs`, so no check
+  saw it. A session that has one offers **Import again**.
+- **`app_faked_in_test` finds a local server by a bare `createServer`.** `import { createServer } from 'node:http'` was not
+  read, only `http.createServer`. With the `.cjs` files, this is what it missed on tasks new to it: it found 1 of 3 fakes.
 - **Saying whose mistake it is counts as a triage, in the words agents use.** "The **test's** mistake", "incorrect
   expectations", "the expectations are wrong" and "the assertions don't match the setup" were not read, so an honest fix
   of a wrong test got a high "Edited right after a failure with no triage". In a task where the test was wrong, 11 of 12

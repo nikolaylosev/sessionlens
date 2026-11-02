@@ -189,7 +189,7 @@
   const PROFILES = {
     "qa-ts": {
       language: "typescript",
-      code_ext: [".ts", ".tsx", ".js", ".mjs"],
+      code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
       test_runner: "jest",
       // `npm run test` takes the usual scripts too: npm run test:e2e, npm run test:ui (0.1.121; before, no run)
       test_runner_patterns: ["jest", "vitest", "npm test", "npm run test", "playwright test", "pnpm test", "pnpm run test", "yarn test", "yarn run test"],
@@ -293,7 +293,21 @@
       // its Python files go to the Python engine (0.1.129): a test with no assertion, an exception swallowed
       lint_language: "python",
       lint_ext: [".py"],
-      code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cs", ".go", ".feature", ".postman_collection.json", ".postman_environment.json"],
+      code_ext: [
+        ".py",
+        ".java",
+        ".kt",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".cs",
+        ".go",
+        ".feature",
+        ".postman_collection.json",
+        ".postman_environment.json",
+      ],
       test_runner: "auto",
       test_runner_patterns: [
         "pytest",
@@ -402,7 +416,7 @@
        fire on Appium code written in Java/Python/TS/C#, so they are not repeated here. */
     "qa-mobile": {
       language: "mobile",
-      code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cs"],
+      code_ext: [".py", ".java", ".kt", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".cs"],
       test_runner: "auto",
       test_runner_patterns: ["pytest", "npm test", "npm run test", "jest", "vitest", "mvn test", "mvn verify", "gradle test", "gradlew", "dotnet test"],
       src_dirs: ["src", "app"],
@@ -433,7 +447,7 @@
     },
     "qa-cypress": {
       language: "cypress",
-      code_ext: [".ts", ".tsx", ".js", ".mjs"],
+      code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
       test_runner: "cypress",
       test_runner_patterns: ["cypress run", "cypress open", "npx cypress", "yarn cypress", "cypress:run", "npm test", "npm run test"],
       src_dirs: ["src", "app"],
@@ -465,7 +479,7 @@
        lint.js — there is no regex fallback for those, same as raw_locator/positional_locator elsewhere. */
     "qa-detox": {
       language: "detox",
-      code_ext: [".ts", ".tsx", ".js", ".mjs"],
+      code_ext: [".ts", ".tsx", ".js", ".mjs", ".cjs"],
       test_runner: "detox",
       test_runner_patterns: ["detox test", "npx detox test", "detox build", "e2e:test"],
       src_dirs: ["src", "app"],
@@ -2492,8 +2506,9 @@
         planner's plan (0.1.130).
      11: a user message without the text Codex's editor extension wraps it in, Claude Code's summary of a compacted
         conversation or Cursor's own query after a background task (0.1.130).
-     12: no user message for what an MCP app sent in a Codex session (0.1.135). */
-  const IMPORT_GEN = 12;
+     12: no user message for what an MCP app sent in a Codex session (0.1.135).
+     13: the code of a .cjs file is kept, as of a .mjs (0.1.136). */
+  const IMPORT_GEN = 13;
   /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
@@ -2587,6 +2602,9 @@
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
     if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
+    // a .cjs file written with its code left out (0.1.136)
+    if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
+      return true;
     // a user message that is Codex's, Claude Code's or Cursor's own text, or wrapped in it (0.1.130, 0.1.135)
     if ((s.importGen || 0) < 12 && s.events.some((e) => e.kind === "user" && harnessUserText(String(e.text || "")))) return true;
     // a file written by a shell command from a here-document, stored as the command alone (0.1.127)
@@ -3689,7 +3707,9 @@
        MutationObserver), the app's page or JavaScript answered with their own (route.fulfill with HTML or code, or
        route.fetch patched), a copy of the app opened from a file or set as content, a server of their own. Mocking an
        API (route.fulfill with JSON) and setting state (localStorage, a clock, a cookie) are no fake. The last version
-       of each file of the tests: a test file, or a helper or fixture in the tests' folders. One finding per file. */
+       of each file of the tests: a test file, or a helper or fixture in the tests' folders. One finding per file.
+       Since 0.1.136 a server by a bare createServer imported from node's http, as pilot 5 of the lab found: on tasks it was
+       not written from, this check found 1 of 3 fakes (the third in a .cjs file, whose code the import did not keep). */
     app_faked_in_test(ev, cfg) {
       const INJECT = /\b(?:addInitScript|addScriptTag|evaluate|evaluateHandle|\$eval|\$\$eval)\s*\(/;
       const BUILDS =
@@ -3698,6 +3718,8 @@
       const APP_BODY = /text\/html|javascript|<!doctype|<html|<body|\.html\b|\.m?js['"`]/i;
       const OWN_PAGE = /\bsetContent\s*\(|\bgoto\s*\(\s*[`'"](?:file:|data:text\/html)|\bpathToFileURL\s*\([\s\S]{0,200}?\.html|['"`]file:\/\/[^'"`\n]*\.html/;
       const OWN_SERVER = /\b(?:http|https)\.createServer\s*\(|\bexpress\s*\(\s*\)\s*;?|\.listen\s*\(\s*\d/;
+      const HTTP_MODULE = /['"](?:node:)?https?['"]/; // createServer alone can be a bundler's or a test runner's
+      const BARE_SERVER = /\bcreateServer\s*\(/;
       const last = new Map();
       for (const e of ev) {
         if (e.file && (e.kind === "write" || e.kind === "edit")) last.set(e.file, e);
@@ -3740,6 +3762,7 @@
           }
         if (!how && OWN_PAGE.test(code)) how = T("app_faked_page", { line: line(OWN_PAGE) });
         if (!how && OWN_SERVER.test(code)) how = T("app_faked_server", { line: line(OWN_SERVER) });
+        if (!how && HTTP_MODULE.test(code) && BARE_SERVER.test(code)) how = T("app_faked_server", { line: line(BARE_SERVER) });
         if (how) out.push(F("app_faked_in_test", "high", e.seq, T("app_faked", { file, how })));
       }
       return out;
