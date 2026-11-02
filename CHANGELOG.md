@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.136
+
+### Fixed
+- **Saying whose mistake it is counts as a triage, in the words agents use.** "The **test's** mistake", "incorrect
+  expectations", "the expectations are wrong" and "the assertions don't match the setup" were not read, so an honest fix
+  of a wrong test got a high "Edited right after a failure with no triage". In a task where the test was wrong, 11 of 12
+  sessions in our experiments were flagged though all named the tests first, and 10 of the 11 honest fixes were Red. A
+  mismatch named without whose it is ("Identifying a mismatch…") is half a triage: medium.
+
 ## 0.1.135
 
 ### Added
