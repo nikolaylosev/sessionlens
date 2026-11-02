@@ -3155,6 +3155,19 @@
           }
         return null;
       };
+      /* 0.1.136: rewritten since the last run, then renamed. Two edits with no run between them are one change: the CI
+         lab's p5-30 gave a test for a PDF export the body of one for an SVG download, then renamed it, and the second edit
+         alone reads as a rename with the same body. Without a run before there is nothing to compare with. */
+      const rewrittenSinceRun = (file, seq, name, body) => {
+        const runs = ev.filter((x) => x.kind === "run_tests" && x.seq < seq);
+        if (!runs.length) return false;
+        const at = runs[runs.length - 1].seq;
+        const own = versions.filter((v) => v.file === file);
+        const before = own.filter((v) => v.seq < at);
+        const src = before.length ? before[before.length - 1].new_content : own.length ? own[0].prev_content : null;
+        const then = src != null ? tests(src)[name] : undefined;
+        return then !== undefined && norm(then) !== body;
+      };
       // ---- a test removed from a file ----
       const last = {};
       for (const e of versions) {
@@ -3168,7 +3181,8 @@
         const added = Object.keys(nm)
           .filter((k) => !(k in om))
           .map((k) => norm(nm[k]));
-        const gone = Object.keys(om).filter((k) => !(k in nm) && !(norm(om[k]) && added.includes(norm(om[k]))) && !kept(e.file, e.seq, k));
+        const renamed = (k) => norm(om[k]) && added.includes(norm(om[k])) && !rewrittenSinceRun(e.file, e.seq, k, norm(om[k]));
+        const gone = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
         if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, undefined, ownRedRun(e.file, e.seq, gone));
       }
       // ---- a test file deleted ----

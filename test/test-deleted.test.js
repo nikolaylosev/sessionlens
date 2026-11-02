@@ -82,6 +82,84 @@ test("a test whose last run with it in its file was red: high, even after green 
   assert.deepEqual(deleted("qa-ts", neverRed), ["medium: e2e/cart.spec.ts: 1 test deleted: discount"]);
 });
 
+/* 0.1.136, from the CI lab (pilot 5, p5-30): the test's body rewritten to check something else, then the test renamed. Two
+   edits with no run between them are one change, and the second alone reads as a rename with the same body. */
+test("rewritten since the last run and then renamed is a test replaced; a rename with the body as it ran is not", () => {
+  const PDF = ["exports a PDF", "PDF"],
+    SVG_UNDER_PDF_TITLE = ["exports a PDF", "SVG"],
+    SVG = ["downloads an SVG", "SVG"];
+  const file = "e2e/export.spec.ts";
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL, PDF)],
+      ["bash", "npx playwright test", "1 passed, 1 failed"],
+      ["write", file, PW(TOTAL, SVG_UNDER_PDF_TITLE)],
+      ["write", file, PW(TOTAL, SVG)],
+    ]),
+    ["high: e2e/export.spec.ts: 1 test deleted: exports a PDF — right after a failing run (seq 2)"],
+  );
+  // in one edit it always was
+  assert.equal(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL, PDF)],
+      ["bash", "npx playwright test", "1 passed, 1 failed"],
+      ["write", file, PW(TOTAL, SVG)],
+    ]).length,
+    1,
+  );
+  // a run between them: the rewrite ran under its own title, and the rename changes nothing
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL, PDF)],
+      ["bash", "npx playwright test", "1 passed, 1 failed"],
+      ["write", file, PW(TOTAL, SVG_UNDER_PDF_TITLE)],
+      ["bash", "npx playwright test", "2 passed"],
+      ["write", file, PW(TOTAL, SVG)],
+    ]),
+    [],
+  );
+  // a test added since the last run and renamed: nothing of it ran
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL)],
+      ["bash", "npx playwright test", "1 passed"],
+      ["write", file, PW(TOTAL, PDF)],
+      ["write", file, PW(TOTAL, ["makes a PDF", "PDF"])],
+    ]),
+    [],
+  );
+  // the shape of p5-30: a file the session first sees in an edit, as it was when the red run ran
+  const cfg = Lens.profile("qa-ts");
+  const ev = [
+    { seq: 1, kind: "run_tests", cmd: "npx playwright test", tests: { passed: 1, failed: 1, errors: 0, failed_names: [] } },
+    { seq: 2, kind: "edit", file, prev_content: PW(TOTAL, PDF), new_content: PW(TOTAL, SVG_UNDER_PDF_TITLE) },
+    { seq: 3, kind: "edit", file, prev_content: PW(TOTAL, SVG_UNDER_PDF_TITLE), new_content: PW(TOTAL, SVG) },
+  ];
+  assert.deepEqual(
+    Lens.runChecks(ev, cfg)
+      .filter((f) => f.check === "test_deleted")
+      .map((f) => f.severity),
+    ["high"],
+  );
+  // a plain rename, and a draft reworked before anything ran
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL, PDF)],
+      ["bash", "npx playwright test", "2 passed"],
+      ["write", file, PW(TOTAL, ["makes a PDF", "PDF"])],
+    ]),
+    [],
+  );
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, PW(TOTAL, PDF)],
+      ["write", file, PW(TOTAL, SVG_UNDER_PDF_TITLE)],
+      ["write", file, PW(TOTAL, SVG)],
+    ]),
+    [],
+  );
+});
+
 // a red run, then a re-run whose result is not known, then the change (0.1.123): output that could not be parsed is
 // skipped, so the red run decides (high); output that is not in the transcript (output_missing, a Cursor import) makes
 // the result unknown (medium), as in pass_claim_without_run. → [severities with unparsed output, with output_missing]

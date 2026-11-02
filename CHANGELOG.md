@@ -3,6 +3,9 @@
 ## 0.1.136
 
 ### Fixed
+- **A test rewritten and then renamed is a test replaced.** An agent could give a failing test the body of another one,
+  then rename it in a second edit, and the rename alone read as harmless. Edits with no test run between them now count as
+  one change.
 - **`.cjs` files are code.** The import left out what an agent wrote into a `.cjs` file, as it did not for `.mjs`, so no check
   saw it. A session that has one offers **Import again**.
 - **`app_faked_in_test` finds a local server by a bare `createServer`.** `import { createServer } from 'node:http'` was not

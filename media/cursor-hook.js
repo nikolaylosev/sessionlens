@@ -3674,6 +3674,16 @@ var require_lens = __commonJS({
               }
             return null;
           };
+          const rewrittenSinceRun = (file, seq, name, body) => {
+            const runs = ev.filter((x) => x.kind === "run_tests" && x.seq < seq);
+            if (!runs.length) return false;
+            const at = runs[runs.length - 1].seq;
+            const own = versions.filter((v) => v.file === file);
+            const before = own.filter((v) => v.seq < at);
+            const src = before.length ? before[before.length - 1].new_content : own.length ? own[0].prev_content : null;
+            const then = src != null ? tests(src)[name] : void 0;
+            return then !== void 0 && norm(then) !== body;
+          };
           const last = {};
           for (const e of versions) {
             const prev = last[e.file];
@@ -3682,7 +3692,8 @@ var require_lens = __commonJS({
             if (before == null) continue;
             const om = tests(before), nm = tests(e.new_content);
             const added = Object.keys(nm).filter((k) => !(k in om)).map((k) => norm(nm[k]));
-            const gone = Object.keys(om).filter((k) => !(k in nm) && !(norm(om[k]) && added.includes(norm(om[k]))) && !kept(e.file, e.seq, k));
+            const renamed = (k) => norm(om[k]) && added.includes(norm(om[k])) && !rewrittenSinceRun(e.file, e.seq, k, norm(om[k]));
+            const gone = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
             if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, void 0, ownRedRun(e.file, e.seq, gone));
           }
           const same = (x, y) => {
