@@ -91,9 +91,6 @@ async function review(s, o, io) {
   } catch (e) {
     return { model, error: clean(e.message) };
   }
-  // a local server is asked file by file, and a file that fails does not stop the others (LensAI.review)
-  const failed = r.fileErrors || [];
-  if (failed.length && failed.length === r.files) return { model, error: clean(failed[0]) };
   const rows = r.findings.map(row);
   const aside = (f) => !!o.ci && CI_CONTEXT.has(f.check);
   return {
@@ -103,7 +100,7 @@ async function review(s, o, io) {
     dropped: (r.dropped || []).map((f) => ({ ...row(f), why: clean(f.why) })),
     ...(r.truncated ? { truncated: true } : {}),
     ...(r.verifyError ? { verifyError: clean(r.verifyError) } : {}),
-    ...(failed.length ? { partial: `${failed.length} of ${r.files} files not reviewed: ${clean(failed[0])}` } : {}),
+    ...(r.partial ? { partial: clean(r.partial) } : {}),
   };
 }
 
