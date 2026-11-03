@@ -159,6 +159,7 @@ export function initReview() {
         cur.ai_truncated = r.truncated;
         cur.ai_raw = r.raw;
         cur.ai_verify_error = r.verifyError || null;
+        cur.ai_partial = r.partial || null;
       });
       if (state.current === sid) {
         renderReview();
@@ -166,7 +167,10 @@ export function initReview() {
           n: r.findings.length,
           dropped: r.dropped && r.dropped.length ? T("ai_dropped", { n: r.dropped.length }) : "",
           repaired: r.repaired ? T("ai_repaired") : "",
-          err: r.verifyError ? " · " + r.verifyError : "",
+          err: [r.partial, r.verifyError]
+            .filter(Boolean)
+            .map((x) => " · " + x)
+            .join(""),
         });
       }
     } catch (e) {
@@ -429,6 +433,7 @@ export function renderReview() {
   $("#ai-status").textContent = s.ai_at
     ? T("ai_last", { at: s.ai_at.slice(0, 16).replace("T", " ") }) +
       (s.ai_truncated ? T("ai_truncated") : "") +
+      (s.ai_partial ? " · " + s.ai_partial : "") +
       (s.ai_verify_error ? " · " + s.ai_verify_error : "")
     : "";
   $("#ai-verify-again").hidden = !s.ai_verify_error;

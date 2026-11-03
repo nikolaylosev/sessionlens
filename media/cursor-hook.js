@@ -283,6 +283,7 @@ var require_i18n = __commonJS({
           no_msgs: "No messages.",
           ai_status: "model: {n} {n|finding|findings}{dropped}{repaired}{err}",
           ai_dropped: ", {n} dropped by verification",
+          ai_files_failed: "{n} of {total} {total|file|files} not reviewed: {msg}",
           ai_repaired: " · JSON was repaired",
           ai_wait: "calling the model…",
           ai_wait_verify: "calling the model, then verifying…",
@@ -4632,7 +4633,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.137";
+      const ANALYSIS_VERSION = "0.1.138";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

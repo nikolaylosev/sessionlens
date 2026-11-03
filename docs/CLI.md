@@ -18,12 +18,14 @@ their analysis code.
 The CLI has these limits:
 
 - It doesn't run the agent or the tests. It only reads a finished log.
-- It doesn't use the network, so the log and the code in it stay on your machine.
-- It doesn't run a review with a language model. Those checks exist only in the extension.
+- It doesn't use the network unless you give `--review`, so by default the log and the code in it stay on your machine.
+- With `--review`, it sends part of the session to the model provider you chose (see
+  [`--review`](#--review-a-review-by-a-language-model-0138-and-newer)).
 
 ## Installation
 
-You only need Node.js 22 or newer, because the package has no dependencies and needs no API keys or settings files.
+You only need Node.js 22 or newer, because the package has no dependencies and needs no settings files. It needs an API
+key only for `--review`.
 Check your Node version:
 
 ```
@@ -47,8 +49,8 @@ To see all the options, run:
 npx sessionlens-cli --help
 ```
 
-Versions: `--latest` and folder analysis were added in 0.1.136. In older versions, `--latest` fails with the error
-`Unknown option '--latest'`. You can check your version with `--version`.
+Versions: `--latest` and folder analysis were added in 0.1.136, and `--review` in 0.1.138. In older versions, these options
+fail with an error such as `Unknown option '--latest'`. You can check your version with `--version`.
 
 ## First run
 
@@ -110,10 +112,11 @@ with a single message, "Done.", also gets Green, so always look at `runs` and `e
 Each line has four fields, which are the severity, the name of the check, the step number in the session, and the text.
 The report sorts findings by severity, and findings of the same severity stay in session order.
 
-The report can end with two more lines:
+The report can end with these parts:
 
 - `Context, not counted in CI` lists the checks that `--ci` set aside.
 - `Hidden by calibration` lists the findings that calibration hid, with the reason.
+- `Model review` holds what a language model said, with `--review`. It doesn't count in the verdict.
 
 ## Which log to give it
 
@@ -188,6 +191,10 @@ Only `--profile` is required, and you can add the other options when you need th
 | `--verdicts <path>` | reviewers' verdicts, as a file or a folder; you can give it several times |
 | `--ci` | for a session that ran in CI |
 | `--fail-on <level>` | `none` (the default), `red` or `yellow`; exit code 1 when the session is that colour or worse |
+| `--review` | also ask a language model to review the session; this sends part of the session to the provider (0.1.138 and newer) |
+| `--provider <name>` | with `--review`, the provider: `anthropic`, `google`, `openai`, `xai`, `deepseek`, `qwen` or `local` |
+| `--model <name>` | with `--review`, the model; without it, the provider's default in this version |
+| `--base-url <url>` | with `--review` and `qwen` or `local`, the server's address |
 | `--json` | the report as JSON instead of text |
 | `--md` | the report as Markdown instead of text |
 | `--json-file <file>` | also write the JSON to a file |
@@ -249,6 +256,58 @@ By default, the CLI exits with code 0 whatever the verdict, so it doesn't block 
 | `yellow` | Red or Yellow |
 
 The CLI uses the verdict after `--ci` and calibration.
+
+### `--review`: a review by a language model (0.1.138 and newer)
+
+With `--review`, the CLI also asks a language model to read the session. The model looks for what patterns can't see, e.g.,
+whether a test checks what its name promises, what is fragile, and which cases are missing. It uses the same prompts and the
+same verification as the extension.
+
+```
+export ANTHROPIC_API_KEY=...
+npx sessionlens-cli analyze agent.jsonl --profile qa-ts --review --provider anthropic --model <name>
+```
+
+The key comes only from an environment variable, so it stays out of your shell history and your CI logs.
+
+| `--provider` | The key's variable | Notes |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` | |
+| `google` | `GEMINI_API_KEY` | |
+| `openai` | `OPENAI_API_KEY` | |
+| `xai` | `XAI_API_KEY` | |
+| `deepseek` | `DEEPSEEK_API_KEY` | |
+| `qwen` | `DASHSCOPE_API_KEY` | the key and `--base-url` must belong to the same region |
+| `local` | none | any OpenAI-compatible server, such as Ollama; `http://localhost:11434/v1` by default |
+
+Give `--model` in CI, because the default can change from one version to the next. Claude Code, Codex and Cursor through a
+subscription aren't available in the CLI yet.
+
+The report gets a part of its own:
+
+```
+Model review by anthropic/<name>, not counted in the verdict: 1 high, 0 medium, 0 low; 2 dropped by verification
+high    ai_purpose  The test is named "adds a todo" but only checks that the page body is visible — «await expect(page.locator('body')).toBeVisible()»
+```
+
+With `--json` and `--json-file`, the same data is in the `modelReview` field.
+
+Keep these points in mind:
+
+- **What is sent.** The specification, the findings of the other checks, the test code and a shortened transcript go to the
+  provider. The code is cut at 40000 characters, or 12000 for a local server. Secrets are masked by pattern, so a secret of an
+  unusual shape can still get through. The CLI names the provider on stderr before it sends anything.
+- **It doesn't change the verdict.** The model's findings don't count in the verdict or in `--fail-on`, and calibration
+  doesn't apply to them. In our measurement (73 reviews, with one model and one prompt), a high finding from the model didn't
+  separate honest sessions from cheating, and two reviews of one session often differed. Read this part as an explanation for
+  the reviewer.
+- **With `--ci`,** `ai_questions` ("the agent should have asked") is context, because nobody in CI could be asked.
+- **If the model fails,** you still get the report and the same exit code. The reason is on stderr and in the report. A
+  missing key counts as a failure too, because a pull request from a fork has no secrets, and that must not break its build.
+- **A folder isn't allowed,** so that one run can't pay for many reviews. Review one session at a time.
+- **Cost.** One run makes two requests on your account, the review and its verification. A local server gets one request for
+  each file, up to 12 files, and one verification. We haven't measured the cost yet, so check it on your provider's dashboard.
+- **Time.** A request to a cloud provider stops after 10 minutes. A local server has no limit, so set a timeout on the CI job.
 
 ### Output formats
 
@@ -384,15 +443,30 @@ These are the main steps of the example:
 
 The example is written this way for these reasons:
 
-- Only the agent's step has the key, because SessionLens doesn't need one.
+- Only the agent's step has the key, because SessionLens doesn't need one, unless you add `--review`.
 - The task reaches the shell through `env`, so it isn't pasted into the script.
 - The log is outside the working copy, so the agent doesn't read it while it's being written.
 - `if: always()` keeps the review and the log even when the agent fails.
 - `sessionlens-cli@0.1` takes the latest 0.1.x release. For fully repeatable runs, give an exact version.
-- `npx` downloads the package from npm, and the analysis itself doesn't use the network.
+- `npx` downloads the package from npm, and the analysis itself doesn't use the network, unless you add `--review`.
 
 With another agent, only the first step changes, so save that agent's log and give its path to the CLI. With Claude Code,
 copy the subagents folder too.
+
+### Adding a model's review
+
+Add `--review` to the SessionLens step, and give only that step the provider's key:
+
+```yaml
+- name: SessionLens reviews the session
+  if: always()
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  run: npx -y sessionlens-cli@0.1 analyze "$RUNNER_TEMP/agent.jsonl" --profile qa-ts --ci --md --json-file "$RUNNER_TEMP/review.json" --review --provider anthropic --model <name> >> "$GITHUB_STEP_SUMMARY"
+```
+
+The job's summary then has a `Model review` part for the person who reads the pull request. The provider gets the code and
+the transcript, and it may not be the provider your agent uses, so check that your project allows this.
 
 ### A staged rollout
 
@@ -435,6 +509,13 @@ The CLI has three exit codes, and it always writes the reason for an error to st
 | `is not a verdicts.json` | the verdicts file is in another format | export it again from the Calibration tab |
 | `--json and --md: one output at a time` | both formats were given | keep one, and use `--json-file` for the JSON |
 | `--fail-on is none, red or yellow` | the value is wrong | choose one of the three |
+| `--review needs --provider` | no provider was given | add `--provider <name>` |
+| `unknown provider` | no such provider exists | take a name from the list in the message |
+| `runs through a subscription` | `claudecli`, `codexcli` or `cursorcli` was given | use a provider from the list in the message |
+| `goes with --review` | `--provider`, `--model` or `--base-url` was given without `--review` | add `--review`, or remove the option |
+| `--base-url is for the providers local and qwen` | another provider has a fixed address | remove `--base-url` |
+| `--base-url is not an http or https address` | the address is wrong | check the address |
+| `--review is for one session` | `--review` was given with a folder | give one log, or remove `--review` |
 | `lint engine did not load` | the profile's linter didn't load | check your Node version and reinstall the package |
 
 ### Warnings
@@ -447,6 +528,10 @@ These messages don't change the exit code, but the report is incomplete:
   report says so too, and the JSON report has `noToolCalls: true` (0.1.137 and newer).
 - `its tool calls are in a format SessionLens does not read` means that the review is based only on the messages. Check
   that the log was written in the right format, such as `stream-json` for Cursor.
+- `the model review did not run` means that the report has no model review, and it gives the reason, such as a missing key
+  or an error from the provider.
+- `the model review:` followed by `verification not performed` means that the findings weren't verified. Followed by `files
+  not reviewed`, it means that a local server failed on some of the files.
 
 ### What the CLI doesn't stop
 
