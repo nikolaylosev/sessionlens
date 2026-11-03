@@ -617,9 +617,8 @@ npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --md >> "$GITHUB_ST
 ```
 
 It reads the same logs as the extension and runs the same lint engines. It reviews one log, the newest session of the folder you are in (`--latest`), or a whole folder of sessions with a summary. It
-prints text, Markdown for a CI job's summary, or the Report .json, and it uses no network. By default it never fails a build; add `--fail-on red` when you
-trust its reports. `--verdicts` calibrates its checks with the verdicts you export from the Calibration tab. It has no
-model review yet. Its options are in [cli/README.md](cli/README.md), and a
+prints text, Markdown for a CI job's summary, or the Report .json, and it uses no network unless you ask for a model's review. By default it never fails a build; add `--fail-on red` when you
+trust its reports. `--verdicts` calibrates its checks with the verdicts you export from the Calibration tab. `--review` adds a language model's review of one session, with your own key: the provider gets the same material as from the panel, and the model's findings don't change the verdict. Its options are in [cli/README.md](cli/README.md), and a
 complete GitHub Actions workflow with a Cursor agent is in [cli/examples/cursor-agent.yml](cli/examples/cursor-agent.yml).
 
 ## Your data
