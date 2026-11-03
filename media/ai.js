@@ -971,7 +971,8 @@ with real newline characters.`;
     if (!files.length) return { findings: [], exchanges: [], files: 0 };
     const spec = session.spec && session.spec.trim() ? `# Specification\n${session.spec.trim()}\n\n` : "";
     const out = [],
-      exchanges = [];
+      exchanges = [],
+      errors = [];
     for (const [name, code] of files) {
       const user = maskSecrets(`${spec}# File: ${name}\n${code.slice(0, settings.maxCode || 12000)}`);
       try {
@@ -987,9 +988,10 @@ with real newline characters.`;
         }
       } catch (e) {
         exchanges.push(`--- ${name}: ${e.message}`);
+        errors.push(e.message);
       }
     }
-    return { findings: out, exchanges, files: files.length };
+    return { findings: out, exchanges, files: files.length, errors };
   }
 
   async function review(session, settings, fetchImpl) {
@@ -1005,9 +1007,11 @@ with real newline characters.`;
       const r = await reviewChunked(session, settings, fetchImpl);
       for (const f of r.findings) f.model = modelLabel(settings);
       const raw1 = `${T("req_review", used(settings))} (${T("review_per_file", { n: r.files })})\n--- system ---\n${pick("review_local", LOCAL_FILE_SYSTEM)}\n\n${T("resp")}\n${r.exchanges.join("\n\n")}`;
-      if (settings.verify === false) return { findings: r.findings, dropped: [], raw: raw1, truncated: p.truncated };
+      // fileErrors: the files whose request failed. A review with no findings may then mean nothing was reviewed (the CLI says so)
+      const failed = { files: r.files, fileErrors: r.errors || [] };
+      if (settings.verify === false) return { findings: r.findings, dropped: [], raw: raw1, truncated: p.truncated, ...failed };
       const v = await verify(session, r.findings, routed, fetchImpl);
-      return { findings: v.kept, dropped: v.dropped, raw: raw1 + "\n\n\n" + v.raw, truncated: p.truncated, verifyError: v.error };
+      return { findings: v.kept, dropped: v.dropped, raw: raw1 + "\n\n\n" + v.raw, truncated: p.truncated, verifyError: v.error, ...failed };
     }
     let text;
     try {
