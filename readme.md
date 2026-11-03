@@ -602,6 +602,8 @@ From a `.vsix` file (each [GitHub release](https://github.com/nikolaylosev/sessi
 3. Select the `.vsix` file, then run **Developer: Reload Window** from the Command Palette. A window that is not
    reloaded keeps running the previous version, and some buttons may do nothing until it is.
 
+Updating keeps your sessions and verdicts. Uninstalling deletes them, see [Your data](#your-data).
+
 To build it from source, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Command line and CI
@@ -647,6 +649,16 @@ Everything stays on your machine, in VS Code's storage for this extension (ID `n
   [Using your Cursor subscription](#using-your-cursor-subscription-no-api-key)). Nothing else is sent anywhere, and
   the panel itself has no network access.
 
+**Uninstalling deletes your sessions.** The next time VS Code or Cursor starts after you uninstall the extension, it
+deletes the extension's global storage folder, with every session in it, their specifications and verdicts, and your
+groups. The editor does this itself and shows no warning. An update keeps the folder, so if an update fails, install
+the new version over the old one from a `.vsix` file instead of uninstalling (see [Install](#install)).
+
+To keep your verdicts, press **Export verdicts.json** on the Calibration tab before you uninstall. To bring them back,
+install the extension, load the same logs again under the same names, then press **Import verdicts / findings**. A
+verdict whose session or finding is not found counts only in the precision table. The file holds only verdicts, so
+paste each specification again.
+
 **What a model call sends.** The model is called only when you press one of these buttons. Each button shows the
 same list when you hover over it. In everything sent, secrets are masked first: API keys and tokens (`sk-…`,
 `ghp_…`, `AKIA…`, `xox…-`, `AIza…`), JWTs, `Bearer` tokens, values assigned to names such as `api_key`, `token` or
@@ -667,7 +679,8 @@ With a local server (see [Local servers](#local-servers)) on your own machine, n
 
 **To remove everything:** in **⚙ Settings**, press **Delete everything** (all sessions and the calibration history)
 and **Reset settings to defaults** (this also deletes the stored API keys), remove the `sessionlens.*` entries from
-your `settings.json`, then uninstall the extension. Deleting the folder `globalStorage/nikolaylosev.sessionlens-vscode/` removes any session files left behind.
+your `settings.json`, then uninstall the extension. At its next start the editor deletes the folder
+`globalStorage/nikolaylosev.sessionlens-vscode/`. If the folder is still there after that, delete it yourself.
 
 **An earlier local build** (extension ID `local.sessionlens-vscode`, versions up to 0.1.105) is a separate extension
 for VS Code: its sessions, rules and keys are not carried over. If you need its verdicts or rules, export them there
