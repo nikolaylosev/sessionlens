@@ -968,10 +968,11 @@ with real newline characters.`;
     const byFile = {};
     for (const e of session.events) if (e.new_content) byFile[e.file || "(code in message)"] = e.new_content;
     const files = Object.entries(byFile).slice(0, 12);
-    if (!files.length) return { findings: [], exchanges: [], files: 0 };
+    if (!files.length) return { findings: [], exchanges: [], files: 0, errors: [] };
     const spec = session.spec && session.spec.trim() ? `# Specification\n${session.spec.trim()}\n\n` : "";
     const out = [],
-      exchanges = [];
+      exchanges = [],
+      errors = [];
     for (const [name, code] of files) {
       const user = maskSecrets(`${spec}# File: ${name}\n${code.slice(0, settings.maxCode || 12000)}`);
       try {
@@ -987,9 +988,10 @@ with real newline characters.`;
         }
       } catch (e) {
         exchanges.push(`--- ${name}: ${e.message}`);
+        errors.push(e.message);
       }
     }
-    return { findings: out, exchanges, files: files.length };
+    return { findings: out, exchanges, files: files.length, errors };
   }
 
   async function review(session, settings, fetchImpl) {
@@ -1005,9 +1007,14 @@ with real newline characters.`;
       const r = await reviewChunked(session, settings, fetchImpl);
       for (const f of r.findings) f.model = modelLabel(settings);
       const raw1 = `${T("req_review", used(settings))} (${T("review_per_file", { n: r.files })})\n--- system ---\n${pick("review_local", LOCAL_FILE_SYSTEM)}\n\n${T("resp")}\n${r.exchanges.join("\n\n")}`;
-      if (settings.verify === false) return { findings: r.findings, dropped: [], raw: raw1, truncated: p.truncated };
+      /* Each file's request fails on its own, so a server that is down used to read as a review with no findings, and
+         the panel replaced the findings it had with nothing (fixed in 0.1.138). No file answered: a failure, as with a
+         cloud provider. Some did: their findings stand, and partial says what is missing. */
+      if (r.errors.length && r.errors.length === r.files) throw Object.assign(new Error(r.errors[0]), { raw: raw1 });
+      const partial = r.errors.length ? { partial: T("ai_files_failed", { n: r.errors.length, total: r.files, msg: r.errors[0] }) } : {};
+      if (settings.verify === false) return { findings: r.findings, dropped: [], raw: raw1, truncated: p.truncated, ...partial };
       const v = await verify(session, r.findings, routed, fetchImpl);
-      return { findings: v.kept, dropped: v.dropped, raw: raw1 + "\n\n\n" + v.raw, truncated: p.truncated, verifyError: v.error };
+      return { findings: v.kept, dropped: v.dropped, raw: raw1 + "\n\n\n" + v.raw, truncated: p.truncated, verifyError: v.error, ...partial };
     }
     let text;
     try {

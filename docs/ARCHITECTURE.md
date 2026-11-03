@@ -180,6 +180,8 @@ cli/                  the command-line tool, npm package sessionlens-cli (phase 
   lib/media.js        where the core is: the package's own media/, or the repository's
   lib/verdicts.js     --verdicts: exported verdicts as the counts Lens.calibrate() reads (RA §5.2)
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
+  lib/model.js        --review: LensAI.review over providers.js, with the key from the environment; loaded only with
+                      --review, its findings stay out of s.findings and the verdict (0.1.138)
 scripts/              build-webview.js, check-vsix.js, release-notes.js, pack-cli.js (the CLI's npm package)
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX + npm)
 ```

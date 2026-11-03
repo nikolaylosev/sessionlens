@@ -9,7 +9,8 @@
    session has with it; noToolCalls: the log has only messages, so the verdict says nothing about the tests; context
    (--ci): a Set of check names set aside as context, not counted in the verdict (see LensReport.json); color: ANSI
    colours in the terminal text; calibration (--verdicts):
-   { verdicts, files, off, demoted }, how many verdicts calibrated the checks and which they switched off or demoted. */
+   { verdicts, files, off, demoted }, how many verdicts calibrated the checks and which they switched off or demoted;
+   modelReview (--review): what cli/lib/model.js returned, shown apart from the findings, which it does not touch. */
 const path = require("path");
 
 const MEDIA = require("./media");
@@ -96,6 +97,20 @@ function parts(s, opts) {
     findings: SEVERITIES.flatMap((sev) => r.findings.filter((f) => f.severity === sev)),
   };
 }
+// "1 high, 0 medium, 0 low; 3 dropped by verification; code was truncated": the line above a model review's findings
+function modelCounts(m) {
+  const n = m.dropped.length;
+  return [
+    SEVERITIES.map((sev) => `${m.findings.filter((f) => f.severity === sev).length} ${T("sev_" + sev)}`).join(", "),
+    n ? `${n} dropped by verification` : "",
+    m.truncated ? "code was truncated" : "",
+    m.partial || "",
+    m.verifyError || "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+const bySeverity = (rows) => SEVERITIES.flatMap((sev) => rows.filter((f) => f.severity === sev));
 const plain = (md) => md.replace(/\*\*/g, "");
 const step = (f) => (f.seq >= 0 ? `#${f.seq}` : "");
 const footer = (opts) => `SessionLens ${opts.version || ""}`.trim();
@@ -123,11 +138,21 @@ function text(s, opts = {}) {
     const rows = p.r.hiddenByCalibration.map((f) => `${f.check}${whyHidden(f) ? ` (${whyHidden(f)})` : ""}`);
     out.push("", paint(c, "dim", `Hidden by calibration: ${[...new Set(rows)].join(", ")}`));
   }
+  const m = opts.modelReview;
+  if (m && m.error) out.push("", `Model review by ${m.model} did not run: ${m.error}`);
+  else if (m) {
+    out.push("", paint(c, "bold", `Model review by ${m.model}, not counted in the verdict: ${modelCounts(m)}`));
+    const mw = Math.max(0, ...m.findings.map((f) => f.check.length));
+    for (const f of bySeverity(m.findings)) out.push(`${paint(c, f.severity, f.severity.padEnd(6))}  ${f.check.padEnd(mw)}  ${f.message}`);
+    if (m.context.length) out.push(paint(c, "dim", `Context, not counted in CI: ${[...new Set(m.context.map((f) => f.check))].join(", ")}`));
+  }
   return out.join("\n") + "\n";
 }
 
 // a message quotes the session's code: no HTML of its own in a job summary
 const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+// a model's message can quote what the session's material made it say: no link or image of its own in a job summary
+const escModel = (t) => esc(t).replace(/[\\`*_[\]!]/g, (c) => "\\" + c);
 
 function md(s, opts = {}) {
   const p = parts(s, opts);
@@ -147,6 +172,14 @@ function md(s, opts = {}) {
   out.push(`### Findings: ${p.count}`, ...(p.findings.length ? p.findings.map(line) : ["None."]), "");
   if (p.r.context && p.r.context.length) out.push("### Context, not counted in CI", ...p.r.context.map(line), "");
   if (p.r.hiddenByCalibration.length) out.push(T("md_hidden"), ...p.r.hiddenByCalibration.map((f) => line(f) + (whyHidden(f) ? ` · ${whyHidden(f)}` : "")), "");
+  const m = opts.modelReview;
+  const modelLine = (f) => `- ${ICON[f.severity]} **${T("sev_" + f.severity)}** ${escModel(f.message)} · \`${f.check}\``;
+  if (m && m.error) out.push("### Model review", `${escModel(m.model)} did not run: ${escModel(m.error)}`, "");
+  else if (m) {
+    out.push(`### Model review: ${escModel(modelCounts(m))}`, `Not counted in the verdict. By ${escModel(m.model)}.`, "");
+    if (m.findings.length) out.push(...bySeverity(m.findings).map(modelLine), "");
+    if (m.context.length) out.push("### Model review, context not counted in CI", ...bySeverity(m.context).map(modelLine), "");
+  }
   out.push(`_${footer(opts)}_`);
   return out.join("\n") + "\n";
 }
@@ -159,6 +192,7 @@ const json = (s, opts = {}) =>
       ...(opts.subagents ? { subagents: opts.subagents } : {}),
       ...(opts.noToolCalls ? { noToolCalls: true } : {}),
       ...(opts.calibration ? { calibration: opts.calibration } : {}),
+      ...(opts.modelReview ? { modelReview: opts.modelReview } : {}),
     },
     null,
     1,

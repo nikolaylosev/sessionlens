@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.138
+
+### Added
+- **The CLI can ask a language model to review a session.** `--review --provider <name>` adds a part to the report that
+  says what a test really checks, what is fragile and what is missing, with the same prompts and verification as the
+  panel. It works with Anthropic, Google, OpenAI, xAI, DeepSeek, Qwen and a local server, and takes the key from an
+  environment variable. The model's findings do not change the verdict or `--fail-on`. If the model fails or there is no
+  key, you still get the report and the same exit code, with the reason on stderr. Without `--review`, the CLI sends
+  nothing. It reviews one session at a time, not a folder.
+
+### Fixed
+- **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
+  `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only
+  some files got an answer, it says how many were not reviewed and why.
+
 ## 0.1.137
 
 ### Fixed
