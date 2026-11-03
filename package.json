@@ -14,6 +14,7 @@
     "Testing"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onWebviewPanel:sessionlensSession"
   ],
   "main": "./extension.js",

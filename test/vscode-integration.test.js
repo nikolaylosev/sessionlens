@@ -98,7 +98,11 @@ test("package.json: every %key% is in package.nls.json; no key is unused; no tra
 });
 
 test("package.json: activation, views, commands and menus", async () => {
-  assert.deepEqual(PKG.activationEvents, ["onWebviewPanel:sessionlensSession"]);
+  // onStartupFinished (0.1.138): sessionlens.inCursor is set in activate(), and a command hidden behind it could not start
+  // the extension, so Record Cursor agent runs was not in the palette until the panel had been opened once
+  assert.deepEqual(PKG.activationEvents, ["onStartupFinished", "onWebviewPanel:sessionlensSession"]);
+  const inCursorOnly = PKG.contributes.menus.commandPalette.filter((m) => /sessionlens\.inCursor/.test(m.when || "")).map((m) => m.command);
+  assert.deepEqual(inCursorOnly, ["sessionlens.recordCursorRuns", "sessionlens.stopRecordingCursorRuns"]);
   const views = PKG.contributes.views.sessionlens;
   // phase 7 (7A.2): the panel first, the Sessions tree under it
   assert.deepEqual(

@@ -14,6 +14,9 @@
 - **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
   `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only
   some files got an answer, it says how many were not reviewed and why.
+- **Record Cursor agent runs is in the Command Palette from the start.** Cursor showed the command only after the SessionLens
+  panel had been opened once, so following the steps with a closed panel found nothing. The extension now starts when the
+  editor has finished starting, in VS Code too. This took about 40 ms or less in our measurement, with 200 sessions.
 
 ## 0.1.137
 
