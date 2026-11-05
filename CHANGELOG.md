@@ -16,6 +16,10 @@
   Code in VS Code. **Import again** still asks, since a session can be from another agent.
 
 ### Fixed
+- **A Cursor command no longer takes another command's output.** When the output of an early command was gone (Cursor had
+  dropped the start of the chat, or Record Cursor agent runs started later), it took the output of a later run of the same
+  command, so a red result could appear on the wrong step, and the commands in between got none. Each command now gets
+  its own output or none. In one chat of ours, 44 of 61 commands get their output instead of 13.
 - **Test results of new Cursor chats are read again.** Cursor changed how it stores a chat in mid-October, and SessionLens
   found no command output in chats since then, so their test runs had no result (red or green) unless Record Cursor
   agent runs was on. It now reads both formats, and the files before and after an edit too. If a later Cursor changes
