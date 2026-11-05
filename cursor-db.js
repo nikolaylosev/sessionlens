@@ -15,7 +15,9 @@
      `toolFormerData` with `name` (`run_terminal_command_v2`), `params` (JSON, `command`) and `result` (JSON, `output`,
      `exitCode` only when it is not 0). An edit (`edit_file_v2`, since 0.1.127) has `params.relativeWorkspacePath` (an
      absolute path in practice) and `result.beforeContentId` / `afterContentId`: keys of the same table whose value is
-     the whole file before and after, named by its SHA-256 (the hash of "" for a file that did not exist).
+     the whole file before and after, named by its SHA-256 (the hash of "" for a file that did not exist). A chat from
+     mid-October 2026 on (first seen on 21 Oct, on Cursor 3.25; still so on 3.27; read since 0.1.138) leaves `fullConversationHeadersOnly` empty:
+     `headerLog` says how many parts the list has, and each is a key `composerConvHeaders:<id>:000000`, `000001`, …
    - the CLI keeps no file before an edit, only "Wrote contents to …", but it keeps what the agent read: a Read's
      result is the file with every tenth line marked by its number ("    10|"). The file before an edit is the last
      version the session saw of it (0.1.130): a whole Read (no offset or limit, not cut with "... N lines not shown
@@ -36,6 +38,7 @@ const path = require("path");
 const ID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_OUTPUT = 200000; // per command; a runner's summary is at the end, so the end is kept
 const MAX_FILE = 400000; // a file before or after an edit; a longer one is left out
+const MAX_HEADER_PARTS = 4096; // 256 bubbles each in what Cursor writes: more than a million, far beyond a real chat
 const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 // a shell command that may change files the session read: after it, every version known is dropped
 const MAY_WRITE =
@@ -196,9 +199,24 @@ function fromCli(db) {
   return outputs.length || edits.length ? { outputs: outputs.length ? outputs : null, edits: edits.length ? edits : null } : null;
 }
 
+/* The composer's list of bubbles in order, in either of the IDE's two formats (see the top of the file); [] when there
+   is none to read. A part that is missing is skipped: what the others list is still the chat, in its order. */
+function bubbleHeaders(composer, id, get) {
+  const full = composer.fullConversationHeadersOnly;
+  if (Array.isArray(full) && full.length) return full;
+  const parts = composer.headerLog && composer.headerLog.chunkCount;
+  if (!Number.isInteger(parts) || parts < 1) return [];
+  const headers = [];
+  for (let i = 0; i < Math.min(parts, MAX_HEADER_PARTS); i++) {
+    const part = get(`composerConvHeaders:${id}:${String(i).padStart(6, "0")}`);
+    if (Array.isArray(part)) headers.push(...part);
+  }
+  return headers;
+}
+
 /* The IDE's state.vscdb → { outputs, edits } for the chat with this id: the same list of commands, and each edit's
-   file before and after ({ path, before, after }, before "" for a new file); null when the chat or the format is not
-   there */
+   file before and after ({ path, before, after }, before "" for a new file); null when the chat is not there or holds
+   neither; { unknownFormat: true } when its bubbles are there and no list of them can be read */
 function fromIde(db, id) {
   const raw = (key) => {
     const r = db.prepare("SELECT value FROM cursorDiskKV WHERE key = ?").get(key);
@@ -210,8 +228,13 @@ function fromIde(db, id) {
   };
   const file = (cid) => (typeof cid !== "string" ? null : cid.endsWith(EMPTY_SHA256) ? "" : raw(cid));
   const composer = get("composerData:" + id);
-  const headers = composer && Array.isArray(composer.fullConversationHeadersOnly) ? composer.fullConversationHeadersOnly : null;
-  if (!headers) return null;
+  if (!composer) return null;
+  const headers = bubbleHeaders(composer, id, get);
+  if (!headers.length) {
+    // the keys sort after "bubbleId:<id>:" and before "bubbleId:<id>;": no scan of the whole table
+    const any = db.prepare("SELECT 1 FROM cursorDiskKV WHERE key >= ? AND key < ? LIMIT 1").get(`bubbleId:${id}:`, `bubbleId:${id};`);
+    return any ? { unknownFormat: true } : null;
+  }
   const out = [],
     edits = [];
   for (const h of headers) {
@@ -256,6 +279,8 @@ function cursorOutputs(file, { home = os.homedir(), platform = process.platform,
     try {
       db = new S.DatabaseSync(file, { readOnly: true });
       const got = source === "cli" ? fromCli(db) : fromIde(db, id);
+      // said in the Output channel: the chat is there, so "no database has it" would send the person the wrong way
+      if (got && got.unknownFormat) reason = `the ${source} database has this chat in a format this version cannot read`;
       if (got && got.outputs && !got.edits) return { outputs: got.outputs, source };
       if (got && (got.outputs || got.edits)) return { outputs: got.outputs, edits: got.edits, source };
     } catch (e) {

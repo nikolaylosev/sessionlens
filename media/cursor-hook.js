@@ -283,6 +283,7 @@ var require_i18n = __commonJS({
           no_msgs: "No messages.",
           ai_status: "model: {n} {n|finding|findings}{dropped}{repaired}{err}",
           ai_dropped: ", {n} dropped by verification",
+          ai_files_failed: "{n} of {total} {total|file|files} not reviewed: {msg}",
           ai_repaired: " · JSON was repaired",
           ai_wait: "calling the model…",
           ai_wait_verify: "calling the model, then verifying…",
@@ -331,7 +332,8 @@ var require_i18n = __commonJS({
           gen_dup_msg: "The picked rules are the same as the last generation — nothing new to add. Overwrite that result, or create a new one anyway?",
           gen_dup_overwrite: "Overwrite last",
           gen_dup_new: "Create new",
-          pick_source_msg: "Where is the transcript from? This decides where the file dialog opens — ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
+          pick_source: "Source",
+          pick_source_title: "Where the transcript is from. Choose file opens this folder: ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
           pick_source_claude: "Claude Code",
           pick_source_codex: "Codex",
           pick_source_cursor: "Cursor Agent",
@@ -2591,9 +2593,56 @@ var require_lens = __commonJS({
         return "";
       }
       const samePath = (a, b) => a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
+      function cursorMatchOutputs(commands, outs) {
+        const a = commands.map((c) => c.trim()), b = outs.map((o) => o.command.trim());
+        const out = new Array(a.length).fill(-1);
+        if (a.length * b.length > 25e6) {
+          let next = 0;
+          a.forEach((c, i) => {
+            const k = b.indexOf(c, next);
+            if (k >= 0) [out[i], next] = [k, k + 1];
+          });
+          return out;
+        }
+        const best = a.map(() => new Uint16Array(b.length + 1));
+        best.unshift(new Uint16Array(b.length + 1));
+        for (let i = 1; i <= a.length; i++)
+          for (let j = 1; j <= b.length; j++) best[i][j] = a[i - 1] === b[j - 1] ? best[i - 1][j - 1] + 1 : Math.max(best[i - 1][j], best[i][j - 1]);
+        for (let i = a.length, j = b.length; i > 0 && j > 0; ) {
+          if (a[i - 1] === b[j - 1]) out[--i] = --j;
+          else if (best[i - 1][j] >= best[i][j - 1]) i--;
+          else j--;
+        }
+        return out;
+      }
+      const cursorCall = (b) => {
+        const raw = String(b.name || ""), name = raw === "CallDynamicTool" && cursorDynamicName(b.input) || raw;
+        return {
+          name,
+          input: cursorInput(name, raw === "CallDynamicTool" && playwrightTestTool(name) && cursorArgs(b.input && b.input.arguments) || b.input || {})
+        };
+      };
+      function cursorShellCommands(text) {
+        const commands = [];
+        for (const line of text.split("\n")) {
+          let rec = null;
+          try {
+            rec = line.trim() ? JSON.parse(line) : null;
+          } catch {
+            continue;
+          }
+          if (!rec || rec.role !== "assistant" || !rec.message || !Array.isArray(rec.message.content)) continue;
+          for (const b of rec.message.content) {
+            if (!b || typeof b !== "object" || b.type !== "tool_use") continue;
+            const { name, input } = cursorCall(b);
+            if (name === "Shell" && typeof input.command === "string") commands.push(input.command);
+          }
+        }
+        return commands;
+      }
       function fromCursorJsonl(text, cfg, outputs, project, edits) {
-        const lines = [], names = [], paths = [], done = /* @__PURE__ */ new Set(), outs = Array.isArray(outputs) ? outputs.filter((o) => o && typeof o.command === "string" && typeof o.output === "string") : [], eds = Array.isArray(edits) ? edits.filter((e) => e && typeof e.path === "string" && typeof e.before === "string" && typeof e.after === "string") : [], used = /* @__PURE__ */ new Set();
-        let next = 0;
+        const lines = [], names = [], paths = [], done = /* @__PURE__ */ new Set(), outs = Array.isArray(outputs) ? outputs.filter((o) => o && typeof o.command === "string" && typeof o.output === "string") : [], eds = Array.isArray(edits) ? edits.filter((e) => e && typeof e.path === "string" && typeof e.before === "string" && typeof e.after === "string") : [], used = /* @__PURE__ */ new Set(), matched = outs.length ? cursorMatchOutputs(cursorShellCommands(text), outs) : [];
+        let shellCall = 0;
         for (const line of text.split("\n")) {
           if (!line.trim()) continue;
           let rec;
@@ -2613,7 +2662,7 @@ var require_lens = __commonJS({
               if (u.text) content.push({ type: "text", text: u.text });
             } else if (b.type === "text") content.push({ type: "text", text: b.text || "" });
             else if (b.type === "tool_use" && rec.role === "assistant") {
-              const raw = String(b.name || ""), name = raw === "CallDynamicTool" && cursorDynamicName(b.input) || raw, input = cursorInput(name, raw === "CallDynamicTool" && playwrightTestTool(name) && cursorArgs(b.input && b.input.arguments) || b.input || {});
+              const { name, input } = cursorCall(b);
               const as = name === "StrReplace" && !input.file_path ? name : CURSOR_TOOLS[name] || name;
               const id = "cursor-" + names.length;
               content.push({ type: "tool_use", id, name: as, input });
@@ -2621,21 +2670,19 @@ var require_lens = __commonJS({
               if (typeof input.file_path === "string") paths.push(input.file_path);
               if ((name === "Write" || name === "StrReplace") && typeof input.file_path === "string" && eds.length) {
                 const now = String((name === "Write" ? input.content : input.new_string) ?? "");
-                const k2 = eds.findIndex(
+                const k = eds.findIndex(
                   (e, i2) => !used.has(i2) && samePath(e.path, input.file_path) && (name === "Write" ? e.after.trimEnd() === now.trimEnd() : e.after.includes(now))
                 );
-                if (k2 >= 0) {
-                  used.add(k2);
-                  const e = eds[k2];
+                if (k >= 0) {
+                  used.add(k);
+                  const e = eds[k];
                   versions.push({ id, before: e.before === "" && name === "Write" ? null : e.before, after: e.after });
                 }
               }
               if (name !== "Shell" || typeof input.command !== "string") continue;
-              const k = outs.findIndex((o2, i2) => i2 >= next && o2.command.trim() === input.command.trim());
-              if (k < 0) continue;
-              next = k + 1;
+              const o = outs[matched[shellCall++]];
+              if (!o) continue;
               done.add(id);
-              const o = outs[k];
               results.push({ type: "tool_result", tool_use_id: id, content: o.output, is_error: Number.isInteger(o.exitCode) && o.exitCode !== 0 });
             }
           }
@@ -4632,7 +4679,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.137";
+      const ANALYSIS_VERSION = "0.1.138";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

@@ -69,6 +69,11 @@ export function initSessions() {
   });
   $("#demo-go").title = T("demo_try_title");
   $("#demo-go").addEventListener("click", () => openDemo());
+  $("#source").title = T("pick_source_title");
+  $("#source").addEventListener("change", async (e) => {
+    state.settings.transcriptSource = e.target.value;
+    await save();
+  });
   $("#profile").addEventListener("change", async (e) => {
     state.settings.profile = e.target.value;
     renderProfileInfo();
@@ -109,21 +114,22 @@ export function show(v) {
   if (!window.SL_OPEN_SESSION) window.__slSetActiveTab(v);
 }
 
+/* The Source list (0.1.138; until then a question at every Choose file). The stored choice, or where a new install most
+   likely wants to look: Cursor Agent in Cursor, otherwise Claude Code, the first answer the question offered. */
+const SOURCES = ["claude", "codex", "cursor", "other"];
+export function transcriptSource() {
+  const s = state.settings.transcriptSource;
+  return SOURCES.includes(s) ? s : "inCursor" in document.body.dataset ? "cursor" : "claude";
+}
+
 // VS Code build: use the extension's own file dialog instead of the browser-native one, so it can
 // start already inside ~/.claude, ~/.codex or ~/.cursor — dot-folders a native "choose file" dialog hides by
-// default, with no way for us to override that from a webview's plain <input type="file">. Ask
-// which one first: guessing (e.g. "whichever changed more recently") traps the person in one of
-// them, since going up from inside a dot-folder to the home folder hides dot-folders again,
+// default, with no way for us to override that from a webview's plain <input type="file">. The folder comes
+// from the Source list, not from a guess (e.g. "whichever changed more recently"), which would trap the person in one
+// of them, since going up from inside a dot-folder to the home folder hides dot-folders again,
 // including the others — there'd be no way to browse across.
 export async function pickAndImport() {
-  const source = await chooseDialog(T("pick_source_msg"), [
-    { label: T("pick_source_claude"), value: "claude", primary: true },
-    { label: T("pick_source_codex"), value: "codex" },
-    { label: T("pick_source_cursor"), value: "cursor" },
-    { label: T("pick_source_other"), value: "other" },
-  ]);
-  if (source === null) return; // the dialog's own Cancel button
-  const r = await pickTranscript(source);
+  const r = await pickTranscript(transcriptSource());
   if (r)
     askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
       cursorOutputs: r.cursorOutputs,
@@ -354,6 +360,8 @@ export function renderProfileInfo() {
 
 // ---------- list ----------
 export function renderList() {
+  const from = transcriptSource();
+  $("#source").innerHTML = SOURCES.map((s) => `<option value="${s}" ${s === from ? "selected" : ""}>${esc(T("pick_source_" + s))}</option>`).join("");
   const sel = $("#profile");
   sel.innerHTML = Lens.PROFILES.map(
     (p) =>

@@ -62,14 +62,15 @@ test(
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-cursor-panel-"));
       const host = bootHost({
         storageDir: dir,
-        globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+        globalState: {
+          storageVersion: 2,
+          settings: { profile: "qa-ts", transcriptSource: "cursor", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null },
+        },
         vscode: { openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
       });
       const sb = await openPage(host);
       await sb.ready();
       click(sb, "#file");
-      await until(() => sb.document.querySelectorAll(".sl-modal-overlay button").length >= 4);
-      [...sb.document.querySelectorAll(".sl-modal-overlay button")].find((b) => b.textContent === "Cursor Agent").click();
       await until(() => !sb.document.querySelector("#name-row").hidden);
       // no workspace is open, so the dialog starts in ~/.cursor/projects (transcript-dialog.test.js has the rest)
       assert.equal(host.calls.openDialog[0].defaultUri.fsPath, path.join(h, ".cursor", "projects"));

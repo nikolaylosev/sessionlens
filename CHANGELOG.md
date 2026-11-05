@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.1.138
+
+### Added
+- **The CLI can ask a language model to review a session.** `--review --provider <name>` adds a part to the report that
+  says what a test really checks, what is fragile and what is missing, with the same prompts and verification as the
+  panel. It works with Anthropic, Google, OpenAI, xAI, DeepSeek, Qwen and a local server, and takes the key from an
+  environment variable. The model's findings do not change the verdict or `--fail-on`. If the model fails or there is no
+  key, you still get the report and the same exit code, with the reason on stderr. Without `--review`, the CLI sends
+  nothing. It reviews one session at a time, not a folder.
+
+### Changed
+- **Choose file no longer asks where the transcript is from.** A **Source** list above **Profile** says it and
+  keeps it, and the file dialog opens that folder at once. A new install starts at Cursor Agent in Cursor and at Claude
+  Code in VS Code. **Import again** still asks, since a session can be from another agent.
+
+### Fixed
+- **A Cursor command no longer takes another command's output.** When the output of an early command was gone (Cursor had
+  dropped the start of the chat, or Record Cursor agent runs started later), it took the output of a later run of the same
+  command, so a red result could appear on the wrong step, and the commands in between got none. Each command now gets
+  its own output or none. In one chat of ours, 44 of 61 commands get their output instead of 13.
+- **Test results of new Cursor chats are read again.** Cursor changed how it stores a chat in mid-October, and SessionLens
+  found no command output in chats since then, so their test runs had no result (red or green) unless Record Cursor
+  agent runs was on. It now reads both formats, and the files before and after an edit too. If a later Cursor changes
+  the format again, the Output channel says so. Tested on macOS with Cursor 3.27; Windows is not tested yet. A session
+  imported before keeps no results: pick its file again with **Choose file**.
+- **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
+  `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only
+  some files got an answer, it says how many were not reviewed and why.
+- **Record Cursor agent runs is in the Command Palette from the start.** Cursor showed the command only after the SessionLens
+  panel had been opened once, so following the steps with a closed panel found nothing. The extension now starts when the
+  editor has finished starting, in VS Code too. This took about 40 ms or less in our measurement, with 200 sessions.
+
 ## 0.1.137
 
 ### Fixed

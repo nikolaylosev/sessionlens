@@ -180,6 +180,8 @@ cli/                  the command-line tool, npm package sessionlens-cli (phase 
   lib/media.js        where the core is: the package's own media/, or the repository's
   lib/verdicts.js     --verdicts: exported verdicts as the counts Lens.calibrate() reads (RA §5.2)
   lib/report.js       what the CLI prints: terminal text, Markdown for a CI job's summary, JSON
+  lib/model.js        --review: LensAI.review over providers.js, with the key from the environment; loaded only with
+                      --review, its findings stay out of s.findings and the verdict (0.1.138)
 scripts/              build-webview.js, check-vsix.js, release-notes.js, pack-cli.js (the CLI's npm package)
 .github/workflows/    ci.yml (3 OS), release.yml (tag → Marketplace + Open VSX + npm)
 ```
@@ -236,7 +238,11 @@ All three webviews load the same page (`sidepanel.html` + scripts); a session ta
 
 ### 4.2 Activation
 
-The extension activates when its view or a command is used, or when VS Code restores a session tab.
+The extension activates when the editor has finished starting (`onStartupFinished`, since 0.1.138), and earlier if its view or a
+command is used or VS Code restores a session tab. It used to wait for one of those, but `sessionlens.inCursor` is set in
+`activate()` and hides the Cursor hook's commands from the palette until then, so they could not be found with the panel
+closed. Measured with 200 sessions: about 15 ms in VS Code 1.144 and 40 ms in Cursor 3.27 for loading and `activate()`, and up
+to 64 ms more for the migrations in the background.
 
 ```mermaid
 sequenceDiagram
@@ -542,7 +548,11 @@ flowchart TD
   databases and returns the commands with their output beside the text (`open:transcript` → `cursorOutputs`): the
   CLI's `~/.cursor/chats/<md5 of the workspace>/<id>/store.db`, or the IDE's `globalStorage/state.vscdb`. Both are
   opened read-only with Node's `node:sqlite`; without it (VS Code on Node before 22.13), or with no database, the
-  import runs without output. `fromCursorJsonl` gives a `Shell` call the next output with the same command as its
+  import runs without output. The IDE keeps a chat's list of steps in `fullConversationHeadersOnly` or, in chats from
+  mid-October 2026 on, in parts (`headerLog`, `composerConvHeaders:<id>:000000`, since 0.1.138). The format is not
+  documented, so a chat whose steps are there but whose list cannot be read is said in the Output channel. `fromCursorJsonl` pairs the `Shell` calls with the outputs by command, both in order, the longest list
+  of pairs and among equals the later ones (`cursorMatchOutputs`, since 0.1.138; an output can be gone: Cursor dropped
+  the start of a chat, a hook starts mid-chat), and gives a call its output as its
   `tool_result`, so its tests are parsed as for Claude Code; a run with none keeps `output_missing`. The session
   keeps the output's ends (`source_outputs`, 20 000 characters each) with `source_text`, for Back to regex parsing
   and Import again. From the IDE's database the host also returns each edit's file before and after (since 0.1.127,
@@ -558,7 +568,9 @@ flowchart TD
   (`cursorProject`, since 0.1.122; kept as `source_project`): the transcript's paths are absolute, and
   `fromCursorJsonl` makes them relative to the folder above them whose name, made by the same rule
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps
-  absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** → Cursor Agent opens
+  absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** with the **Source** list above
+  **Profile** (since 0.1.138; `settings.transcriptSource`; a new install has Cursor Agent in Cursor and Claude Code
+  elsewhere; before, a question at every pick, which **Import again** still asks) on Cursor Agent opens
   the dialog at `~/.cursor/projects`, one folder per workspace, and at the home folder when that directory does not
   exist (`guessTranscriptDefaultUri` in `extension.js`). Until 0.1.125 it opened the workspace's own `agent-transcripts`
   folder, and the dialog, which hides `~/.cursor`, had no way up to another workspace. A folder's name follows

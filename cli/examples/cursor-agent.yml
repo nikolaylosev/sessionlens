@@ -45,6 +45,9 @@ jobs:
       # --ci: nobody approved the agent's plan here, so that finding is context, not part of the verdict.
       # Add --spec <file> if you have a specification, --verdicts <folder> if your reviewers keep their exported verdicts
       # in the repository, and --fail-on red once you trust the reports.
+      # To add a language model's review to the summary, add --review --provider <name> --model <name> and give this step
+      # that provider's key in env, e.g., ANTHROPIC_API_KEY. The test code and a shortened transcript then go to the provider.
+      # The model's findings do not change the verdict, and a model that fails does not fail this step.
       # sessionlens-cli@0.1 is the latest 0.1.x release.
       - name: SessionLens reviews the session
         if: always()

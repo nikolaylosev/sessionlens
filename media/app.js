@@ -1462,6 +1462,11 @@ ${en.raw}`).join("\n\n\n");
     });
     $("#demo-go").title = T("demo_try_title");
     $("#demo-go").addEventListener("click", () => openDemo());
+    $("#source").title = T("pick_source_title");
+    $("#source").addEventListener("change", async (e) => {
+      state.settings.transcriptSource = e.target.value;
+      await save();
+    });
     $("#profile").addEventListener("change", async (e) => {
       state.settings.profile = e.target.value;
       renderProfileInfo();
@@ -1497,15 +1502,13 @@ ${en.raw}`).join("\n\n\n");
     if (v === "settings") renderSettings();
     if (!window.SL_OPEN_SESSION) window.__slSetActiveTab(v);
   }
+  var SOURCES = ["claude", "codex", "cursor", "other"];
+  function transcriptSource() {
+    const s = state.settings.transcriptSource;
+    return SOURCES.includes(s) ? s : "inCursor" in document.body.dataset ? "cursor" : "claude";
+  }
   async function pickAndImport() {
-    const source = await chooseDialog(T("pick_source_msg"), [
-      { label: T("pick_source_claude"), value: "claude", primary: true },
-      { label: T("pick_source_codex"), value: "codex" },
-      { label: T("pick_source_cursor"), value: "cursor" },
-      { label: T("pick_source_other"), value: "other" }
-    ]);
-    if (source === null) return;
-    const r = await pickTranscript(source);
+    const r = await pickTranscript(transcriptSource());
     if (r)
       askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
         cursorOutputs: r.cursorOutputs,
@@ -1678,6 +1681,8 @@ ${en.raw}`).join("\n\n\n");
     ].join("")}</ul><div class="muted">${esc(T("pi_gherkin"))}</div>${groups}</details>`;
   }
   function renderList() {
+    const from = transcriptSource();
+    $("#source").innerHTML = SOURCES.map((s) => `<option value="${s}" ${s === from ? "selected" : ""}>${esc(T("pick_source_" + s))}</option>`).join("");
     const sel = $("#profile");
     sel.innerHTML = Lens.PROFILES.map(
       (p) => `<option value="${esc(p)}" ${p === state.settings.profile ? "selected" : ""}>${esc(p)} — ${esc(T("profile_desc_" + p))}${!Lens.isValidated(p, profileVerdicts(p)) ? T("unverified_opt") : ""}</option>`
@@ -1831,6 +1836,7 @@ ${en.raw}`).join("\n\n\n");
           cur.ai_truncated = r.truncated;
           cur.ai_raw = r.raw;
           cur.ai_verify_error = r.verifyError || null;
+          cur.ai_partial = r.partial || null;
         });
         if (state.current === sid) {
           renderReview();
@@ -1838,7 +1844,7 @@ ${en.raw}`).join("\n\n\n");
             n: r.findings.length,
             dropped: r.dropped && r.dropped.length ? T("ai_dropped", { n: r.dropped.length }) : "",
             repaired: r.repaired ? T("ai_repaired") : "",
-            err: r.verifyError ? " · " + r.verifyError : ""
+            err: [r.partial, r.verifyError].filter(Boolean).map((x) => " · " + x).join("")
           });
         }
       } catch (e) {
@@ -2031,7 +2037,7 @@ ${en.raw}`).join("\n\n\n");
     $("#spec-count").textContent = s.specParsed && s.specParsed.n ? T("spec_count", { n: s.specParsed.n, oos: s.specParsed.oos ? T("spec_oos", { n: s.specParsed.oos }) : "" }) + (s.specParsed.hasIds ? "" : T("spec_auto")) : (s.spec || "").trim() ? T("spec_unparsed") : T("spec_none");
     $("#spec-d").open = !s.spec;
     renderCoverage(s);
-    $("#ai-status").textContent = s.ai_at ? T("ai_last", { at: s.ai_at.slice(0, 16).replace("T", " ") }) + (s.ai_truncated ? T("ai_truncated") : "") + (s.ai_verify_error ? " · " + s.ai_verify_error : "") : "";
+    $("#ai-status").textContent = s.ai_at ? T("ai_last", { at: s.ai_at.slice(0, 16).replace("T", " ") }) + (s.ai_truncated ? T("ai_truncated") : "") + (s.ai_partial ? " · " + s.ai_partial : "") + (s.ai_verify_error ? " · " + s.ai_verify_error : "") : "";
     $("#ai-verify-again").hidden = !s.ai_verify_error;
     $("#lint-note").textContent = s.lintNote || "";
     $("#mark-reviewed").textContent = s.reviewed ? T("reviewed_on") : T("mark_reviewed");
