@@ -19,7 +19,8 @@ test("Choose file: a source the host refuses shows the reason and how to fix it,
   const p = await openPage(host);
   await p.ready();
   const alerts = [];
-  p.window.chooseDialog = async () => "newer-source"; // what an older host does not know
+  const pick = p.window.__slPickTranscript;
+  p.window.__slPickTranscript = () => pick({ source: "newer-source" }); // what an older host does not know
   p.window.alertDialog = async (m) => alerts.push(m);
   p.document.querySelector("#file").dispatchEvent(new p.window.MouseEvent("click", { bubbles: true }));
   await until(() => alerts.length);

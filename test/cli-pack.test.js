@@ -33,7 +33,16 @@ test("the package: the CLI, the core and every engine with its .wasm, the licenc
   const libs = fs.readdirSync(path.join(root, "cli", "lib")).map((f) => "lib/" + f);
   assert.deepEqual(
     list(dir).sort(),
-    ["LICENSE", "README.md", "THIRD-PARTY-NOTICES.md", "package.json", "bin/sessionlens.js", ...libs, ...[...CORE, ...ENGINES].map((f) => "media/" + f)].sort(),
+    [
+      "LICENSE",
+      "README.md",
+      "THIRD-PARTY-NOTICES.md",
+      "package.json",
+      "bin/sessionlens.js",
+      ...libs,
+      "lib/providers.js",
+      ...[...CORE, ...ENGINES].map((f) => "media/" + f),
+    ].sort(),
   );
   for (const f of [
     "tree-sitter.wasm",
@@ -91,4 +100,8 @@ test("installed elsewhere, the package runs on its own media/: the core, an engi
   // Python: tree-sitter and Ruff from the package's .wasm files
   const py = run(["analyze", "a.jsonl", "--profile", "qa-python"]);
   assert.equal(py.status, 0, py.stderr);
+  // --review from the package's own ai.js and providers.js: no server here, so the review fails and the report stands
+  const rev = run(["analyze", "a.jsonl", "--profile", "qa-ts", "--json", "--review", "--provider", "local", "--base-url", "http://127.0.0.1:9/v1"]);
+  assert.equal(rev.status, 0, rev.stderr);
+  assert.match(JSON.parse(rev.stdout).modelReview.error, /Failed to fetch/);
 });

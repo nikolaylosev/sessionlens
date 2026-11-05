@@ -2,7 +2,8 @@
 /* sessionlens analyze (phase 11, step 4): one agent session log → the review, in the terminal, as Markdown for a CI
    job's summary or as the Report .json. The same analysis as the panel (media/analyze.js) with the lint engine of the
    profile's language (cli/lib/engines.js). Without --verdicts, calibration stays at its defaults and a check on trial
-   is low; with it, the panel's own thresholds on the team's verdicts. No network: nothing leaves the machine.
+   is low; with it, the panel's own thresholds on the team's verdicts. No network: nothing leaves the machine, unless
+   --review asks a language model (cli/lib/model.js), whose findings do not count in the verdict.
 
    run(argv, io) → the exit code. io: { stdout, stderr, env, isTTY, cwd }, so tests run it without a process.
    0: the report is written (whatever its colour, unless --fail-on); 1: --fail-on matched the session's colour;
@@ -43,6 +44,12 @@ Options:
                      can be given several times
   --ci               stop_markers_missing (and no_spec, without --spec) are context, not counted in the verdict
   --fail-on <level>  none (default), red or yellow: exit with 1 when the session is that colour or worse
+  --review           also ask a language model to review the session. This sends the specification, the test code and
+                     a shortened transcript to the provider, with secrets masked. It does not change the verdict.
+  --provider <name>  with --review: anthropic (ANTHROPIC_API_KEY), google (GEMINI_API_KEY), openai (OPENAI_API_KEY),
+                     xai (XAI_API_KEY), deepseek (DEEPSEEK_API_KEY), qwen (DASHSCOPE_API_KEY) or local (no key)
+  --model <name>     with --review: the model; without it, the provider's default in this version
+  --base-url <url>   with --review and qwen or local: the server's address
   --json             the Report .json
   --md               Markdown, for a CI job's summary
   --json-file <file> also write the Report .json to this file, whatever is printed
@@ -64,6 +71,10 @@ const OPTIONS = {
   json: { type: "boolean" },
   "json-file": { type: "string" },
   md: { type: "boolean" },
+  review: { type: "boolean" },
+  provider: { type: "string" },
+  model: { type: "string" },
+  "base-url": { type: "string" },
   "no-color": { type: "boolean" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean" },
@@ -98,6 +109,9 @@ async function run(argv, io) {
   const failOn = o["fail-on"] || "none";
   if (!FAIL_ON[failOn]) return fail(`--fail-on is none, red or yellow, not "${failOn}"`);
   if (o.json && o.md) return fail("--json and --md: one output at a time");
+  const model = o.review || o.provider || o.model || o["base-url"] ? require("./model") : null;
+  const wrong = model && model.optionError(o);
+  if (wrong) return fail(wrong);
 
   const cwd = io.cwd || process.cwd();
   let file = given;
@@ -115,6 +129,7 @@ async function run(argv, io) {
     }
   })();
   if (isFolder && o.spec) return fail("--spec is for one session: a folder's sessions have tasks of their own");
+  if (isFolder && o.review) return fail("--review is for one session: on a folder, each session would be a paid request to the model");
 
   const read = (p) => fs.readFileSync(path.resolve(cwd, p), "utf8");
   const files = {};
@@ -240,6 +255,13 @@ async function run(argv, io) {
   const r = review(file);
   if (r.reason) return fail(r.reason);
   const { s, opts } = r;
+  if (o.review) {
+    io.stderr.write(`sessionlens: --review: the specification, the test code and a shortened transcript go to ${model.destination(o)}, with secrets masked\n`);
+    opts.modelReview = await model.review(s, o, io);
+    const m = opts.modelReview;
+    if (m.error) io.stderr.write(`sessionlens: the model review did not run: ${m.error}\n`);
+    for (const note of [m.partial, m.verifyError]) if (note) io.stderr.write(`sessionlens: the model review: ${note}\n`);
+  }
   const error = writeJson(report.json(s, opts));
   if (error) return fail(error);
   io.stdout.write(o.json ? report.json(s, opts) : o.md ? report.md(s, opts) : report.text(s, opts));

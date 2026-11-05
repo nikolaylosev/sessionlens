@@ -98,7 +98,11 @@ test("package.json: every %key% is in package.nls.json; no key is unused; no tra
 });
 
 test("package.json: activation, views, commands and menus", async () => {
-  assert.deepEqual(PKG.activationEvents, ["onWebviewPanel:sessionlensSession"]);
+  // onStartupFinished (0.1.138): sessionlens.inCursor is set in activate(), and a command hidden behind it could not start
+  // the extension, so Record Cursor agent runs was not in the palette until the panel had been opened once
+  assert.deepEqual(PKG.activationEvents, ["onStartupFinished", "onWebviewPanel:sessionlensSession"]);
+  const inCursorOnly = PKG.contributes.menus.commandPalette.filter((m) => /sessionlens\.inCursor/.test(m.when || "")).map((m) => m.command);
+  assert.deepEqual(inCursorOnly, ["sessionlens.recordCursorRuns", "sessionlens.stopRecordingCursorRuns"]);
   const views = PKG.contributes.views.sessionlens;
   // phase 7 (7A.2): the panel first, the Sessions tree under it
   assert.deepEqual(
@@ -590,9 +594,9 @@ test("Export verdicts / Import transcript…: the host shows the sidebar, waits 
   const rows = JSON.parse(save.payload.content);
   assert.ok(rows.length >= 1 && rows.every((r) => r.schema === "sessionlens/finding@1"));
   assert.equal(sb.document.querySelector(".tab.active").dataset.view, "calib");
-  // import: the page switches to Sessions and asks where the transcript is from (its own dialog)
+  // import: the page switches to Sessions and opens the file dialog for the Source list's value
   await host.registered.commands["sessionlens.importTranscript"]();
-  await until(() => sb.document.querySelector(".sl-modal-overlay"));
+  await until(() => host.calls.openDialog.length);
   assert.equal(sb.document.querySelector(".tab.active").dataset.view, "sessions");
   assert.deepEqual([...sb.errors, ...tab.errors], []);
   sb.close();
@@ -680,8 +684,6 @@ test("Output channel: migrations, analysis times and CLI failures are logged; no
   ].join("\n");
   sb.window.eval(`window.__slPickTranscript = async () => ({ name: "mark.jsonl", text: ${JSON.stringify(text)} })`);
   await host.registered.commands["sessionlens.importTranscript"]();
-  await until(() => sb.document.querySelector(".sl-modal-overlay button"));
-  sb.document.querySelector(".sl-modal-overlay button").click(); // the first (primary) source
   await until(() => !sb.document.querySelector("#name-row").hidden);
   sb.document.querySelector("#name-go").click();
   await until(() => host.calls.output.some((l) => /analysis \(import\): qa-ts, \d+ events, \d+ ms/.test(l)));
