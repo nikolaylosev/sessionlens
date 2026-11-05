@@ -157,7 +157,10 @@ test("picked in the panel: the log's results; Import again gets a log written af
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-hookimp-store-"));
     const host = bootHost({
       storageDir: dir,
-      globalState: { storageVersion: 2, settings: { profile: "qa-python", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+      globalState: {
+        storageVersion: 2,
+        settings: { profile: "qa-python", transcriptSource: "cursor", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null },
+      },
       vscode: { openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
     });
     const store = async () => {
@@ -172,8 +175,6 @@ test("picked in the panel: the log's results; Import again gets a log written af
     const sb = await openPage(host);
     await sb.ready();
     click(sb, "#file");
-    await until(() => sb.document.querySelectorAll(".sl-modal-overlay button").length >= 4);
-    [...sb.document.querySelectorAll(".sl-modal-overlay button")].find((b) => b.textContent === "Cursor Agent").click();
     await until(() => !sb.document.querySelector("#name-row").hidden);
     sb.document.querySelector("#name-go").click();
     await until(() => host.calls.output.some((l) => /analysis \(import\)/.test(l)));
@@ -209,8 +210,6 @@ test("picked in the panel: the log's results; Import again gets a log written af
     const again = await openPage(host);
     await again.ready();
     click(again, "#file");
-    await until(() => again.document.querySelectorAll(".sl-modal-overlay button").length >= 4);
-    [...again.document.querySelectorAll(".sl-modal-overlay button")].find((b) => b.textContent === "Cursor Agent").click();
     await until(() => !again.document.querySelector("#name-row").hidden);
     const out = host.calls.output.join("\n");
     assert.match(out, /cursor: the output of 4 commands from the hook log/);

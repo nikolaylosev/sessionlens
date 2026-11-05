@@ -10,6 +10,11 @@
   key, you still get the report and the same exit code, with the reason on stderr. Without `--review`, the CLI sends
   nothing. It reviews one session at a time, not a folder.
 
+### Changed
+- **Choose file no longer asks where the transcript is from.** A **Source** list above **Profile** says it and
+  keeps it, and the file dialog opens that folder at once. A new install starts at Cursor Agent in Cursor and at Claude
+  Code in VS Code. **Import again** still asks, since a session can be from another agent.
+
 ### Fixed
 - **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
   `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only

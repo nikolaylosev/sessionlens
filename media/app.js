@@ -1462,6 +1462,11 @@ ${en.raw}`).join("\n\n\n");
     });
     $("#demo-go").title = T("demo_try_title");
     $("#demo-go").addEventListener("click", () => openDemo());
+    $("#source").title = T("pick_source_title");
+    $("#source").addEventListener("change", async (e) => {
+      state.settings.transcriptSource = e.target.value;
+      await save();
+    });
     $("#profile").addEventListener("change", async (e) => {
       state.settings.profile = e.target.value;
       renderProfileInfo();
@@ -1497,15 +1502,13 @@ ${en.raw}`).join("\n\n\n");
     if (v === "settings") renderSettings();
     if (!window.SL_OPEN_SESSION) window.__slSetActiveTab(v);
   }
+  var SOURCES = ["claude", "codex", "cursor", "other"];
+  function transcriptSource() {
+    const s = state.settings.transcriptSource;
+    return SOURCES.includes(s) ? s : "inCursor" in document.body.dataset ? "cursor" : "claude";
+  }
   async function pickAndImport() {
-    const source = await chooseDialog(T("pick_source_msg"), [
-      { label: T("pick_source_claude"), value: "claude", primary: true },
-      { label: T("pick_source_codex"), value: "codex" },
-      { label: T("pick_source_cursor"), value: "cursor" },
-      { label: T("pick_source_other"), value: "other" }
-    ]);
-    if (source === null) return;
-    const r = await pickTranscript(source);
+    const r = await pickTranscript(transcriptSource());
     if (r)
       askName(r.text, r.name.replace(/\.(jsonl|txt|md|log|json)$/i, ""), {
         cursorOutputs: r.cursorOutputs,
@@ -1678,6 +1681,8 @@ ${en.raw}`).join("\n\n\n");
     ].join("")}</ul><div class="muted">${esc(T("pi_gherkin"))}</div>${groups}</details>`;
   }
   function renderList() {
+    const from = transcriptSource();
+    $("#source").innerHTML = SOURCES.map((s) => `<option value="${s}" ${s === from ? "selected" : ""}>${esc(T("pick_source_" + s))}</option>`).join("");
     const sel = $("#profile");
     sel.innerHTML = Lens.PROFILES.map(
       (p) => `<option value="${esc(p)}" ${p === state.settings.profile ? "selected" : ""}>${esc(p)} — ${esc(T("profile_desc_" + p))}${!Lens.isValidated(p, profileVerdicts(p)) ? T("unverified_opt") : ""}</option>`
