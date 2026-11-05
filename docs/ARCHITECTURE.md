@@ -121,6 +121,8 @@ secrets.js            host: API keys in SecretStorage, migration out of settings
 providers.js          host: HTTP transport to model providers (node:http/https)
 cli.js                host: runs the user's claude / codex / cursor agent CLI with no tools, in an empty temp folder
 cursor-db.js          host: the command output of a Cursor Agent chat, read-only from Cursor's own databases
+recent-transcripts.js host: the newest transcripts of a source for the list Choose file shows first (0.1.138); read-only,
+                      only the start of each file
 cursor-hooks.js       host: Record / Stop recording Cursor agent runs: the hook in ~/.cursor/hooks.json and
                       ~/.cursor/sessionlens/ (0.1.130), the person's own hooks kept, logs removed after 30 days;
                       readLog: a chat's log as the import's command output and file versions
@@ -566,7 +568,9 @@ flowchart TD
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps
   absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** with the **Source** list above
   **Profile** (since 0.1.138; `settings.transcriptSource`; a new install has Cursor Agent in Cursor and Claude Code
-  elsewhere; before, a question at every pick, which **Import again** still asks) on Cursor Agent opens
+  elsewhere; before, a question at every pick, which **Import again** still asks) first lists the source's 30 newest
+  transcripts in a QuickPick (`recent-transcripts.js`, the first 256 KB of each listed file; no list when there are none
+  or for Somewhere else). **Browse…** there, on Cursor Agent, opens
   the dialog at `~/.cursor/projects`, one folder per workspace, and at the home folder when that directory does not
   exist (`guessTranscriptDefaultUri` in `extension.js`). Until 0.1.125 it opened the workspace's own `agent-transcripts`
   folder, and the dialog, which hides `~/.cursor`, had no way up to another workspace. A folder's name follows

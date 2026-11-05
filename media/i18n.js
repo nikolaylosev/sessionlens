@@ -354,7 +354,7 @@
       gen_dup_new: "Create new",
       pick_source: "Source",
       pick_source_title:
-        "Where the transcript is from. Choose file opens this folder: ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
+        "Where the transcript is from. Choose file lists this source's newest transcripts and opens its folder for the rest: ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
       pick_source_claude: "Claude Code",
       pick_source_codex: "Codex",
       pick_source_cursor: "Cursor Agent",

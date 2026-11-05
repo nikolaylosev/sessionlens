@@ -66,7 +66,7 @@ test(
           storageVersion: 2,
           settings: { profile: "qa-ts", transcriptSource: "cursor", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null },
         },
-        vscode: { openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
+        vscode: { quickPickAnswer: (items) => items.at(-1), openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
       });
       const sb = await openPage(host);
       await sb.ready();

@@ -83,6 +83,7 @@ function fakeVscode(opts = {}) {
   };
   const vscode = {
     Uri,
+    QuickPickItemKind: { Separator: -1, Default: 0 },
     EventEmitter,
     ViewColumn: { Active: -1 },
     ProgressLocation: { Window: 10 },

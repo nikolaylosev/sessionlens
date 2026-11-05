@@ -14,6 +14,9 @@
 - **Choose file no longer asks where the transcript is from.** A **Source** list above **Profile** says it and
   keeps it, and the file dialog opens that folder at once. A new install starts at Cursor Agent in Cursor and at Claude
   Code in VS Code. **Import again** still asks, since a session can be from another agent.
+- **Choose file lists your newest transcripts first.** You no longer walk through a folder per project and per chat. The
+  list shows the 30 newest of the source, with the project, the time and your first message, and you can type to filter.
+  **Browse…** at its end opens the file dialog as before. Only the start of each listed file is read, on your machine.
 
 ### Fixed
 - **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said

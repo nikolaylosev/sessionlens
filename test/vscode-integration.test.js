@@ -594,9 +594,9 @@ test("Export verdicts / Import transcript…: the host shows the sidebar, waits 
   const rows = JSON.parse(save.payload.content);
   assert.ok(rows.length >= 1 && rows.every((r) => r.schema === "sessionlens/finding@1"));
   assert.equal(sb.document.querySelector(".tab.active").dataset.view, "calib");
-  // import: the page switches to Sessions and opens the file dialog for the Source list's value
+  // import: the page switches to Sessions and asks the host for a transcript of the Source list's value
   await host.registered.commands["sessionlens.importTranscript"]();
-  await until(() => host.calls.openDialog.length);
+  await until(() => sb.sent.some((m) => m.type === "open:transcript" && m.payload.source === "claude"));
   assert.equal(sb.document.querySelector(".tab.active").dataset.view, "sessions");
   assert.deepEqual([...sb.errors, ...tab.errors], []);
   sb.close();

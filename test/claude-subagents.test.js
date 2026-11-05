@@ -117,7 +117,10 @@ test("a session that started subagents and has none of their steps asks to be im
 
 // the host: Choose file reads <session>/subagents/ next to the picked file
 async function picked(file) {
-  const { vscode, registered } = fakeVscode({ openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] });
+  const { vscode, registered } = fakeVscode({
+    quickPickAnswer: (items) => items.at(-1),
+    openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }],
+  });
   loadExtension(vscode).activate(fakeContext({ globalState: { settings: {}, sessions: {} } }));
   const wv = fakeWebviewView();
   registered.views.sessionlensView.resolveWebviewView(wv.view);

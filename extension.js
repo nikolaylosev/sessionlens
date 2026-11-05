@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 const { runClaude, checkClaude, runCodex, checkCodex, runCursor, checkCursor, cursorProjectSlug, PATH_RX } = require("./cli.js");
 const { cursorOutputs, transcriptId } = require("./cursor-db.js");
+const { recentTranscripts, whenText } = require("./recent-transcripts.js");
 const CursorHooks = require("./cursor-hooks.js");
 const Lens = require("./media/lens.js"); // shared with the webview: verdict(), same rules for the same data
 const LensAI = require("./media/ai.js"); // shared too: the provider table and each provider's request shape
@@ -328,6 +329,27 @@ function guessTranscriptDefaultUri(source) {
           ? path.join(home, ".cursor", "projects")
           : null;
   return vscode.Uri.file(wanted && isDir(wanted) ? wanted : home);
+}
+
+/* The newest transcripts of this source, before any file dialog (0.1.138). → the picked file's uri, null for Escape, or
+   undefined for the file dialog: Browse…, no transcripts, or a source without a list. */
+async function pickRecentTranscript(source) {
+  const workspaces = (vscode.workspace.workspaceFolders || []).filter((f) => f.uri.scheme === "file").map((f) => f.uri.fsPath);
+  const started = Date.now();
+  const recent = await recentTranscripts(source, { home: os.homedir(), workspaces });
+  if (!recent.length) return undefined;
+  host.log(`recent transcripts: ${recent.length} in ${Date.now() - started} ms`);
+  const browse = { label: "$(folder-opened) " + t("Browse…"), description: t("the file dialog"), alwaysShow: true, file: "" };
+  const items = recent.map((r) => ({ label: r.project, description: whenText(r.mtimeMs), detail: r.task || undefined, file: r.file }));
+  const names = { claude: "Claude Code", codex: "Codex", cursor: "Cursor Agent" };
+  const picked = await vscode.window.showQuickPick([...items, { kind: vscode.QuickPickItemKind.Separator, label: "", file: "" }, browse], {
+    title: t("{0}: recent transcripts", names[source]),
+    placeHolder: t("Type to filter"),
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+  if (!picked) return null;
+  return picked.file ? vscode.Uri.file(picked.file) : undefined;
 }
 
 function isDir(p) {
@@ -774,17 +796,25 @@ function wireMessages(
         vscode.window.showInformationMessage(t("SessionLens: skill saved to {0}", root.fsPath));
         reply(root.fsPath);
       } else if (msg.type === "open:transcript") {
-        const picked = await vscode.window.showOpenDialog({
-          canSelectFiles: true,
-          canSelectFolders: false,
-          canSelectMany: false,
-          defaultUri: guessTranscriptDefaultUri(msg.payload && msg.payload.source),
-        });
-        if (!picked || !picked.length) {
-          reply(null);
+        const source = msg.payload && msg.payload.source;
+        let uri = await pickRecentTranscript(source);
+        if (uri === null) {
+          reply(null); // Escape in the list
           return;
         }
-        const uri = picked[0];
+        if (!uri) {
+          const picked = await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            defaultUri: guessTranscriptDefaultUri(source),
+          });
+          if (!picked || !picked.length) {
+            reply(null);
+            return;
+          }
+          uri = picked[0];
+        }
         const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
         // a Cursor transcript keeps no command output; Cursor's own database may (cursor-db.js, 0.1.121)
         if (uri.scheme === "file" && Lens.isCursorJsonl(text.trimStart())) {

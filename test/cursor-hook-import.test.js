@@ -161,7 +161,7 @@ test("picked in the panel: the log's results; Import again gets a log written af
         storageVersion: 2,
         settings: { profile: "qa-python", transcriptSource: "cursor", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null },
       },
-      vscode: { openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
+      vscode: { quickPickAnswer: (items) => items.at(-1), openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
     });
     const store = async () => {
       const st = createStore({ dir: path.join(dir, "sessions") });

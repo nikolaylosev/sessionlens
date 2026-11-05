@@ -4582,6 +4582,7 @@
     GROUP_MAX,
     isCursorJsonl,
     cursorProjectSlug,
+    cursorUserText,
     isCursorStreamJson,
     unreadToolCalls,
     IMPORT_GEN,
