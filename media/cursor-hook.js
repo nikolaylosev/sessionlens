@@ -283,6 +283,7 @@ var require_i18n = __commonJS({
           no_msgs: "No messages.",
           ai_status: "model: {n} {n|finding|findings}{dropped}{repaired}{err}",
           ai_dropped: ", {n} dropped by verification",
+          ai_files_failed: "{n} of {total} {total|file|files} not reviewed: {msg}",
           ai_repaired: " · JSON was repaired",
           ai_wait: "calling the model…",
           ai_wait_verify: "calling the model, then verifying…",
@@ -331,7 +332,8 @@ var require_i18n = __commonJS({
           gen_dup_msg: "The picked rules are the same as the last generation — nothing new to add. Overwrite that result, or create a new one anyway?",
           gen_dup_overwrite: "Overwrite last",
           gen_dup_new: "Create new",
-          pick_source_msg: "Where is the transcript from? This decides where the file dialog opens — ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
+          pick_source: "Source",
+          pick_source_title: "Where the transcript is from. Choose file opens this folder: ~/.claude, ~/.codex and ~/.cursor are dot-folders a file dialog otherwise hides, and there's no way to browse from one into another.",
           pick_source_claude: "Claude Code",
           pick_source_codex: "Codex",
           pick_source_cursor: "Cursor Agent",
@@ -4632,7 +4634,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.137";
+      const ANALYSIS_VERSION = "0.1.138";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

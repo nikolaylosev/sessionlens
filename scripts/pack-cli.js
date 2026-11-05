@@ -17,7 +17,7 @@ const LensLint = require(path.join(MEDIA, "lint.js"));
 const { WASM } = require(path.join(root, "cli", "lib", "engines.js"));
 
 // the core: what media/analyze.js, media/report.js and the CLI require, with what those require in turn
-const CORE = ["i18n.js", "checks.js", "lens.js", "lint.js", "rules.js", "spec.js", "analyze.js", "report.js", "claude-subagents.js"];
+const CORE = ["i18n.js", "checks.js", "lens.js", "lint.js", "rules.js", "spec.js", "analyze.js", "report.js", "claude-subagents.js", "ai.js"];
 // the engines: every file of every language (lint.js's ENGINE_FILES), Robot's parser and the .wasm files
 const ENGINES = [...new Set(Object.values(LensLint.ENGINE_FILES).flatMap((e) => e.js)), "lint-robot.js", ...Object.values(WASM)];
 
@@ -33,6 +33,7 @@ function stage(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
   for (const sub of ["bin", "lib"]) for (const f of fs.readdirSync(path.join(root, "cli", sub))) copy(path.join(root, "cli", sub, f), path.join(dir, sub, f));
   fs.chmodSync(path.join(dir, "bin", "sessionlens.js"), 0o755);
+  copy(path.join(root, "providers.js"), path.join(dir, "lib", "providers.js")); // the extension's transport, for --review (cli/lib/model.js)
   for (const f of [...CORE, ...ENGINES]) copy(path.join(MEDIA, f), path.join(dir, "media", f));
   copy(path.join(root, "cli", "README.md"), path.join(dir, "README.md"));
   copy(path.join(root, "LICENSE"), path.join(dir, "LICENSE"));

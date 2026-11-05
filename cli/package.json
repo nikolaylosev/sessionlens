@@ -1,6 +1,6 @@
 {
   "name": "sessionlens-cli",
-  "version": "0.1.137",
+  "version": "0.1.138",
   "private": true,
   "description": "Reviews an AI coding agent's session log (Claude Code, Codex, Cursor): did it test honestly? SessionLens on the command line and in CI.",
   "license": "MIT",

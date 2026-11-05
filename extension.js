@@ -75,7 +75,8 @@ function buildHtml(webview, extensionUri, initialSessionId) {
   for (const f of ENGINE_SCRIPTS) engineUris[f] = asUri(f);
   const wasmAttrs =
     WASM_ASSETS.map((f) => `data-${f.replace(/\.wasm$/, "").replace(/[^a-z0-9]+/gi, "-")}-wasm="${asUri(f)}"`).join(" ") +
-    ` data-engines="${attr(JSON.stringify(engineUris))}"`;
+    ` data-engines="${attr(JSON.stringify(engineUris))}"` +
+    (inCursor() ? " data-in-cursor" : ""); // the Source list starts at Cursor Agent there
   if (initialSessionId) {
     const idAttr = String(initialSessionId).replace(/"/g, "&quot;");
     html = html.replace("<body>", `<body class="sl-session" data-open-session="${idAttr}" ${wasmAttrs}>`);
@@ -310,11 +311,11 @@ function broadcastRefresh(except, what = { scope: "keys" }) {
 // VS Code, there is no API to ask the dialog to reveal them — see microsoft/vscode#160351) — but
 // only that outer folder is hidden. Once the dialog opens already inside it, every session file and
 // project/date subfolder underneath is a perfectly ordinary, visible entry.
-// `source` is what the person picked in the "Where is the transcript from?" prompt in app.js:
+// `source` is what the Source list above Profile says, or the answer to Import again's question in app.js:
 // "claude" or "codex" go straight to that folder (or the home folder if it turns out not to exist);
 // "cursor" goes to ~/.cursor/projects, one folder per workspace, so a transcript of another workspace is a click away
 // (until 0.1.125 it went straight into this workspace's agent-transcripts, and there was no way up from there);
-// anything else ("somewhere else", or no prompt at all) goes to the home folder, same as a plain
+// anything else ("somewhere else", or no source at all) goes to the home folder, same as a plain
 // "Choose file" always did — the person is browsing for it themselves, not being pointed anywhere.
 function guessTranscriptDefaultUri(source) {
   const home = os.homedir();

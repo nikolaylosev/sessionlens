@@ -51,6 +51,8 @@ around process mistakes that only the session shows.
 ## Now
 
 - Try the command line tool on real CI runs, test the Cursor hook on Windows, and ship fixes as patch releases.
+- A language model's review in the command line tool (`--review`, 0.1.138): measure what a run costs and how much noise it
+  makes in CI, then a prompt for CI and Cursor's CLI as a provider.
 - Tune checks based on [false finding reports](https://github.com/nikolaylosev/sessionlens/issues/new?template=false-finding.yml).
 
 ## Next: starter rules and a Cursor plugin

@@ -169,7 +169,6 @@ async function pickInPanel(text, answer) {
   const p = await openPage(host);
   await p.ready();
   const asked = [];
-  p.window.chooseDialog = async () => "other";
   p.window.__slPickTranscript = async () => ({ name: "run.jsonl", text });
   p.window.confirmDialog = async (m) => (asked.push(m), answer);
   p.document.querySelector("#file").dispatchEvent(new p.window.MouseEvent("click", { bubbles: true }));
