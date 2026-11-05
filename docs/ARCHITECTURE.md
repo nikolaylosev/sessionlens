@@ -548,7 +548,9 @@ flowchart TD
   databases and returns the commands with their output beside the text (`open:transcript` → `cursorOutputs`): the
   CLI's `~/.cursor/chats/<md5 of the workspace>/<id>/store.db`, or the IDE's `globalStorage/state.vscdb`. Both are
   opened read-only with Node's `node:sqlite`; without it (VS Code on Node before 22.13), or with no database, the
-  import runs without output. `fromCursorJsonl` gives a `Shell` call the next output with the same command as its
+  import runs without output. The IDE keeps a chat's list of steps in `fullConversationHeadersOnly` or, in chats from
+  mid-October 2026 on, in parts (`headerLog`, `composerConvHeaders:<id>:000000`, since 0.1.138). The format is not
+  documented, so a chat whose steps are there but whose list cannot be read is said in the Output channel. `fromCursorJsonl` gives a `Shell` call the next output with the same command as its
   `tool_result`, so its tests are parsed as for Claude Code; a run with none keeps `output_missing`. The session
   keeps the output's ends (`source_outputs`, 20 000 characters each) with `source_text`, for Back to regex parsing
   and Import again. From the IDE's database the host also returns each edit's file before and after (since 0.1.127,

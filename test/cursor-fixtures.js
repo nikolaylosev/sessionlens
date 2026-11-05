@@ -46,13 +46,23 @@ const result = (id, text) => ({ role: "tool", content: [{ type: "tool-result", t
 
 // the IDE's state.vscdb: cursorDiskKV with the composer and its bubbles
 // contents: { "composer.content.<sha256>": text } — the files an edit's result names (0.1.127)
-function ideDb(h, bubbles, contents = {}) {
+// partSize: the list of bubbles as Cursor keeps it in chats from mid-October 2026 on, in parts of this size (0.1.138)
+function ideDb(h, bubbles, contents = {}, { partSize } = {}) {
   const file = ideDatabase(h, "darwin", {});
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new S.DatabaseSync(file);
   db.exec("CREATE TABLE cursorDiskKV (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);");
   const put = db.prepare("INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)");
-  put.run("composerData:" + ID, JSON.stringify({ fullConversationHeadersOnly: bubbles.map((b, i) => ({ bubbleId: "b" + i, type: 2 })) }));
+  const headers = bubbles.map((b, i) => ({ bubbleId: "b" + i, type: 2 }));
+  if (partSize) {
+    const parts = Math.ceil(headers.length / partSize);
+    put.run(
+      "composerData:" + ID,
+      JSON.stringify({ fullConversationHeadersOnly: [], headerLog: { chunkSize: partSize, chunkCount: parts, count: headers.length, generation: "g" } }),
+    );
+    for (let p = 0; p < parts; p++)
+      put.run(`composerConvHeaders:${ID}:${String(p).padStart(6, "0")}`, JSON.stringify(headers.slice(p * partSize, (p + 1) * partSize)));
+  } else put.run("composerData:" + ID, JSON.stringify({ fullConversationHeadersOnly: headers }));
   bubbles.forEach((b, i) => put.run(`bubbleId:${ID}:b${i}`, JSON.stringify(b)));
   for (const [k, v] of Object.entries(contents)) put.run(k, v);
   db.close();

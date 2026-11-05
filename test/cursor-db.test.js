@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const { root } = require("./helpers");
 const { cursorOutputs, transcriptId, ideDatabase } = require(path.join(root, "cursor-db.js"));
-const { S, home, transcript, cliDb, shell, result, ideDb, terminal, ideEdit, contentId } = require("./cursor-fixtures");
+const { S, ID, home, transcript, cliDb, shell, result, ideDb, terminal, ideEdit, contentId } = require("./cursor-fixtures");
 
 const skip = !S && "node:sqlite is not available";
 
@@ -102,6 +102,78 @@ test("the IDE's state.vscdb: each edit's file before and after, by the ids its r
     } finally {
       fs.rmSync(h2, { recursive: true, force: true });
     }
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
+});
+
+const NEW_FORMAT = "the IDE's state.vscdb in parts (chats from mid-October 2026 on, 0.1.138)";
+test(`${NEW_FORMAT}: the commands and edits of every part, in order, with their exit codes`, { skip }, () => {
+  const h = home();
+  try {
+    ideDb(
+      h,
+      [
+        { text: "a reply, no tool" },
+        terminal("pytest -q", " 1 failed, 1 passed", 1),
+        ideEdit("/w/tests/a.py", "old", "new"),
+        { text: "another reply" },
+        terminal("pytest -q", " 2 passed", 0),
+      ],
+      { [contentId("old")]: "old", [contentId("new")]: "new" },
+      { partSize: 2 }, // three parts, so a loop that stops after the first is seen
+    );
+    const r = cursorOutputs(transcript(h), { home: h, platform: "darwin", env: {} });
+    assert.equal(r.source, "ide");
+    assert.deepEqual(
+      r.outputs.map((o) => [o.command, o.exitCode, o.output.trim()]),
+      [
+        ["pytest -q", 1, "1 failed, 1 passed"],
+        ["pytest -q", 0, "2 passed"],
+      ],
+    );
+    assert.deepEqual(r.edits, [{ path: "/w/tests/a.py", before: "old", after: "new" }]);
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
+});
+
+test(`${NEW_FORMAT}: a list with entries wins over the parts, a part or a bubble that is gone is skipped`, { skip }, () => {
+  const h = home();
+  try {
+    const file = ideDb(h, [terminal("one", "o1"), terminal("two", "o2"), terminal("three", "o3")], {}, { partSize: 1 });
+    const db = new S.DatabaseSync(file);
+    db.prepare("DELETE FROM cursorDiskKV WHERE key = ?").run(`composerConvHeaders:${ID}:000001`);
+    db.close();
+    const commands = () => cursorOutputs(transcript(h), { home: h, platform: "darwin", env: {} }).outputs.map((o) => o.command);
+    assert.deepEqual(commands(), ["one", "three"]);
+    const db2 = new S.DatabaseSync(file);
+    db2
+      .prepare("UPDATE cursorDiskKV SET value = ? WHERE key = ?")
+      .run(JSON.stringify({ fullConversationHeadersOnly: [{ bubbleId: "b1" }, { bubbleId: "gone" }], headerLog: { chunkCount: 3 } }), "composerData:" + ID);
+    db2.close();
+    assert.deepEqual(commands(), ["two"]);
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
+});
+
+test(`${NEW_FORMAT}: the chat there with no list that can be read is said so, not "no database has it"`, { skip }, () => {
+  const h = home();
+  try {
+    const file = ideDb(h, [terminal("one", "o1")], {}, { partSize: 1 });
+    const db = new S.DatabaseSync(file);
+    const set = db.prepare("UPDATE cursorDiskKV SET value = ? WHERE key = ?");
+    const composer = (v) => set.run(JSON.stringify(v), "composerData:" + ID);
+    composer({ fullConversationHeadersOnly: [], somethingNew: { chunks: 1 } }); // a next format
+    db.close();
+    const reason = () => cursorOutputs(transcript(h), { home: h, platform: "darwin", env: {} }).reason;
+    assert.equal(reason(), "the ide database has this chat in a format this version cannot read");
+    const db2 = new S.DatabaseSync(file);
+    db2.prepare("DELETE FROM cursorDiskKV WHERE key LIKE 'bubbleId:%'").run();
+    db2.prepare("INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)").run("bubbleId:ffffffff-3c17-4425-918c-f62e9496e707:b0", "{}"); // another chat's
+    db2.close();
+    assert.equal(reason(), "no Cursor database has this chat"); // a chat with no steps yet
   } finally {
     fs.rmSync(h, { recursive: true, force: true });
   }
