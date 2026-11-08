@@ -57,6 +57,38 @@ test("readLog: the capture gives the output of each command and two versions of 
   assert.equal(H.readLog({ home: h, id: "../" + id }), null);
 });
 
+test("readLog: a command Cursor reports as failed with no code counts as exit code 1; a code wins; neither stays unknown (0.1.138)", () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), "sl-hookimp-"));
+  const id = crypto.randomUUID();
+  const shell = (n) => ({ v: 1, conversation_id: id, event: "shell", tool_use_id: "t" + n, command: "c" + n, output: "o" });
+  const exit = (n, extra) => ({ v: 1, conversation_id: id, event: "exit", tool_use_id: "t" + n, ...extra });
+  const dir = path.join(h, ".cursor", "sessionlens", "log");
+  fs.mkdirSync(dir, { recursive: true });
+  const lines = [
+    shell(1),
+    exit(1, { failed: true }),
+    shell(2),
+    exit(2, { failed: true, exit_code: 2 }),
+    shell(3),
+    exit(3, { failed: false, exit_code: 0 }),
+    shell(4),
+    exit(4, { failed: false }),
+    shell(5),
+  ];
+  fs.writeFileSync(path.join(dir, id + ".jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  assert.deepEqual(
+    H.readLog({ home: h, id }).outputs.map((o) => [o.command, o.exitCode]),
+    [
+      ["c1", 1],
+      ["c2", 2],
+      ["c3", 0],
+      ["c4", undefined],
+      ["c5", undefined],
+    ],
+  );
+  fs.rmSync(h, { recursive: true, force: true });
+});
+
 test("readLog: a broken line and another chat's line are left out; a file edited before the log is told from its edit", () => {
   const h = home(),
     id = crypto.randomUUID(),
