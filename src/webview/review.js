@@ -4,7 +4,7 @@
 import { $, LABEL, SEV, T, VCOL, VLABEL, esc, fkey, srcLabel, state } from "./common.js";
 import { curS, needEngine, profileVerdicts, updateSession } from "./store.js";
 import { analyze, analyzeNow } from "./analysis.js";
-import { keptEdits, keptOutputs, pickTranscript, piDeps, profileSummary, readFile } from "./sessions.js";
+import { keptEdits, keptOutputs, pickTranscript, piDeps, profileSummary, readFile, transcriptSource } from "./sessions.js";
 import { download } from "./calibration.js";
 
 export function initReview() {
@@ -217,6 +217,8 @@ export function initReview() {
   });
 }
 
+const AGENT_SOURCE = { "claude-code": "claude", codex: "codex", cursor: "cursor" };
+
 /* "Import again" (0.1.114): a session imported before 0.1.113 lacks what test_deleted and config_weakened read
    (Lens.needsReimport). Its transcript is parsed again into the same session, which keeps its id, name, specification
    and verdicts: from the text kept at import, or from the file picked again. A file that does not look like this
@@ -238,14 +240,8 @@ export async function reimport() {
     cursorUsage = null,
     fromLog = false;
   if (!text) {
-    const source = await chooseDialog(T("reimport_pick"), [
-      { label: T("pick_source_claude"), value: "claude", primary: true },
-      { label: T("pick_source_codex"), value: "codex" },
-      { label: T("pick_source_cursor"), value: "cursor" },
-      { label: T("pick_source_other"), value: "other" },
-    ]);
-    if (source === null) return;
-    const r = await pickTranscript(source);
+    // the session knows its agent (0.1.138); a session that does not (imported with no text kept) goes by the Source list
+    const r = await pickTranscript(AGENT_SOURCE[s.agent] || transcriptSource());
     if (!r) return;
     text = r.text;
     cursorOutputs = r.cursorOutputs;
