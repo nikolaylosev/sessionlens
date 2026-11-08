@@ -47,8 +47,9 @@ const result = (id, text) => ({ role: "tool", content: [{ type: "tool-result", t
 // the IDE's state.vscdb: cursorDiskKV with the composer and its bubbles
 // contents: { "composer.content.<sha256>": text } — the files an edit's result names (0.1.127)
 // partSize: the list of bubbles as Cursor keeps it in chats from mid-October 2026 on, in parts of this size (0.1.138)
-function ideDb(h, bubbles, contents = {}, { partSize } = {}) {
-  const file = ideDatabase(h, "darwin", {});
+// platform, env: where the host under test will look for it; by default the path cursorOutputs is given in cursor-db.test.js
+function ideDb(h, bubbles, contents = {}, { partSize, platform = "darwin", env = {} } = {}) {
+  const file = ideDatabase(h, platform, env);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new S.DatabaseSync(file);
   db.exec("CREATE TABLE cursorDiskKV (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);");
