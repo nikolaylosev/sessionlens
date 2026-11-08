@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 /* The sessionlens command (phase 11). Everything is in cli/lib/cli.js; this file only hands it the process. */
+// Node 25 and later warn on stderr when anything reads localStorage, and the bundled ESLint looks for it. A CLI has none.
+if (Object.getOwnPropertyDescriptor(globalThis, "localStorage"))
+  Object.defineProperty(globalThis, "localStorage", { value: undefined, configurable: true, writable: true });
 const { run } = require("../lib/cli");
 
 run(process.argv.slice(2), { stdout: process.stdout, stderr: process.stderr, env: process.env, isTTY: !!process.stdout.isTTY, cwd: process.cwd() }).then(
