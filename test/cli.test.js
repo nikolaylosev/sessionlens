@@ -254,3 +254,25 @@ test("the bin: the exit code of the process; an engine that does not load is exi
   assert.equal(r.stderr, "sessionlens: the typescript lint engine did not load: no bundle\n");
   assert.equal(r.stdout, "");
 });
+
+test("a run does not read localStorage: Node 25 and later warn on stderr when anything does (0.1.138)", () => {
+  // the same trap on any Node version: a getter that says so when it is read, as Node's own does
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-localstorage-"));
+  const trap = path.join(dir, "trap.js");
+  fs.writeFileSync(trap, 'Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { process.stderr.write("READ localStorage\\n"); } });');
+  // a test file, so the bundled ESLint is loaded: that is what looks for localStorage
+  const code = "import { test, expect } from '@playwright/test';\ntest('a', async ({ page }) => {\n  await expect(page).toHaveTitle('x');\n});\n";
+  const log = path.join(dir, "agent.jsonl");
+  const lines = [
+    { type: "user", message: { role: "user", content: "Write a test" } },
+    {
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "t1", name: "Write", input: { file_path: "tests/a.spec.ts", content: code } }] },
+    },
+  ];
+  fs.writeFileSync(log, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  const r = spawnSync(process.execPath, ["-r", trap, BIN, "analyze", log, "--profile", "qa-ts"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /READ localStorage/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

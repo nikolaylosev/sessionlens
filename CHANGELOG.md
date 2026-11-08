@@ -16,6 +16,8 @@
   Code in VS Code. **Import again** no longer asks either: it opens the folder of the session's own agent.
 
 ### Fixed
+- **The CLI no longer prints a warning about `localStorage` on newer Node versions.** It appeared on every run on Node 26,
+  on stderr, and changed nothing else.
 - **A command that failed under Record Cursor agent runs counts as failed.** Cursor gives no exit code for a failed command,
   and the log's mark that it failed was not read, so a run with no test summary in its output could look as if it had
   passed.
