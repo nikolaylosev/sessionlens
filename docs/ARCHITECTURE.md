@@ -238,7 +238,11 @@ All three webviews load the same page (`sidepanel.html` + scripts); a session ta
 
 ### 4.2 Activation
 
-The extension activates when its view or a command is used, or when VS Code restores a session tab.
+The extension activates when the editor has finished starting (`onStartupFinished`, since 0.1.138), and earlier if its view or a
+command is used or VS Code restores a session tab. It used to wait for one of those, but `sessionlens.inCursor` is set in
+`activate()` and hides the Cursor hook's commands from the palette until then, so they could not be found with the panel
+closed. Measured with 200 sessions: about 15 ms in VS Code 1.144 and 40 ms in Cursor 3.27 for loading and `activate()`, and up
+to 64 ms more for the migrations in the background.
 
 ```mermaid
 sequenceDiagram
