@@ -81,7 +81,7 @@ If you moved the two parts around in an earlier version, VS Code keeps your orde
 
 The **Sessions** tab itself, inside Calibration & Settings, is where you load a transcript:
 
-![The SessionLens sidebar: the Sessions tab with Choose file, Paste text, Try a demo session and the profile, and the Sessions list under it](media/screenshots/panel-profile.png)
+![The SessionLens sidebar: the Sessions tab with Choose file, Paste text, Try a demo session, the source and the profile, and the Sessions list under it](media/screenshots/panel-profile.png)
 
 The **Source** list says where your transcripts are: Claude Code, Codex, Cursor Agent or somewhere else. **Choose file** opens that folder, and the list keeps your choice. A new install starts at Cursor Agent in Cursor and at Claude Code in VS Code.
 
@@ -595,7 +595,6 @@ In Cursor, VSCodium and other editors that use [Open VSX](https://open-vsx.org/e
 search for **SessionLens** in the Extensions view and press **Install**. Cursor takes extensions from Open VSX, so a
 new version can reach it a little later than VS Code.
 
-![SessionLens in Cursor: the SessionLens sidebar with the Sessions tab, Choose file, Paste text, Try a demo session and the profile, and the Sessions list under it](media/screenshots/cursor.png)
 
 From a `.vsix` file (each [GitHub release](https://github.com/nikolaylosev/sessionlens/releases) has one):
 
