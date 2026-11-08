@@ -13,3 +13,5 @@ node_modules/
 # The owner's own Cursor agents and skills (e.g. the LLM council): Cursor reads them only from here, so they cannot
 # move to local/. Never committed; .vscodeignore leaves them out of the .vsix too.
 /.cursor/
+# the owner's code graph tool (Code Explorer): a local database of about 84 MB
+/.codeexplorer/
