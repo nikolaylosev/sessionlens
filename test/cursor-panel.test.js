@@ -185,9 +185,12 @@ test(
   { skip: !S && "node:sqlite is not available" },
   async () => {
     const h = home();
-    const env = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    const env = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, APPDATA: process.env.APPDATA, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
     process.env.HOME = h;
     process.env.USERPROFILE = h;
+    // the host reads the database of this platform: on Windows from APPDATA, on Linux from XDG_CONFIG_HOME
+    process.env.APPDATA = path.join(h, "AppData", "Roaming");
+    process.env.XDG_CONFIG_HOME = path.join(h, ".config");
     try {
       const file = transcript(h);
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -196,7 +199,7 @@ test(
         h,
         [terminal("npx playwright test", "  1 failed\n  1 passed (2.0s)", 1), terminal("npx playwright test", "  2 passed (2.0s)", 0)],
         {},
-        { partSize: 1 },
+        { partSize: 1, platform: process.platform, env: process.env },
       );
       const cfg = Lens.profile("qa-ts");
       const events = Lens.importAny(JSONL, cfg, { cursorProject: "Users-me-shop" });
