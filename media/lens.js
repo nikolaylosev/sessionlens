@@ -1689,7 +1689,7 @@
   /* Rewrites the lines in the Claude Code shape and lets fromClaudeJsonl rebuild the files, then puts Cursor's own tool
      names back on the events. A StrReplace without a path has no file to apply it to: it stays a plain tool call.
      outputs (optional) are the commands Cursor's own database kept for this chat, in order ({command, output,
-     exitCode}, read by the host, cursor-db.js): a Shell call takes the next one with the same command and gets it as
+     exitCode}, read by the host, cursor-db.js): a Shell call matched with one of them (cursorMatchOutputs) gets it as
      its tool_result, so its test results are parsed as for Claude Code. A test run without one keeps output_missing:
      its result is unknown, not red and not absent (pass_claim_without_run, 0.1.121). */
   /* Cursor names a workspace's folder in ~/.cursor/projects after its path: every character that is not a Latin letter
@@ -1714,6 +1714,64 @@
      tests it lost. An edit of the same file whose text after matches (a Write's text, a StrReplace's new fragment)
      gives the step its file before and after, the way Claude Code's toolUseResult does. */
   const samePath = (a, b) => a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
+  /* Which output each Shell call gets: the longest list of pairs with the same command, both in order. Taking the next
+     output with the same command lost the rest of the session when a call's own output was not kept: Cursor dropped the
+     first half hour of a chat (a first "git status" then took a much later one, and the 30 commands between got nothing,
+     13 of a possible 46 on the owner's chat), and a hook started mid-chat logs only what came after. Among equal lists
+     the later pair wins, for the same reason: what is missing is what came first. → [output's index or -1, per call] */
+  function cursorMatchOutputs(commands, outs) {
+    const a = commands.map((c) => c.trim()),
+      b = outs.map((o) => o.command.trim());
+    const out = new Array(a.length).fill(-1);
+    if (a.length * b.length > 25000000) {
+      // beyond any chat seen; the table would take too much memory, so the next one with the same command, in order
+      let next = 0;
+      a.forEach((c, i) => {
+        const k = b.indexOf(c, next);
+        if (k >= 0) [out[i], next] = [k, k + 1];
+      });
+      return out;
+    }
+    // best[i][j]: the most pairs in the first i calls and the first j outputs
+    const best = a.map(() => new Uint16Array(b.length + 1));
+    best.unshift(new Uint16Array(b.length + 1));
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++) best[i][j] = a[i - 1] === b[j - 1] ? best[i - 1][j - 1] + 1 : Math.max(best[i - 1][j], best[i][j - 1]);
+    for (let i = a.length, j = b.length; i > 0 && j > 0;) {
+      if (a[i - 1] === b[j - 1]) out[--i] = --j;
+      else if (best[i - 1][j] >= best[i][j - 1]) i--;
+      else j--;
+    }
+    return out;
+  }
+  // a Cursor tool call's name and input, as the import reads them
+  const cursorCall = (b) => {
+    const raw = String(b.name || ""),
+      name = (raw === "CallDynamicTool" && cursorDynamicName(b.input)) || raw;
+    return {
+      name,
+      input: cursorInput(name, (raw === "CallDynamicTool" && playwrightTestTool(name) && cursorArgs(b.input && b.input.arguments)) || b.input || {}),
+    };
+  };
+  // the commands of the Shell calls in a transcript, in order
+  function cursorShellCommands(text) {
+    const commands = [];
+    for (const line of text.split("\n")) {
+      let rec = null;
+      try {
+        rec = line.trim() ? JSON.parse(line) : null;
+      } catch {
+        continue;
+      }
+      if (!rec || rec.role !== "assistant" || !rec.message || !Array.isArray(rec.message.content)) continue;
+      for (const b of rec.message.content) {
+        if (!b || typeof b !== "object" || b.type !== "tool_use") continue;
+        const { name, input } = cursorCall(b);
+        if (name === "Shell" && typeof input.command === "string") commands.push(input.command);
+      }
+    }
+    return commands;
+  }
   function fromCursorJsonl(text, cfg, outputs, project, edits) {
     const lines = [],
       names = [],
@@ -1721,8 +1779,9 @@
       done = new Set(),
       outs = Array.isArray(outputs) ? outputs.filter((o) => o && typeof o.command === "string" && typeof o.output === "string") : [],
       eds = Array.isArray(edits) ? edits.filter((e) => e && typeof e.path === "string" && typeof e.before === "string" && typeof e.after === "string") : [],
-      used = new Set();
-    let next = 0;
+      used = new Set(),
+      matched = outs.length ? cursorMatchOutputs(cursorShellCommands(text), outs) : [];
+    let shellCall = 0;
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
       let rec;
@@ -1744,9 +1803,7 @@
           if (u.text) content.push({ type: "text", text: u.text });
         } else if (b.type === "text") content.push({ type: "text", text: b.text || "" });
         else if (b.type === "tool_use" && rec.role === "assistant") {
-          const raw = String(b.name || ""),
-            name = (raw === "CallDynamicTool" && cursorDynamicName(b.input)) || raw,
-            input = cursorInput(name, (raw === "CallDynamicTool" && playwrightTestTool(name) && cursorArgs(b.input && b.input.arguments)) || b.input || {});
+          const { name, input } = cursorCall(b);
           const as = name === "StrReplace" && !input.file_path ? name : CURSOR_TOOLS[name] || name;
           const id = "cursor-" + names.length;
           content.push({ type: "tool_use", id, name: as, input });
@@ -1764,11 +1821,9 @@
             }
           }
           if (name !== "Shell" || typeof input.command !== "string") continue;
-          const k = outs.findIndex((o, i) => i >= next && o.command.trim() === input.command.trim());
-          if (k < 0) continue;
-          next = k + 1;
+          const o = outs[matched[shellCall++]];
+          if (!o) continue;
           done.add(id);
-          const o = outs[k];
           results.push({ type: "tool_result", tool_use_id: id, content: o.output, is_error: Number.isInteger(o.exitCode) && o.exitCode !== 0 });
         }
       }

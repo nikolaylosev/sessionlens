@@ -148,6 +148,103 @@ test("with the database's output, test runs have results: red, fix, green gives 
   assert.equal(Lens.importAny(jsonl(...lines), cfg).filter((e) => e.output_missing).length, 2, "without the database: unknown, as before");
 });
 
+/* What each call gets when not all of them have an output (0.1.138). Cursor dropped the start of a chat and a hook starts
+   mid-chat; a Shell call that took the next output with the same command then took a later one, and what lay between
+   got nothing. */
+const ran = (...commands) => commands.map((command) => call("Shell", { command }));
+const said = (command, output, exitCode = 0) => ({ command, output, exitCode });
+const results = (lines, cursorOutputs) =>
+  Lens.importAny(jsonl(user("Run"), ...lines), cfg, { cursorOutputs })
+    .slice(1)
+    .map((e) => [e.cmd, e.output_missing || e.text == null ? null : e.text]);
+
+test("an early call whose output is gone does not take a later one, and the calls between keep theirs", () => {
+  assert.deepEqual(
+    results(ran("git status", "ls", "pwd", "git status"), [said("ls", "L"), said("pwd", "P"), said("git status", "LATE")]).map((r) => r[1] || ""),
+    ["", "L", "P", "LATE"],
+  );
+});
+
+test("a run with the same command: the output goes to the later run, so a red result is not moved to an earlier step", () => {
+  const got = Lens.importAny(jsonl(user("Run"), ...ran(RUN, "ls", RUN)), cfg, { cursorOutputs: [said("ls", "L"), out("  1 failed\n  1 passed", 1)] }).slice(1);
+  assert.deepEqual(
+    got.map((e) => [e.cmd, !!e.output_missing, e.tests ? e.tests.failed : null]),
+    [
+      [RUN, true, null],
+      ["ls", false, null],
+      [RUN, false, 1],
+    ],
+  );
+});
+
+test("a command Cursor rewrote finds nothing, and neither it nor the output left over moves the others", () => {
+  assert.deepEqual(
+    results(ran("ls", 'git commit -m "x"', "pwd"), [said("ls", "L"), said('git commit --trailer "T" -m "x"', "C"), said("pwd", "P")]).map((r) => r[1] || ""),
+    ["L", "", "P"],
+  );
+});
+
+test("the same commands in the same order: each its own, also with an output for every repeat", () => {
+  assert.deepEqual(
+    results(ran("ls", "ls", "pwd", "ls"), [said("ls", "1"), said("ls", "2"), said("pwd", "3"), said("ls", "4")]).map((r) => r[1]),
+    ["1", "2", "3", "4"],
+  );
+});
+
+test("calls of other tools between the Shell calls do not shift the pairs, and a Shell call with no command takes nothing", () => {
+  assert.deepEqual(
+    results(
+      [call("Shell", { command: "ls" }), call("Read", { path: "a.ts" }), call("Shell", {}), call("Shell", { command: "pwd" })],
+      [said("ls", "L"), said("pwd", "P")],
+    )
+      .filter((r) => r[1])
+      .map((r) => r[1]),
+    ["L", "P"],
+  );
+});
+
+test("the most pairs win: outputs in another order give up the one that would cost two", () => {
+  assert.deepEqual(
+    results(ran("a1", "b1", "c1"), [said("b1", "B"), said("c1", "C"), said("a1", "A")]).map((r) => r[1] || ""),
+    ["", "B", "C"],
+  );
+});
+
+test("outputs no call asked for are passed over, and a pair before them stays", () => {
+  assert.deepEqual(
+    results(ran("a1", "b1"), [said("a1", "A"), said("c1", "C"), said("c2", "D")]).map((r) => r[1] || ""),
+    ["A", ""],
+  );
+});
+
+test("equal lists: the later output is kept, since what is gone is what came first", () => {
+  assert.deepEqual(
+    results(ran("x1", "y1"), [said("y1", "Y"), said("x1", "X")]).map((r) => r[1] || ""),
+    ["X", ""],
+  );
+});
+
+test("spaces around a call's command do not count, and a tool_use in a user's line is no call", () => {
+  assert.deepEqual(
+    results(ran(" ls "), [said("ls", "L")]).map((r) => r[1]),
+    ["L"],
+  );
+  const inUser = { role: "user", message: { content: [{ type: "tool_use", name: "Shell", input: { command: "ls" } }] } };
+  assert.deepEqual(
+    results([inUser, ...ran("pwd")], [said("pwd", "P")]).map((r) => r[1]),
+    ["P"],
+  );
+});
+
+test("a session too long for the table: the next output with the same command, in order, and spaces around a command do not count", () => {
+  const commands = Array.from({ length: 5100 }, (_, i) => "echo " + (i % 2));
+  const got = results(ran(...commands), [...commands.map((command, i) => said("  " + command + " ", "o" + i))]);
+  assert.deepEqual(
+    got.map((r) => r[1]),
+    commands.map((_, i) => "o" + i),
+  );
+});
+
 test("a Shell call takes the next output with the same command; one with no match keeps output_missing", () => {
   const lines = [user("Run"), call("Shell", { command: "ls" }), call("Shell", { command: RUN }), call("Shell", { command: "npx playwright test --headed" })];
   const got = Lens.importAny(jsonl(...lines), cfg, {
