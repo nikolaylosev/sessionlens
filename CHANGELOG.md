@@ -13,7 +13,7 @@
 ### Changed
 - **Choose file no longer asks where the transcript is from.** A **Source** list above **Profile** says it and
   keeps it, and the file dialog opens that folder at once. A new install starts at Cursor Agent in Cursor and at Claude
-  Code in VS Code. **Import again** still asks, since a session can be from another agent.
+  Code in VS Code. **Import again** no longer asks either: it opens the folder of the session's own agent.
 
 ### Fixed
 - **A Cursor command no longer takes another command's output.** When the output of an early command was gone (Cursor had

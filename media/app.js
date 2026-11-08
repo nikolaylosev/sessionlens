@@ -1883,20 +1883,14 @@ ${en.raw}`).join("\n\n\n");
       if (state.current === sid) btn.disabled = false;
     });
   }
+  var AGENT_SOURCE = { "claude-code": "claude", codex: "codex", cursor: "cursor" };
   async function reimport() {
     const sid = state.current, s = curS();
     if (!s) return;
     const fromFile = (s.importGen || 0) < 9 && Lens.subagentsMissing(s) || (s.importGen || 0) < 10 && Lens.cursorEditsMissing(s);
     let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project, cursorId = s.source_cursor_id, cursorUsage = null, fromLog = false;
     if (!text) {
-      const source = await chooseDialog(T("reimport_pick"), [
-        { label: T("pick_source_claude"), value: "claude", primary: true },
-        { label: T("pick_source_codex"), value: "codex" },
-        { label: T("pick_source_cursor"), value: "cursor" },
-        { label: T("pick_source_other"), value: "other" }
-      ]);
-      if (source === null) return;
-      const r = await pickTranscript(source);
+      const r = await pickTranscript(AGENT_SOURCE[s.agent] || transcriptSource());
       if (!r) return;
       text = r.text;
       cursorOutputs = r.cursorOutputs;

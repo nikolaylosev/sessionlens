@@ -102,7 +102,10 @@ async function tab(opts = {}) {
   await st.put(s, { analyzedGen: "" });
   const host = bootHost({
     storageDir: dir,
-    globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+    globalState: {
+      storageVersion: 2,
+      settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null, ...(opts.settings || {}) },
+    },
   });
   const p = await openPage(host, { sessionId: s.id });
   await p.ready();
@@ -224,19 +227,16 @@ test("Import again without the text: the file is picked again; a transcript of a
   // no text kept: the agent is unknown; the project is where the files it wrote are (Lens.projectOf, 0.1.127)
   assert.deepEqual([(await disk(dir)).meta.agent, (await disk(dir)).meta.project], ["", "/w"]);
   const asked = [];
-  let sources = null;
-  p.window.chooseDialog = async (msg, opts) => (asked.push(msg), (sources = opts.map((o) => String(o.value)).join()), "claude");
+  p.window.chooseDialog = async (msg) => (asked.push(msg), null);
   p.window.confirmDialog = async (msg) => (asked.push(msg), false);
   let file = other();
   p.window.__slPickTranscript = async (o) => (asked.push("pick " + o.source), { name: "x.jsonl", text: file });
   const n0 = puts(p).length; // what the tab wrote when it opened
   click(p, "#reimport-go");
-  await until(() => asked.length === 3);
+  await until(() => asked.length === 2);
   await p.idle();
-  assert.match(asked[0], /Pick the transcript of this session/);
-  assert.equal(sources, "claude,codex,cursor,other");
-  assert.equal(asked[1], "pick claude");
-  assert.match(asked[2], /does not look like this session/);
+  assert.equal(asked[0], "pick claude", "no question first: an unknown agent goes by the Source list");
+  assert.match(asked[1], /does not look like this session/);
   assert.equal(puts(p).length, n0, "cancelled: nothing written");
 
   file = transcript();
@@ -244,7 +244,7 @@ test("Import again without the text: the file is picked again; a transcript of a
   click(p, "#reimport-go");
   await until(() => puts(p).length > n0);
   await p.idle();
-  assert.equal(asked.length, 2, "the right file: no question after the pick");
+  assert.equal(asked.length, 1, "the right file: no question after the pick");
   const { session: s, meta } = await disk(dir);
   assert.ok(s.findings.some((f) => f.check === "test_deleted"));
   assert.equal(s.source_text, file, "a small transcript is kept, as at import");
@@ -253,10 +253,31 @@ test("Import again without the text: the file is picked again; a transcript of a
   p.close();
 });
 
+test("Import again asks no question: the file dialog is for the session's agent, and an agent with no folder goes by the Source list", async () => {
+  for (const [agent, transcriptSource, source] of [
+    ["claude-code", "codex", "claude"],
+    ["codex", "cursor", "codex"],
+    ["cursor", "codex", "cursor"],
+    ["claude-ai", "codex", "codex"],
+    ["text", "other", undefined],
+  ]) {
+    const { p } = await tab({ extra: { agent }, settings: { transcriptSource } });
+    const asked = [];
+    p.window.chooseDialog = async (msg) => (asked.push(msg), null);
+    p.window.__slPickTranscript = async (o) => (asked.push(o.source), null);
+    click(p, "#reimport-go");
+    await until(() => asked.length);
+    await p.idle();
+    assert.deepEqual(asked, [source], agent);
+    p.close();
+  }
+});
+
 test("Import again: a pick the host refuses is said in a dialog, nothing is written", async () => {
   const { p } = await tab();
   const alerts = [];
-  p.window.chooseDialog = async () => "newer-source"; // a source an older host does not know
+  const pick = p.window.__slPickTranscript;
+  p.window.__slPickTranscript = () => pick({ source: "newer-source" }); // a source an older host does not know
   p.window.alertDialog = async (m) => alerts.push(m);
   const n0 = puts(p).length;
   click(p, "#reimport-go");
@@ -386,12 +407,12 @@ test("Import again for a Cursor session of 0.1.127–0.1.129 without the files b
   assert.equal(Lens.needsReimport({ ...s, source_edits: [{ path: "/w/e2e/cart.spec.ts", before: PW(TOTAL, DISCOUNT), after: PW(TOTAL) }] }), false, "has them");
   const { p } = await tab({ events: oldEvents(transcript()), sourceText: text, extra: { agent: "cursor", importGen: 9, events } });
   const asked = [];
-  p.window.chooseDialog = async (msg) => (asked.push(msg), null); // the person cancels the pick
+  p.window.__slPickTranscript = async (o) => (asked.push(o.source), null); // the person cancels the pick
   const n0 = puts(p).length;
   click(p, "#reimport-go");
   await until(() => asked.length);
   await p.idle();
-  assert.equal(asked.length, 1, "the file is asked for, not the kept text parsed again");
+  assert.deepEqual(asked, ["cursor"], "the file is asked for, in the folder of the session's agent, not the kept text parsed again");
   assert.equal(puts(p).length, n0, "cancelled: nothing written");
   assert.deepEqual(p.errors, []);
   p.close();
@@ -402,7 +423,7 @@ test("Import again for a Claude Code session of generation 9 parses the kept tex
   const events = [...oldEvents(text), { seq: 99, kind: "tool", tool: "Agent", text: "" }];
   const { p } = await tab({ events, sourceText: text, extra: { importGen: 9 } });
   const asked = [];
-  p.window.chooseDialog = async (msg) => (asked.push(msg), null);
+  p.window.__slPickTranscript = async (o) => (asked.push(o.source), null);
   p.window.confirmDialog = async () => true;
   const n0 = puts(p).length;
   click(p, "#reimport-go");

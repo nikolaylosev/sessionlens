@@ -277,7 +277,6 @@ test("an older Cursor session, with no text and no chat id: Import again picks t
     });
     const p = await openPage(host, { sessionId: s.id });
     await p.ready();
-    p.window.chooseDialog = async () => "cursor";
     // what the host answers for the picked file: its text and the chat's id, no database here
     p.window.__slPickTranscript = async () => ({ name: id + ".jsonl", text: TRANSCRIPT, cursorId: id });
     const n0 = p.sent.filter((m) => m.type === "session:put").length;
