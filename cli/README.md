@@ -13,8 +13,8 @@ for VS Code and Cursor. It runs the same checks, so you can review a session in 
 npx sessionlens-cli analyze <log> --profile <name>
 ```
 
-You need Node.js 22 or newer. The package has no dependencies, and it does not use the network: the log and the code
-in it stay on your machine.
+You need Node.js 22 or newer. The package has no dependencies. It does not use the network unless you give `--review`, so
+by default the log and the code in it stay on your machine.
 
 ```
 $ npx sessionlens-cli analyze agent.jsonl --profile qa-ts
@@ -66,6 +66,10 @@ Give it one session per file.
 | `--verdicts <path>` | Your reviewers' verdicts: a `verdicts.json` exported from the Calibration tab of the extension, or a folder of them. Can be given several times. See [Calibration](#calibration). |
 | `--ci` | For a session that ran in CI. Nobody was there to approve the agent's plan, so `stop_markers_missing` (code written without a plan) is listed as context and does not count in the verdict. Without `--spec`, nobody could give a specification either, so `no_spec` is context too. |
 | `--fail-on <level>` | `none` (the default), `red` or `yellow`. Exit with code 1 when the session is that colour or worse. |
+| `--review` | Also ask a language model to review the session. This sends part of the session to the provider. See [Model review](#model-review). |
+| `--provider <name>` | With `--review`: `anthropic`, `google`, `openai`, `xai`, `deepseek`, `qwen` or `local`. |
+| `--model <name>` | With `--review`: the model. Without it, the provider's default in this version. |
+| `--base-url <url>` | With `--review` and `qwen` or `local`: the server's address. |
 | `--json` | Print the review as JSON (schema `sessionlens/finding@1`, the same file the extension exports). |
 | `--md` | Print the review as Markdown, for a CI job's summary. |
 | `--json-file <file>` | Also write the JSON to this file, whatever is printed, so one run gives both. |
@@ -92,13 +96,32 @@ Checks, by the sessions they spoke in:
 is enough for exit 1. A log that cannot be reviewed is listed as skipped; if none can be, the exit code is 2. `--spec` is for
 one session, so it cannot be given with a folder.
 
+## Model review
+
+With `--review`, a language model also reads the session and says what patterns can't see: whether a test checks what its
+name promises, what is fragile, which cases are missing. The prompts and the verification are the extension's.
+
+```
+ANTHROPIC_API_KEY=... npx sessionlens-cli analyze agent.jsonl --profile qa-ts --ci --review --provider anthropic --model <name>
+```
+
+The key comes only from an environment variable: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
+`DEEPSEEK_API_KEY` or `DASHSCOPE_API_KEY` (Qwen). A `local` server, such as Ollama, needs none.
+
+- The specification, the findings of the other checks, the test code and a shortened transcript go to the provider. Secrets are
+  masked by pattern, so a secret of an unusual shape can still get through.
+- The model's findings are a part of their own, and they don't change the verdict or `--fail-on`. In our measurement, a high
+  finding from the model didn't separate honest sessions from cheating, so read this part as an explanation for the reviewer.
+- If the model fails or there is no key, you still get the report and the same exit code, with the reason on stderr.
+- It reviews one session at a time, not a folder. Claude Code, Codex and Cursor through a subscription aren't available yet.
+
 ## Exit codes
 
 | Code | When |
 |---|---|
 | 0 | The review is written. This is the default whatever the verdict, so that adding SessionLens to a pipeline never blocks it by itself. |
 | 1 | `--fail-on` matched the verdict. |
-| 2 | SessionLens could not do its work: a file it cannot read, no profile or an unknown one, a file that is not a session log, a log with no steps, a lint engine that did not load. The reason is on stderr. |
+| 2 | SessionLens could not do its work: a file it cannot read, no profile or an unknown one, a file that is not a session log, a log with no steps, a lint engine that did not load, wrong `--review` options. The reason is on stderr. A model that fails is not one of these. |
 
 ## Calibration
 
@@ -145,12 +168,10 @@ Run the agent, save its log, then review it:
 Start without `--fail-on`, read the reports for a while, then add `--fail-on red` when you trust them. Keep the log as
 an artifact: you can open it in the extension later and mark each finding as right or wrong.
 
+To add a model's review to the summary, add `--review --provider <name> --model <name>` and give that step the provider's key.
+
 A complete workflow with a Cursor agent, ready to copy into `.github/workflows/`:
 [`examples/cursor-agent.yml`](https://github.com/nikolaylosev/sessionlens/blob/main/cli/examples/cursor-agent.yml).
-
-## What it does not do yet
-
-- No model review: the checks that ask a language model run only in the extension.
 
 ## More
 
