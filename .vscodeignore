@@ -29,5 +29,6 @@ CLAUDE.md
 # local notes: see .gitignore (vsce reads only this file)
 local/**
 .cursor/**
+.codeexplorer/**
 SessionLens-TODO.md
 SMOKE.md
