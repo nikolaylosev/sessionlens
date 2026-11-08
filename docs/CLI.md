@@ -306,7 +306,12 @@ Keep these points in mind:
   missing key counts as a failure too, because a pull request from a fork has no secrets, and that must not break its build.
 - **A folder isn't allowed,** so that one run can't pay for many reviews. Review one session at a time.
 - **Cost.** One run makes two requests on your account, the review and its verification. A local server gets one request for
-  each file, up to 12 files, and one verification. We haven't measured the cost yet, so check it on your provider's dashboard.
+  each file, up to 12 files, and one verification. On 8 November 2026, a run on a 185 KB log took about 12,000 tokens with
+  Gemini 3.1 Flash-Lite. That figure is an estimate from the rate limit page. It was free on Google's free tier, and it
+  would cost under 2 cents at that model's paid price then ($0.25 per million input tokens, $1.50 per million output
+  tokens). A longer log or a larger model costs more, so check your provider's dashboard.
+- **Free tiers.** A provider's free tier can have other terms: Google's page says that what you send on Gemini's free tier
+  is used to improve its products. Check those terms before you review a session from work.
 - **Time.** A request to a cloud provider stops after 10 minutes. A local server has no limit, so set a timeout on the CI job.
 
 ### Output formats
