@@ -24,7 +24,7 @@
   found no command output in chats since then, so their test runs had no result (red or green) unless Record Cursor
   agent runs was on. It now reads both formats, and the files before and after an edit too. If a later Cursor changes
   the format again, the Output channel says so. Tested on macOS with Cursor 3.27; Windows is not tested yet. A session
-  imported before keeps no results: pick its file again with **Choose file**.
+  imported before offers **Import again**, once: pick its file, and it gets the results and keeps its name and verdicts.
 - **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
   `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only
   some files got an answer, it says how many were not reviewed and why.

@@ -418,6 +418,23 @@ test("Import again for a Cursor session of 0.1.127–0.1.129 without the files b
   p.close();
 });
 
+test("a Cursor session with a run of unknown result is offered Import again once; a CLI log or a known result is not (0.1.138)", () => {
+  const line = (role, content) => JSON.stringify({ role, message: { content } });
+  const text = [
+    line("user", [{ type: "text", text: "<user_query>Run</user_query>" }]),
+    line("assistant", [{ type: "tool_use", name: "Shell", input: { command: "npx playwright test" } }]),
+  ].join("\n");
+  const events = Lens.importAny(text, cfg);
+  assert.equal(events.filter((e) => e.output_missing).length, 1, "the fixture");
+  const s = { profile: "qa-ts", agent: "cursor", importGen: 13, source_text: text, events };
+  assert.equal(Lens.needsReimport(s), true);
+  assert.equal(Lens.needsReimport({ ...s, source_text: "" }), true, "too long to keep: the file is picked anyway");
+  assert.equal(Lens.needsReimport({ ...s, importGen: Lens.IMPORT_GEN }), false, "once: after it, whatever it found");
+  assert.equal(Lens.needsReimport({ ...s, agent: "claude-code" }), false);
+  assert.equal(Lens.needsReimport({ ...s, source_text: '{"type":"system","subtype":"init"}' }), false, "not a Cursor transcript: nothing in the database");
+  assert.equal(Lens.needsReimport({ ...s, events: events.map((e) => ({ ...e, output_missing: undefined })) }), false, "every result known");
+});
+
 test("Import again for a Claude Code session of generation 9 parses the kept text: subagents are asked for only before 0.1.127", async () => {
   const text = transcript();
   const events = [...oldEvents(text), { seq: 99, kind: "tool", tool: "Agent", text: "" }];

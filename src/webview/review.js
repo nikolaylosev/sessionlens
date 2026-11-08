@@ -231,7 +231,12 @@ export async function reimport() {
   // the file is picked (0.1.127)
   // (only for an import before 0.1.127: a later one has read the file already, with what it had)
   // (a Cursor session without the files: also an import of 0.1.127–0.1.129, before the CLI's database gave them)
-  const fromFile = ((s.importGen || 0) < 9 && Lens.subagentsMissing(s)) || ((s.importGen || 0) < 10 && Lens.cursorEditsMissing(s));
+  // (a Cursor session with a run of unknown result and no output kept: the database is read when the file is picked, 0.1.138;
+  // with some output kept, the kept text pairs its commands anew)
+  const fromFile =
+    ((s.importGen || 0) < 9 && Lens.subagentsMissing(s)) ||
+    ((s.importGen || 0) < 10 && Lens.cursorEditsMissing(s)) ||
+    ((s.importGen || 0) < 14 && Lens.cursorRunsUnknown(s) && !(s.source_outputs || []).length);
   let text = fromFile ? null : s.source_text,
     cursorOutputs = s.source_outputs,
     cursorEdits = s.source_edits,

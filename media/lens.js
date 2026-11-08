@@ -2571,8 +2571,10 @@
      11: a user message without the text Codex's editor extension wraps it in, Claude Code's summary of a compacted
         conversation or Cursor's own query after a background task (0.1.130).
      12: no user message for what an MCP app sent in a Codex session (0.1.135).
-     13: the code of a .cjs file is kept, as of a .mjs (0.1.136). */
-  const IMPORT_GEN = 13;
+     13: the code of a .cjs file is kept, as of a .mjs (0.1.136).
+     14: a Cursor session's test runs get their results from the chats Cursor stores in parts, and a command no longer
+        takes another's output (0.1.138). */
+  const IMPORT_GEN = 14;
   /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
@@ -2585,6 +2587,13 @@
     if (!s || s.source_edits || s.agent !== "cursor") return false;
     if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false; // an Agent CLI log has them
     return (s.events || []).some((e) => (e.kind === "write" || e.kind === "edit") && (e.tool === "Write" || e.tool === "StrReplace"));
+  }
+  /* A Cursor Agent transcript with a test run whose result is not known, imported before 0.1.138: Cursor's database may have
+     it now. An Agent CLI log has its output in the text. */
+  function cursorRunsUnknown(s) {
+    if (!s || s.agent !== "cursor") return false;
+    if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false;
+    return (s.events || []).some((e) => e.kind === "run_tests" && e.output_missing);
   }
   function subagentsMissing(s) {
     const ev = (s && s.events) || [];
@@ -2662,6 +2671,7 @@
     if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
+    if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
@@ -4643,6 +4653,7 @@
     needsReimport,
     subagentsMissing,
     cursorEditsMissing,
+    cursorRunsUnknown,
     transcriptMatch,
     pickConversation,
     runChecks,
