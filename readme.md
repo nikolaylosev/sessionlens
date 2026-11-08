@@ -595,7 +595,6 @@ In Cursor, VSCodium and other editors that use [Open VSX](https://open-vsx.org/e
 search for **SessionLens** in the Extensions view and press **Install**. Cursor takes extensions from Open VSX, so a
 new version can reach it a little later than VS Code.
 
-
 From a `.vsix` file (each [GitHub release](https://github.com/nikolaylosev/sessionlens/releases) has one):
 
 1. Open the Extensions view.
