@@ -949,7 +949,8 @@ session is analyzed again after the update (§6.3).
   command is not a run, a Codex move, a weakened assertion's message) and the 0.1.124 one (a path in the home folder
   from `~`) and the 0.1.125 one (a Cursor session's MCP calls by server) appear only after the transcript is imported
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
-  differs, `IMPORT_GEN` 9). A session whose transcript was too long
+  differs, `IMPORT_GEN` 14: a Cursor session with a test run of unknown result is offered it once, and with no output
+  kept it asks for the file, since the database is read when the file is picked). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a

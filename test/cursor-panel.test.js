@@ -11,7 +11,10 @@ const os = require("os");
 const path = require("path");
 const { bootHost, openPage } = require("./host-panel");
 const { createStore } = require("../store.js");
-const { S, home, transcript, cliDb, shell, result } = require("./cursor-fixtures");
+const { S, ID, home, transcript, cliDb, ideDb, shell, result, terminal } = require("./cursor-fixtures");
+const { load } = require("./helpers");
+
+const { Lens } = load();
 
 const SPEC = "/Users/me/shop/e2e/cart.spec.ts"; // in the workspace of the fixture's folder, Users-me-shop
 const TWO =
@@ -121,6 +124,147 @@ test(
       for (const [k, v] of Object.entries(env))
         if (v === undefined) delete process.env[k];
         else process.env[k] = v;
+      fs.rmSync(h, { recursive: true, force: true });
+    }
+  },
+);
+
+test("Import again of a Cursor session with output kept: no file is asked for, and its commands are paired anew (0.1.138)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-cursor-again-"));
+  const cfg = Lens.profile("qa-ts");
+  const st = createStore({ dir: path.join(dir, "sessions") });
+  await st.open();
+  await st.put(
+    {
+      id: "again2",
+      name: "kept",
+      nameSet: true,
+      task: "",
+      profile: "qa-ts",
+      created: "2026-10-22T00:00:00.000Z",
+      agent: "cursor",
+      importGen: 13,
+      source_text: JSONL,
+      source_project: "Users-me-shop",
+      source_outputs: [
+        { command: "npx playwright test", output: "  1 failed\n  1 passed (2.0s)", exitCode: 1 },
+        { command: "npx playwright test", output: "  2 passed (2.0s)", exitCode: 0 },
+      ],
+      events: Lens.importAny(JSONL, cfg, { cursorProject: "Users-me-shop" }),
+      findings: [],
+      verdicts: {},
+    },
+    { analyzedGen: "" },
+  );
+  const host = bootHost({
+    storageDir: dir,
+    globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+  });
+  const p = await openPage(host, { sessionId: "again2" });
+  await p.ready();
+  const n0 = p.sent.filter((m) => m.type === "session:put").length;
+  click(p, "#reimport-go");
+  await until(() => p.sent.filter((m) => m.type === "session:put").length > n0);
+  await p.idle();
+  assert.equal(host.calls.openDialog.length, 0, "the kept text and output are enough");
+  const st2 = createStore({ dir: path.join(dir, "sessions") });
+  await st2.open();
+  const s = (await st2.get("again2")).session;
+  assert.deepEqual(
+    s.events.filter((e) => e.kind === "run_tests").map((r) => r.tests && r.tests.failed),
+    [1, 0],
+  );
+  assert.deepEqual(p.errors, []);
+  p.close();
+});
+
+/* A session imported before 0.1.138 from a chat in Cursor's new format: its runs have no result. Import again asks for
+   the file, in the agent's folder, reads the database and fills them, in the same session, with its name and verdicts. */
+test(
+  "Import again of a Cursor session with unknown results: the file is picked, the database read, the session the same (0.1.138)",
+  { skip: !S && "node:sqlite is not available" },
+  async () => {
+    const h = home();
+    const env = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = h;
+    process.env.USERPROFILE = h;
+    try {
+      const file = transcript(h);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSONL);
+      ideDb(
+        h,
+        [terminal("npx playwright test", "  1 failed\n  1 passed (2.0s)", 1), terminal("npx playwright test", "  2 passed (2.0s)", 0)],
+        {},
+        { partSize: 1 },
+      );
+      const cfg = Lens.profile("qa-ts");
+      const events = Lens.importAny(JSONL, cfg, { cursorProject: "Users-me-shop" });
+      assert.equal(events.filter((e) => e.output_missing).length, 2, "the fixture: no results");
+      const findings = Lens.runChecks(events, cfg).map((f) => Object.assign(f, { source: "formal" }));
+      const seen = findings[0];
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-cursor-again-"));
+      const st = createStore({ dir: path.join(dir, "sessions") });
+      await st.open();
+      await st.put(
+        {
+          id: "again1",
+          name: "my chat",
+          nameSet: true,
+          task: "",
+          profile: "qa-ts",
+          created: "2026-10-22T00:00:00.000Z",
+          agent: "cursor",
+          importGen: 13,
+          source_text: JSONL,
+          source_project: "Users-me-shop",
+          source_cursor_id: ID,
+          events,
+          findings,
+          verdicts: { [Lens.fkey(seen)]: { v: "ok", note: "seen", at: "2026-10-22T00:00:00.000Z" } },
+        },
+        { analyzedGen: "" },
+      );
+      const host = bootHost({
+        storageDir: dir,
+        globalState: { storageVersion: 2, settings: { profile: "qa-ts", lint: false, rulesTarget: "claude", modelPool: [], defaultModelId: null } },
+        vscode: { openDialogAnswer: [{ scheme: "file", fsPath: file, toString: () => "file://" + file }] },
+      });
+      const p = await openPage(host, { sessionId: "again1" });
+      await p.ready();
+      assert.equal(p.document.querySelector("#reimport").hidden, false, "offered");
+      p.window.confirmDialog = async () => true; // a verdict that no longer matches is asked about, as for any Import again
+      const n0 = p.sent.filter((m) => m.type === "session:put").length;
+      click(p, "#reimport-go");
+      await until(() => p.sent.filter((m) => m.type === "session:put").length > n0);
+      await p.idle();
+      assert.equal(host.calls.openDialog[0].defaultUri.fsPath, path.join(h, ".cursor", "projects"), "the agent's folder, no question");
+      const st2 = createStore({ dir: path.join(dir, "sessions") });
+      await st2.open();
+      assert.deepEqual(
+        st2.list().map((m) => m.id),
+        ["again1"],
+        "no second session",
+      );
+      const s = (await st2.get("again1")).session;
+      assert.deepEqual(
+        s.events.filter((e) => e.kind === "run_tests").map((r) => [r.tests && r.tests.failed, !!r.output_missing]),
+        [
+          [1, false],
+          [0, false],
+        ],
+      );
+      assert.equal(s.name, "my chat");
+      assert.equal(s.source_outputs.length, 2, "kept for the next time");
+      assert.equal(s.importGen, Lens.IMPORT_GEN);
+      assert.ok(checks(s).includes("fix_after_fail_without_triage"), checks(s).join(", "));
+      assert.equal(p.document.querySelector("#reimport").hidden, true, "not offered again");
+      assert.deepEqual(p.errors, []);
+      p.close();
+    } finally {
+      for (const k of Object.keys(env))
+        if (env[k] === undefined) delete process.env[k];
+        else process.env[k] = env[k];
       fs.rmSync(h, { recursive: true, force: true });
     }
   },

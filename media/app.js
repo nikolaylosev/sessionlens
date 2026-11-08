@@ -1887,7 +1887,7 @@ ${en.raw}`).join("\n\n\n");
   async function reimport() {
     const sid = state.current, s = curS();
     if (!s) return;
-    const fromFile = (s.importGen || 0) < 9 && Lens.subagentsMissing(s) || (s.importGen || 0) < 10 && Lens.cursorEditsMissing(s);
+    const fromFile = (s.importGen || 0) < 9 && Lens.subagentsMissing(s) || (s.importGen || 0) < 10 && Lens.cursorEditsMissing(s) || (s.importGen || 0) < 14 && Lens.cursorRunsUnknown(s) && !(s.source_outputs || []).length;
     let text = fromFile ? null : s.source_text, cursorOutputs = s.source_outputs, cursorEdits = s.source_edits, cursorProject = s.source_project, cursorId = s.source_cursor_id, cursorUsage = null, fromLog = false;
     if (!text) {
       const r = await pickTranscript(AGENT_SOURCE[s.agent] || transcriptSource());

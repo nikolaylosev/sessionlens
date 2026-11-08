@@ -173,7 +173,7 @@ var require_i18n = __commonJS({
           seg_failed_hdr: "SEGMENTATION FAILED",
           seg_use_spec: "Use the found specification",
           seg_reset: "Back to regex parsing",
-          reimport_msg: "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, text Claude Code, Codex or Cursor put into your messages, or a diff in the agent's message. Import the transcript again to check; the session keeps its name, specification and verdicts.",
+          reimport_msg: "Imported with an older version of SessionLens, which read some steps differently: deleted tests, loosened runner configs, a Codex session's file changes, a command that only lists the tests, a weakened assertion's text, a Cursor session's browser and other MCP tools, a Cursor session's test results, a file edited with a $ in its new code, the assertions of a page object, a Claude Code session's subagents and Playwright's test agents, a file a shell command wrote, text Claude Code, Codex or Cursor put into your messages, or a diff in the agent's message. Import the transcript again to check; the session keeps its name, specification and verdicts.",
           reimport_go: "Import again",
           reimport_other: "This file does not look like this session: {p}% of its steps are in it. Replace the session's steps with it anyway?",
           reimport_lost: "{n} {n|verdict|verdicts} would no longer match a finding: the steps are numbered differently now. Import again anyway?",
@@ -3267,12 +3267,17 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 13;
+      const IMPORT_GEN = 14;
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
         if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false;
         return (s.events || []).some((e) => (e.kind === "write" || e.kind === "edit") && (e.tool === "Write" || e.tool === "StrReplace"));
+      }
+      function cursorRunsUnknown(s) {
+        if (!s || s.agent !== "cursor") return false;
+        if (s.source_text && !isCursorJsonl(String(s.source_text).trimStart())) return false;
+        return (s.events || []).some((e) => e.kind === "run_tests" && e.output_missing);
       }
       function subagentsMissing(s) {
         const ev = s && s.events || [];
@@ -3313,6 +3318,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 8 && assertsUncountedBefore125(s)) return true;
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
+        if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
@@ -4884,6 +4890,7 @@ var require_lens = __commonJS({
         needsReimport,
         subagentsMissing,
         cursorEditsMissing,
+        cursorRunsUnknown,
         transcriptMatch,
         pickConversation,
         runChecks,
