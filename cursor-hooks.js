@@ -229,8 +229,14 @@ function readLog({ home, id, platform = process.platform }) {
       /* a half-written or broken line: left out */
     }
   }
+  /* Cursor's postToolUseFailure names no exit code, seen on Cursor 3.27 (0.1.138): the line says failed, and such a command
+     counts as exit code 1, so it is not taken for one that passed. */
   const exit = new Map();
-  for (const r of lines) if (r.event === "exit" && r.tool_use_id && Number.isInteger(r.exit_code)) exit.set(r.tool_use_id, r.exit_code);
+  for (const r of lines) {
+    if (r.event !== "exit" || !r.tool_use_id) continue;
+    if (Number.isInteger(r.exit_code)) exit.set(r.tool_use_id, r.exit_code);
+    else if (r.failed === true) exit.set(r.tool_use_id, 1);
+  }
   const outputs = [],
     edits = [],
     known = new Map(), // path → the file as the last line of it left it
