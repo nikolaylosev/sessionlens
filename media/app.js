@@ -1831,6 +1831,7 @@ ${en.raw}`).join("\n\n\n");
           cur.ai_truncated = r.truncated;
           cur.ai_raw = r.raw;
           cur.ai_verify_error = r.verifyError || null;
+          cur.ai_partial = r.partial || null;
         });
         if (state.current === sid) {
           renderReview();
@@ -1838,7 +1839,7 @@ ${en.raw}`).join("\n\n\n");
             n: r.findings.length,
             dropped: r.dropped && r.dropped.length ? T("ai_dropped", { n: r.dropped.length }) : "",
             repaired: r.repaired ? T("ai_repaired") : "",
-            err: r.verifyError ? " · " + r.verifyError : ""
+            err: [r.partial, r.verifyError].filter(Boolean).map((x) => " · " + x).join("")
           });
         }
       } catch (e) {
@@ -2031,7 +2032,7 @@ ${en.raw}`).join("\n\n\n");
     $("#spec-count").textContent = s.specParsed && s.specParsed.n ? T("spec_count", { n: s.specParsed.n, oos: s.specParsed.oos ? T("spec_oos", { n: s.specParsed.oos }) : "" }) + (s.specParsed.hasIds ? "" : T("spec_auto")) : (s.spec || "").trim() ? T("spec_unparsed") : T("spec_none");
     $("#spec-d").open = !s.spec;
     renderCoverage(s);
-    $("#ai-status").textContent = s.ai_at ? T("ai_last", { at: s.ai_at.slice(0, 16).replace("T", " ") }) + (s.ai_truncated ? T("ai_truncated") : "") + (s.ai_verify_error ? " · " + s.ai_verify_error : "") : "";
+    $("#ai-status").textContent = s.ai_at ? T("ai_last", { at: s.ai_at.slice(0, 16).replace("T", " ") }) + (s.ai_truncated ? T("ai_truncated") : "") + (s.ai_partial ? " · " + s.ai_partial : "") + (s.ai_verify_error ? " · " + s.ai_verify_error : "") : "";
     $("#ai-verify-again").hidden = !s.ai_verify_error;
     $("#lint-note").textContent = s.lintNote || "";
     $("#mark-reviewed").textContent = s.reviewed ? T("reviewed_on") : T("mark_reviewed");

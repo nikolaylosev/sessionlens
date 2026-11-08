@@ -10,6 +10,11 @@
   key, you still get the report and the same exit code, with the reason on stderr. Without `--review`, the CLI sends
   nothing. It reviews one session at a time, not a folder.
 
+### Fixed
+- **A local server that is down no longer looks like a clean review.** When no file got an answer, the panel said
+  `0 findings` and removed the model's earlier findings from the session. It now shows the error and keeps them. When only
+  some files got an answer, it says how many were not reviewed and why.
+
 ## 0.1.137
 
 ### Fixed

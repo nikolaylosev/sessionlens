@@ -301,6 +301,7 @@
       no_msgs: "No messages.",
       ai_status: "model: {n} {n|finding|findings}{dropped}{repaired}{err}",
       ai_dropped: ", {n} dropped by verification",
+      ai_files_failed: "{n} of {total} {total|file|files} not reviewed: {msg}",
       ai_repaired: " · JSON was repaired",
       ai_wait: "calling the model…",
       ai_wait_verify: "calling the model, then verifying…",
