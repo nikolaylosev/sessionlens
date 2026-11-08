@@ -1,5 +1,5 @@
 "use strict";
-/* Where the "choose a transcript" dialog opens (open:transcript) for each answer to "Where is the transcript from?":
+/* Where the "choose a transcript" dialog opens (open:transcript) for each value of the Source list:
    the real extension.js under the fake "vscode" module, with a temporary home. Cursor opens ~/.cursor/projects, one
    folder per workspace (0.1.121–0.1.124 went straight into this workspace's agent-transcripts, with no way up). */
 const test = require("node:test");

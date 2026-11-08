@@ -81,7 +81,9 @@ If you moved the two parts around in an earlier version, VS Code keeps your orde
 
 The **Sessions** tab itself, inside Calibration & Settings, is where you load a transcript:
 
-![The SessionLens sidebar: the Sessions tab with Choose file, Paste text, Try a demo session and the profile, and the Sessions list under it](media/screenshots/panel-profile.png)
+![The SessionLens sidebar: the Sessions tab with Choose file, Paste text, Try a demo session, the source and the profile, and the Sessions list under it](media/screenshots/panel-profile.png)
+
+The **Source** list says where your transcripts are: Claude Code, Codex, Cursor Agent or somewhere else. **Choose file** opens that folder, and the list keeps your choice. A new install starts at Cursor Agent in Cursor and at Claude Code in VS Code.
 
 - **Accepted input:** Claude Code `.jsonl` (from `~/.claude/projects`; picked with **Choose file**, the steps of its subagents come with it, such as Playwright's planner, generator and healer, whose tests, runs and plans are read from their MCP calls), Codex `rollout-*.jsonl` (from `~/.codex/sessions`, CLI or the VS Code extension), a Cursor Agent `.jsonl` (from `~/.cursor/projects/<workspace>/agent-transcripts/`; the output of the agent's commands is read from Cursor's own databases on your machine, read-only, so test runs have their results, and so are the files before and after each edit: from the editor's database, or for a CLI chat from what the agent read before it edited; with **Record Cursor agent runs** on, from the hook's log; the calls of Playwright's test agents are read as in Claude Code), a Cursor Agent CLI log (`agent -p --output-format stream-json`, which has every tool call with its result: whole files before and after an edit, command output), `conversations.json` from claude.ai, an `/export`, or plain chat text. A file with several conversations asks for part of a name to load only one. A file with tool calls in a format SessionLens does not read asks before it is imported as text only. In the VS Code build, **Choose file** first asks whether the transcript is from Claude Code, Codex, Cursor Agent or somewhere else, then opens VS Code's own dialog straight inside `~/.claude/projects`, `~/.codex/sessions` or `~/.cursor/projects` (one folder per workspace, the sessions in its `agent-transcripts`) — all three are hidden by a leading dot (with no way to browse from one into another once you're inside), but everything one level below is a normal, visible folder or file.
 - **Profile:** the language and test runner to analyse for. See [Profiles](#profiles).
@@ -592,8 +594,6 @@ In VS Code, from the Visual Studio Marketplace: search for **SessionLens** in th
 In Cursor, VSCodium and other editors that use [Open VSX](https://open-vsx.org/extension/nikolaylosev/sessionlens-vscode):
 search for **SessionLens** in the Extensions view and press **Install**. Cursor takes extensions from Open VSX, so a
 new version can reach it a little later than VS Code.
-
-![SessionLens in Cursor: the SessionLens sidebar with the Sessions tab, Choose file, Paste text, Try a demo session and the profile, and the Sessions list under it](media/screenshots/cursor.png)
 
 From a `.vsix` file (each [GitHub release](https://github.com/nikolaylosev/sessionlens/releases) has one):
 

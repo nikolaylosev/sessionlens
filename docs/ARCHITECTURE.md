@@ -564,7 +564,9 @@ flowchart TD
   (`cursorProject`, since 0.1.122; kept as `source_project`): the transcript's paths are absolute, and
   `fromCursorJsonl` makes them relative to the folder above them whose name, made by the same rule
   (`Lens.cursorProjectSlug`), is that name. A transcript dropped onto the panel or pasted has no output and keeps
-  absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** → Cursor Agent opens
+  absolute paths (from `~` in the home folder since 0.1.124, RA §15.7). **Choose file** with the **Source** list above
+  **Profile** (since 0.1.138; `settings.transcriptSource`; a new install has Cursor Agent in Cursor and Claude Code
+  elsewhere; before, a question at every pick, which **Import again** still asks) on Cursor Agent opens
   the dialog at `~/.cursor/projects`, one folder per workspace, and at the home folder when that directory does not
   exist (`guessTranscriptDefaultUri` in `extension.js`). Until 0.1.125 it opened the workspace's own `agent-transcripts`
   folder, and the dialog, which hides `~/.cursor`, had no way up to another workspace. A folder's name follows
