@@ -11,6 +11,14 @@
   a third of all steps were such copies, and there were 179 extra findings. SessionLens now skips the copies. A session
   imported before shows **Import again**, and the copied steps no longer make it ask whether the transcript is the
   same.
+- **Files an agent changed with terminal commands are now read.** Agents often edit files with `sed -i` or a short
+  Python script instead of their edit tool. SessionLens did not see those edits, so every check read such a file as
+  the agent had first written it. In one of our sessions, a model review said a test never called a helper that a
+  Python edit had in fact added to it. Claude Code 2.1.285 and newer records what each command changed, and SessionLens
+  now reads it: in that session all 12 files are now known as the agent left them, instead of 4. Where the record does
+  not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
+  guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
+  failure made with such commands. A session imported before shows **Import again**.
 - **Paths in an agent's commands are read from the folder it was in.** When a Claude Code agent changed folders in
   the terminal (`cd qa-ts`), SessionLens still read the paths in its later commands from the session's folder. A file
   it wrote with `cat > helpers/teardown.ts` appeared at a path that does not exist, a model review could then report
