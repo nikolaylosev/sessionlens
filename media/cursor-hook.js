@@ -2261,7 +2261,7 @@ var require_lens = __commonJS({
         for (const rec of recs) {
           if (!rec || typeof rec !== "object") continue;
           if (!cwd && typeof rec.cwd === "string") cwd = rec.cwd.replace(/\/+$/, "");
-          if (rec.type && !["user", "assistant"].includes(rec.type) && !rec.message) continue;
+          if (rec.type && !["user", "assistant"].includes(rec.type)) continue;
           const msg = rec.message && typeof rec.message === "object" ? rec.message : rec;
           const role = ["user", "assistant"].includes(rec.type) ? rec.type : msg.role;
           if (!["user", "assistant"].includes(role)) continue;
@@ -3267,7 +3267,17 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 14;
+      const IMPORT_GEN = 15;
+      const REQUEST_COPY = '"type":"api-request-blob"';
+      function requestCopiesBefore139(s) {
+        if (!s || s.agent !== "claude-code") return false;
+        if (s.source_text) return String(s.source_text).includes(REQUEST_COPY);
+        return requestCopySteps(s.events).length > 0;
+      }
+      function requestCopySteps(events) {
+        const ev = events || [];
+        return ev.some((e) => e.ts) ? ev.filter((e) => !e.ts) : [];
+      }
       const SUBAGENT_TOOLS = ["Agent", "Task"];
       function cursorEditsMissing(s) {
         if (!s || s.source_edits || s.agent !== "cursor") return false;
@@ -3319,6 +3329,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
+        if ((s.importGen || 0) < 15 && requestCopiesBefore139(s)) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
@@ -3340,7 +3351,8 @@ var require_lens = __commonJS({
         const said = (e) => e.kind === "user" || e.kind === "message" ? String(e.text || "").slice(0, 60) : "";
         const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), said(e)].join("|");
         const same = (x, y) => sig(x) === sig(y) || x.kind === "tool" && x.tool === "exec" && y.tool === "exec";
-        const a = stored || [], b = fresh || [];
+        const copies = new Set(requestCopySteps(fresh).length ? [] : requestCopySteps(stored));
+        const a = (stored || []).filter((e) => !copies.has(e)), b = fresh || [];
         if (!a.length) return b.length ? 0 : 1;
         let j = 0, n = 0;
         for (const x of a) {
@@ -4684,7 +4696,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.138";
+      const ANALYSIS_VERSION = "0.1.139";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

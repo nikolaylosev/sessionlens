@@ -474,6 +474,12 @@ flowchart TD
   `run_tests` (it matches the profile's runner and does not only list the tests, `isTestRun`) or `run_other`, and
   the runner's output is parsed into
   passed/failed counts by `runners.*` (pytest, jest/Playwright, JUnit, dotnet, go, newman, karate).
+  **Bookkeeping records** are skipped: a record whose `type` is not `user` or `assistant` (`attachment`, `cost-state`…).
+  Since 0.1.139 this includes one with a `message`: `api-request-blob` (Claude Code 2.1.292 and newer) is a copy of a
+  request, one message each and with no time, and read as the conversation it repeated the person's message and the
+  agent's steps. A line with no `type` is still read by its `role`. A session imported before with such steps (by its
+  kept text, else by steps without a time next to steps with one, `requestCopiesBefore139`) asks to be imported again
+  (`IMPORT_GEN` 15), and `transcriptMatch` leaves those steps out of the share.
   **Subagents** (since 0.1.127): the steps of an agent the session started with the `Agent` tool (Playwright's planner,
   generator and healer, Explore…) are in `<session>/subagents/agent-<id>.jsonl`, with `agent-<id>.meta.json` (its
   `agentType`) next to it; the session's own file has only the `Agent` call and its answer. When **Choose file** picks
@@ -949,8 +955,9 @@ session is analyzed again after the update (§6.3).
   command is not a run, a Codex move, a weakened assertion's message) and the 0.1.124 one (a path in the home folder
   from `~`) and the 0.1.125 one (a Cursor session's MCP calls by server) appear only after the transcript is imported
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
-  differs, `IMPORT_GEN` 14: a Cursor session with a test run of unknown result is offered it once, and with no output
-  kept it asks for the file, since the database is read when the file is picked). A session whose transcript was too long
+  differs, `IMPORT_GEN` 15: a Cursor session with a test run of unknown result is offered it once, and with no output
+  kept it asks for the file, since the database is read when the file is picked; since 0.1.139 also a Claude Code
+  session with steps from Claude Code's copies of a request). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a
