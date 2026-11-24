@@ -19,6 +19,10 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **A cause the agent names only in its reasoning now counts as half a triage.** "Edited right after a failure
+  with no triage" is now medium, with its own message, when the agent named the cause in its reasoning before the edit
+  but did not report it. Claude Code often keeps the reasoning without its text, and then nothing changes: in our
+  sessions 10 of 237 such findings became medium.
 - **Paths in an agent's commands are read from the folder it was in.** When a Claude Code agent changed folders in
   the terminal (`cd qa-ts`), SessionLens still read the paths in its later commands from the session's folder. A file
   it wrote with `cat > helpers/teardown.ts` appeared at a path that does not exist, a model review could then report

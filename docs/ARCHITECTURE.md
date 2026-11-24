@@ -474,6 +474,10 @@ flowchart TD
   `run_tests` (it matches the profile's runner and does not only list the tests, `isTestRun`) or `run_other`, and
   the runner's output is parsed into
   passed/failed counts by `runners.*` (pytest, jest/Playwright, JUnit, dotnet, go, newman, karate).
+  **The agent's reasoning** (since 0.1.139): Claude Code's `thinking` blocks (often with no text) give no step; their
+  last 2,000 characters go with the agent's next step as `thought` (per agent, a subagent's with its own steps; a
+  message of the person ends it), so the steps keep their numbers. `fix_after_fail_without_triage` reads it as half a
+  triage.
   **Bookkeeping records** are skipped: a record whose `type` is not `user` or `assistant` (`attachment`, `cost-state`…).
   Since 0.1.139 this includes one with a `message`: `api-request-blob` (Claude Code 2.1.292 and newer) is a copy of a
   request, one message each and with no time, and read as the conversation it repeated the person's message and the
