@@ -22,6 +22,11 @@
   reported on that new file. A test that did not exist at the run cannot be what failed in it. The next edit of an
   existing file is still checked. A new helper or fixture still counts, since a missing one may be what failed. In our
   sessions this removes 25 false findings.
+- **An expected failure you asked for is no longer a finding.** When you asked the agent to mark a test as an
+  expected failure (`test.fail()`, `xfail`, "keep it as a known failure"), the test that does so was reported anyway,
+  although the decision was yours. Now it is not. A request against it ("don't use test.fail()") does not count.
+  When the agent marked a test on its own but named the bug in the call (`F-01`, `ABC-123`, `#42`, a link, "bug 12"),
+  the finding is now low instead of medium.
 
 ## 0.1.138
 

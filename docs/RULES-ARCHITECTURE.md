@@ -826,7 +826,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | sleep_or_skip_added | code | high | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox, Robot), an engine replaces the kinds it finds itself (§6.3) |
 | hardcoded_date | code | medium | regex (lens.js) |
 | fragile_wait | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox), an engine replaces the kinds it finds itself (§6.3) |
-| expected_failure | code | medium | regex (lens.js) |
+| expected_failure | code | medium; none when the person asked for it before, low when every marked test names its bug in the call (0.1.139) | regex (lens.js) |
 | magic_number | code | low | regex (lens.js) |
 | assertion_roulette | code | low | regex (lens.js) + Ruff (PT018, `assert a and b`), both kept (0.1.129) |
 | conditional_logic | code | low | regex (lens.js) + engines (ESLint Playwright), an engine replaces the kinds it finds itself (§6.3) |
