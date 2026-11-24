@@ -121,6 +121,34 @@ test("fix_after_fail_without_triage, not reported: whose mistake it is, as agent
   assert.match(found([TASK, WRITE, RED, ["say", "Вижу расхождение между подготовкой и тестами."], FIX], "fix_after_fail_without_triage")[0], /^medium: /);
 });
 
+/* 0.1.139: a new test file that is not one of the failed ones is new work, not a fix. In the owner's session the agent
+   wrote the next scenario's spec after another spec's red run, and got a high finding on it; over the owner's local
+   sessions 27 such findings, all on new test files. */
+test("fix_after_fail_without_triage, not reported: a new test file after the red run is new work, not a fix", () => {
+  const NEXT = ["write", "tests/checkout.spec.ts", "test('pay', async () => {\n  expect(paid).toBe(true);\n});\n"];
+  const check = "fix_after_fail_without_triage";
+  assert.deepEqual(found([TASK, WRITE, RED, NEXT], check), []);
+  assert.deepEqual(found([TASK, WRITE, RED, ["write", "tests/test_checkout.py", "def test_pay():\n    assert paid\n"]], check), [], "Python");
+  // the edit after it is still the fix of the red run
+  const f = findings([TASK, WRITE, RED, NEXT, FIX], check);
+  assert.deepEqual(
+    f.map((x) => `${x.severity}: ${x.message}`),
+    ["high: Edited tests/cart.spec.ts right after a failure (seq 2) with no triage: product bug / test bug / spec defect"],
+  );
+  assert.equal(f[0].seq, 4);
+  // still a fix: a new helper (one that was missing may be what failed), also in a tests folder
+  assert.equal(found([TASK, WRITE, RED, ["write", "tests/helpers/cart.ts", "export const cart = {};\n"]], check).length, 1);
+  // still a fix: a test file the run named, one the session saw before (read, a shell read, written), or of a known version
+  const MISSING = ["bash", "npx playwright test", "  1 failed\n  1) [chromium] › tests/checkout.spec.ts:1:1 › pay"];
+  assert.equal(found([TASK, MISSING, NEXT], check).length, 1, "the failed file");
+  assert.equal(found([TASK, ["read", "tests/checkout.spec.ts"], WRITE, RED, NEXT], check).length, 1, "read before");
+  assert.equal(found([TASK, ["bash", "cat tests/checkout.spec.ts", "x"], WRITE, RED, NEXT], check).length, 1, "a shell read before");
+  assert.equal(found([TASK, NEXT, WRITE, RED, NEXT], check).length, 1, "written before");
+  assert.equal(found([TASK, WRITE, RED, ["write", SPEC, "test('total', () => {});\n"]], check).length, 1, "the failed file written anew");
+  // an edit is of a file that is there, also one the session did not see before
+  assert.equal(found([TASK, WRITE, RED, ["edit", "tests/old.spec.ts", "a", "b"]], check).length, 1, "an edit of an older test");
+});
+
 test("peeked_at_src_before_plan: product code read or searched before the plan was approved", () => {
   const peeked = (file) => `high: Read ${file} before the plan was approved — product code is off-limits during generation`;
   assert.deepEqual(found([TASK, ["read", "src/cart.ts"], WRITE], "peeked_at_src_before_plan"), [peeked("src/cart.ts")], "no plan at all");

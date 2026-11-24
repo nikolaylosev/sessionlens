@@ -17,6 +17,11 @@
   it as a stray copy, and text it added with `cat >>` was lost. "Read before the plan" named the wrong file, such as
   `src/Account.php` for `login/src/Account.php`, and could take the agent's own files for product code. In 28 of our 65
   sessions the agent changed folders. A session imported before shows **Import again**.
+- **Writing a new test after a red run is no longer taken for a fix of it.** When a test failed and the agent then
+  wrote a new test file, such as the next scenario's spec, "Edited right after a failure with no triage" was
+  reported on that new file. A test that did not exist at the run cannot be what failed in it. The next edit of an
+  existing file is still checked. A new helper or fixture still counts, since a missing one may be what failed. In our
+  sessions this removes 25 false findings.
 
 ## 0.1.138
 

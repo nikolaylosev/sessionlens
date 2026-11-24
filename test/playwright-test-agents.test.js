@@ -121,7 +121,8 @@ test("a fix after a failure: a green run in between ends that failure (0.1.127)"
         use(4, "r", "Bash", { command: "npx playwright test" }),
         result(5, "r", RUN_FAIL),
         ...between,
-        use(8, "e", "Write", { file_path: "/p/tests/other.spec.ts", content: CODE }),
+        // the failed file written again: since 0.1.139 a new test file is no fix (new work)
+        use(8, "e", "Write", { file_path: "/p/tests/add.spec.ts", content: CODE + "\n" }),
         result(9, "e", "ok"),
       ]),
       cfg,
