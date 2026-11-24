@@ -1295,6 +1295,11 @@
       const role = ["user", "assistant"].includes(rec.type) ? rec.type : msg.role;
       if (!["user", "assistant"].includes(role)) continue;
       const ts = rec.timestamp || "";
+      /* the folder the shell is in (0.1.139): Claude Code writes it into every record, and a `cd` in one command moves it
+         for the next. A path in a command is from there, not from the session's folder: in the owner's session the agent
+         ran `cd qa-ts`, and `cat > helpers/global-teardown.ts` later in it became a file at the root that never existed
+         (the model's review then reported it as a stray copy) */
+      const here = typeof rec.cwd === "string" && rec.cwd ? rec.cwd.replace(/\/+$/, "") : cwd;
       const blocks = Array.isArray(msg.content) ? msg.content : [{ type: "text", text: msg.content || "" }];
       /* a subagent's step: who made it. Next to the session's own steps, the text a subagent is "told" is the main
          agent's prompt, not the person's; a subagent's file imported alone keeps it as the task */
@@ -1318,7 +1323,7 @@
           const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
           // a file the command writes from a here-document: a write (or an edit, for >>) of its own before the command
           if (b.name === "Bash")
-            for (const w of heredocWrites(inp.command, cwd)) {
+            for (const w of heredocWrites(inp.command, here)) {
               const o = base(w.file);
               if (w.append && o == null) continue; // added to a file this session never saw: its text is not known
               const now = w.append ? o + w.text : w.text;
@@ -1333,6 +1338,11 @@
               out.push(x);
             }
           const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+          // where the command ran, from the session's folder (or absolute outside it), when it is not that folder: shellReads
+          if (b.name === "Bash" && here !== cwd) r.dir = short(here);
+          /* the command names the session's folder (`cd /…/shop/login`, `cd ~/shop`, `cat /…/shop/src/a.ts`): that folder
+             too, so that shellReads gives a path in it from there, as the session's files are */
+          if (b.name === "Bash" && cwd && [cwd, homeless(cwd)].some((x) => String(cmd || "").includes(x))) r.root = cwd;
           if (playwrightTestTool(b.name || "") && mcpParts(b.name || "")[1] === "planner_save_plan") {
             const plan = planMarkdown(b.input);
             if (plan) r.plan = plan.slice(0, 200000);
@@ -2226,6 +2236,8 @@
       else if (e) {
         if (typeof e.file === "string") e.file = homeless(e.file);
         if (typeof e.cmd === "string") e.cmd = homeless(e.cmd);
+        if (typeof e.dir === "string") e.dir = homeless(e.dir);
+        if (typeof e.root === "string") e.root = homeless(e.root);
       }
     }
     return ev;
@@ -2579,8 +2591,18 @@
      13: the code of a .cjs file is kept, as of a .mjs (0.1.136).
      14: a Cursor session's test runs get their results from the chats Cursor stores in parts, and a command no longer
         takes another's output (0.1.138).
-     15: no steps from Claude Code's copies of a request (api-request-blob records, 0.1.139). */
+     15: no steps from Claude Code's copies of a request (api-request-blob records), and a Claude Code command's paths
+        from the folder its shell was in (`dir`, 0.1.139). */
   const IMPORT_GEN = 15;
+  /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
+     at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
+     cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
+     say which folder its shell was in. */
+  function shellMovedBefore139(s) {
+    if (!s || s.agent !== "claude-code") return false;
+    if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
+    return (s.events || []).some((e) => e.tool === "Bash" && (e.kind === "write" || e.kind === "edit"));
+  }
   /* A Claude Code session imported before 0.1.139 with steps from Claude Code's copies of a request (api-request-blob).
      With the text kept, the text says so. Without it (a transcript of 400 KB or more), the steps do: such a copy has no
      time, and every user and assistant record of Claude Code has one, so a session with steps both with and without a
@@ -2693,7 +2715,7 @@
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-    if ((s.importGen || 0) < 15 && requestCopiesBefore139(s)) return true;
+    if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s))) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
@@ -2817,8 +2839,24 @@
      Code and Cursor often do too. Each part, split at an unquoted &&, ||, ;, | or line break, must start with such a
      command; sed -i, find -delete / -exec and an unquoted > write. The event stays a run_other step: its kind and step
      number keep verdicts and Import again's match, and a stored session gets it on the next analysis. Returns the
-     paths the command names (unquoted words with a / or a dot, or one of the profile's source folders), or null. */
+     paths the command names (unquoted words with a / or a dot, or one of the profile's source folders), or null.
+     Since 0.1.139 a path is from the folder the command ran in (the step's `dir`, from the session's folder) and from a
+     `cd` before it in the command, as the session's files are: `cd login && grep -n x src/Account.php` reads
+     login/src/Account.php, not src/Account.php. A `cd` is no read of its folder: `cd src && cat cart.ts` read src/cart.ts,
+     and until then it was "src". `cd` alone goes to ~; after `cd -` or a folder from a variable it is not known, and a
+     path is as written. */
   const READ_CMD = /^(?:cat|head|tail|nl|less|more|bat|sed|rg|grep|egrep|ls|find|tree|wc|stat|file|pwd|cd|echo|sort|uniq|cut)$/;
+  // a path from a folder; an absolute one or one from ~ as it is, and "." and ".." taken out
+  function fromDir(dir, p) {
+    if (!dir || /^(?:\/|~(?:\/|$))/.test(p)) return p;
+    const out = [];
+    for (const s of (dir + "/" + p).split("/")) {
+      if (s === "" || s === ".") continue;
+      if (s === ".." && out.length && out[out.length - 1] !== ".." && out[out.length - 1] !== "~") out.pop();
+      else out.push(s);
+    }
+    return (dir.startsWith("/") ? "/" : "") + out.join("/");
+  }
   function shellReads(e, cfg) {
     if (e.kind !== "run_other" || !e.cmd) return null;
     const parts = [[]];
@@ -2848,12 +2886,21 @@
     }
     end();
     const files = [];
+    let dir = typeof e.dir === "string" ? e.dir : "";
+    // a path in the session's folder from there, when the step knows it (`root`: the command names such a path)
+    const root = typeof e.root === "string" && e.root ? e.root.replace(/\/+$/, "") : "";
+    const inRoot = (f) => (root && f.startsWith(root + "/") ? f.slice(root.length + 1) : f);
     for (const p of parts.filter((x) => x.length)) {
       const cmd = p[0].word,
         args = p.slice(1);
       if (p[0].quoted || !READ_CMD.test(cmd)) return null;
       if (cmd === "sed" && args.some((a) => !a.quoted && /^-[a-zA-Z]*i/.test(a.word))) return null;
       if (cmd === "find" && args.some((a) => /^-(?:delete|exec|execdir|ok|fprint)/.test(a.word))) return null;
+      if (cmd === "cd") {
+        const to = args.find((a) => !a.word.startsWith("-") || a.word === "-");
+        dir = !to ? "~" : to.word === "-" || /[*?$]/.test(to.word) ? null : fromDir(dir || "", to.word);
+        continue;
+      }
       for (const a of args)
         if (
           !a.quoted &&
@@ -2861,7 +2908,7 @@
           !/[*?$]/.test(a.word) &&
           (/^[^\d].*[/.]|^\.\.?\//.test(a.word) || (cfg.src_dirs || []).includes(a.word.replace(/\/$/, "")))
         )
-          files.push(a.word);
+          files.push(inRoot(dir == null ? a.word : fromDir(dir, a.word)));
     }
     return files;
   }

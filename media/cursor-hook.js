@@ -2266,6 +2266,7 @@ var require_lens = __commonJS({
           const role = ["user", "assistant"].includes(rec.type) ? rec.type : msg.role;
           if (!["user", "assistant"].includes(role)) continue;
           const ts = rec.timestamp || "";
+          const here = typeof rec.cwd === "string" && rec.cwd ? rec.cwd.replace(/\/+$/, "") : cwd;
           const blocks = Array.isArray(msg.content) ? msg.content : [{ type: "text", text: msg.content || "" }];
           const agent = rec.isSidechain === true && main2 ? types[rec.agentId] || "subagent" : null;
           const by = (r) => agent ? Object.assign(r, { agent }) : r;
@@ -2283,7 +2284,7 @@ var require_lens = __commonJS({
               const [kind, f0, cmd] = classify(b.name || "", inp, cfg);
               const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
               if (b.name === "Bash")
-                for (const w of heredocWrites(inp.command, cwd)) {
+                for (const w of heredocWrites(inp.command, here)) {
                   const o = base(w.file);
                   if (w.append && o == null) continue;
                   const now = w.append ? o + w.text : w.text;
@@ -2298,6 +2299,8 @@ var require_lens = __commonJS({
                   out.push(x);
                 }
               const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+              if (b.name === "Bash" && here !== cwd) r.dir = short(here);
+              if (b.name === "Bash" && cwd && [cwd, homeless(cwd)].some((x) => String(cmd || "").includes(x))) r.root = cwd;
               if (playwrightTestTool(b.name || "") && mcpParts(b.name || "")[1] === "planner_save_plan") {
                 const plan = planMarkdown(b.input);
                 if (plan) r.plan = plan.slice(0, 2e5);
@@ -3010,6 +3013,8 @@ var require_lens = __commonJS({
           else if (e) {
             if (typeof e.file === "string") e.file = homeless(e.file);
             if (typeof e.cmd === "string") e.cmd = homeless(e.cmd);
+            if (typeof e.dir === "string") e.dir = homeless(e.dir);
+            if (typeof e.root === "string") e.root = homeless(e.root);
           }
         }
         return ev;
@@ -3268,6 +3273,11 @@ var require_lens = __commonJS({
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
       const IMPORT_GEN = 15;
+      function shellMovedBefore139(s) {
+        if (!s || s.agent !== "claude-code") return false;
+        if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
+        return (s.events || []).some((e) => e.tool === "Bash" && (e.kind === "write" || e.kind === "edit"));
+      }
       const REQUEST_COPY = '"type":"api-request-blob"';
       function requestCopiesBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
@@ -3329,7 +3339,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-        if ((s.importGen || 0) < 15 && requestCopiesBefore139(s)) return true;
+        if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
@@ -3407,6 +3417,16 @@ var require_lens = __commonJS({
       };
       const productPath = (f, cfg) => inDirs(f, cfg.src_dirs) || underDir(f, cfg.src_dirs) && !underDir(f, cfg.test_dirs) && !TEST_FILE_RX.test(f || "") && !TEST_SIDE_RX.test(f || "") && !/(?:^|\/)node_modules\//.test(f || "");
       const READ_CMD = /^(?:cat|head|tail|nl|less|more|bat|sed|rg|grep|egrep|ls|find|tree|wc|stat|file|pwd|cd|echo|sort|uniq|cut)$/;
+      function fromDir(dir, p) {
+        if (!dir || /^(?:\/|~(?:\/|$))/.test(p)) return p;
+        const out = [];
+        for (const s of (dir + "/" + p).split("/")) {
+          if (s === "" || s === ".") continue;
+          if (s === ".." && out.length && out[out.length - 1] !== ".." && out[out.length - 1] !== "~") out.pop();
+          else out.push(s);
+        }
+        return (dir.startsWith("/") ? "/" : "") + out.join("/");
+      }
       function shellReads(e, cfg) {
         if (e.kind !== "run_other" || !e.cmd) return null;
         const parts = [[]];
@@ -3434,14 +3454,22 @@ var require_lens = __commonJS({
         }
         end();
         const files = [];
+        let dir = typeof e.dir === "string" ? e.dir : "";
+        const root = typeof e.root === "string" && e.root ? e.root.replace(/\/+$/, "") : "";
+        const inRoot = (f) => root && f.startsWith(root + "/") ? f.slice(root.length + 1) : f;
         for (const p of parts.filter((x) => x.length)) {
           const cmd = p[0].word, args = p.slice(1);
           if (p[0].quoted || !READ_CMD.test(cmd)) return null;
           if (cmd === "sed" && args.some((a) => !a.quoted && /^-[a-zA-Z]*i/.test(a.word))) return null;
           if (cmd === "find" && args.some((a) => /^-(?:delete|exec|execdir|ok|fprint)/.test(a.word))) return null;
+          if (cmd === "cd") {
+            const to = args.find((a) => !a.word.startsWith("-") || a.word === "-");
+            dir = !to ? "~" : to.word === "-" || /[*?$]/.test(to.word) ? null : fromDir(dir || "", to.word);
+            continue;
+          }
           for (const a of args)
             if (!a.quoted && !a.word.startsWith("-") && !/[*?$]/.test(a.word) && (/^[^\d].*[/.]|^\.\.?\//.test(a.word) || (cfg.src_dirs || []).includes(a.word.replace(/\/$/, ""))))
-              files.push(a.word);
+              files.push(inRoot(dir == null ? a.word : fromDir(dir, a.word)));
         }
         return files;
       }

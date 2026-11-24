@@ -512,10 +512,18 @@ flowchart TD
   message (`FRAGMENT_SKIP` in `lint.js`): a fragment's test is left out of the message.
   **A file a shell command writes from a here-document** (since 0.1.127; `heredocWrites()` in `lens.js`): `cat > f
   <<'EOF' … EOF`, `cat <<EOF > f`, `cat >> f` and `tee [-a] f` become a `write` (an `edit` for `>>`, only of a file the
-  session saw) before the command's own step, the path resolved from a `cd` before it in the command or from `cwd`.
-  Not a here-document inside `$(…)` (a commit message), one fed to another program (`python3 - <<EOF`: what it writes
-  is not known, nor is a Python or `sed -i` edit), `cat <<EOF` with no file, or a scratch file: a temporary folder,
-  `*.tmp.*`, a path from a shell variable. Cursor's shell commands are read the same way.
+  session saw) before the command's own step, the path resolved from a `cd` before it in the command or from the
+  folder the shell is in. Not a here-document inside `$(…)` (a commit message), one fed to another program
+  (`python3 - <<EOF`: what it writes is not known, nor is a Python or `sed -i` edit), `cat <<EOF` with no file, or a
+  scratch file: a temporary folder, `*.tmp.*`, a path from a shell variable. Cursor's shell commands are read the
+  same way.
+  **The folder the shell is in** (since 0.1.139): Claude Code writes it into every record (`cwd`), and a `cd` in one
+  command moves it for the next. A here-document's path is from it, not from the session's folder (the first `cwd`).
+  A `Bash` step keeps it as `dir`, from the session's folder (absolute outside it), when it is another folder, and as
+  `root` the session's folder when the command names it (`cd /…/shop/login`, `cd ~/shop`): `shellReads` then gives a
+  path from the folder the command ran in and from a `cd` in it, as the session's files are, and a `cd` is no read of
+  its folder. A session imported before whose shell left its folder (by its kept text: a second `cwd`; without it: a
+  file a command wrote) asks to be imported again (`IMPORT_GEN` 15).
 - **Codex `rollout-*.jsonl`** gives file changes as unified diffs, applied to the last known content; a deleted file
   becomes a `delete` event, and a moved file (an update with `move_path`, since 0.1.122) an `edit` of its new name
   from the old text. Up to Codex 0.154 a change is an `event_msg` `patch_apply_end`; from 0.155 (Sept 2026) it
@@ -957,7 +965,7 @@ session is analyzed again after the update (§6.3).
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
   differs, `IMPORT_GEN` 15: a Cursor session with a test run of unknown result is offered it once, and with no output
   kept it asks for the file, since the database is read when the file is picked; since 0.1.139 also a Claude Code
-  session with steps from Claude Code's copies of a request). A session whose transcript was too long
+  session with steps from Claude Code's copies of a request, or whose shell left its folder). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a
