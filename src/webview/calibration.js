@@ -281,7 +281,7 @@ export function initCalibration() {
       await logCal("skill", r.raw);
       st.textContent = $("#gen-skill-examples").checked
         ? ex.rows.length
-          ? T("gen_examples_added", { n: ex.rows.length, r: ex.masked })
+          ? T("gen_examples_added", { n: ex.files.length - 1, r: ex.masked }) // the files, without the README (0.1.139: a file may serve two rules)
           : T("gen_examples_none")
         : "";
     } catch (e) {
@@ -677,45 +677,8 @@ export async function buildExamples(keys) {
       full[s.id] = s;
     },
   );
-  const files = [],
-    rows = [],
-    used = new Set();
-  for (const k of keys) {
-    const cand = confirmedFor(k, full)
-      .map(({ s, f }) => ({ s, f, e: s.events.find((x) => x.seq === f.seq) }))
-      .filter((x) => x.e && x.e.new_content && !x.e.fragment_only);
-    const bySession = new Set();
-    const order = [...cand.filter((x) => !bySession.has(x.s.id) && bySession.add(x.s.id)), ...cand]; // one per session first
-    let n = 0;
-    for (const { s, f, e } of order) {
-      if (n >= EXAMPLE_FILES_PER_RULE) break;
-      const id = `${s.id}|${e.file || "seq" + f.seq}|${k}`;
-      if (used.has(id)) continue;
-      used.add(id);
-      const base = ((e.file || "").split("/").pop() || `from-chat-seq${f.seq}.txt`).replace(/[^\w.\-]/g, "_");
-      const cut = e.new_content.length > EXAMPLE_MAX_CHARS,
-        red = Lens.redactSecrets(e.new_content.slice(0, EXAMPLE_MAX_CHARS));
-      const path = `examples/${k}/${++n}-${base}`;
-      files.push({ path, content: red.text });
-      rows.push({ path, k, session: s.task || s.name, seq: f.seq, message: f.message, masked: red.count, cut });
-    }
-  }
-  if (!files.length) return { files: [], rows: [], masked: 0 };
-  const cell = (x) => String(x).replace(/\|/g, "\\|").replace(/\s+/g, " ").trim().slice(0, 160);
-  const notes = (r) => [r.masked ? T("ex_masked", { n: r.masked }) : "", r.cut ? T("ex_truncated", { n: EXAMPLE_MAX_CHARS }) : ""].filter(Boolean).join("; ");
-  const readme = [
-    T("ex_readme_title"),
-    "",
-    T("ex_readme_body"),
-    "",
-    T("ex_col"),
-    "|---|---|---|---|---|",
-    ...rows.map(
-      (r) => `| \`${r.path.replace("examples/", "")}\` | ${r.k} | ${cell(r.session)} | ${r.seq} | ${cell(r.message)}${notes(r) ? " (" + notes(r) + ")" : ""} |`,
-    ),
-    "",
-  ].join("\n");
-  return { files: [{ path: "examples/README.md", content: readme }, ...files], rows, masked: rows.reduce((a, r) => a + r.masked, 0) };
+  // the folder itself is LensRules.skillExamples (0.1.139: one copy of a file two rules need)
+  return LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS });
 }
 
 export function renderSkillResults(openId) {

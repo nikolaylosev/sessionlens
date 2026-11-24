@@ -27,6 +27,10 @@
   although the decision was yours. Now it is not. A request against it ("don't use test.fail()") does not count.
   When the agent marked a test on its own but named the bug in the call (`F-01`, `ABC-123`, `#42`, a link, "bug 12"),
   the finding is now low instead of medium.
+- **A skill's `examples/` folder has each file once.** When two rules had a confirmed finding in the same file at
+  the same step, for example a raw locator and `.first()` in one helper, the file was copied into the folder of each
+  rule. Now there is one copy, and both rules refer to it. `examples/README.md` also says when the session changed the
+  file later, because the example is the version at the finding's step, not the last one.
 
 ## 0.1.138
 
