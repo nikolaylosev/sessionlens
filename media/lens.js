@@ -2967,19 +2967,36 @@
     return e ? e.seq : null;
   };
   /* The files the plan names: a path with a folder and an extension, one of whose folders is a test or source folder
-     (the usual ones and the profile's, so e2e/ and cypress/ too since 0.1.119). */
-  const plannedFiles = (ev, p, cfg) => {
-    if (p == null) return new Set();
+     (the usual ones and the profile's, so e2e/ and cypress/ too since 0.1.119). Since 0.1.139 any path with an
+     extension, a file's bare name with a code or config extension (auth-01-login.spec.ts, global-setup.ts), and the
+     files the person named in the messages before the approval: the task and the answers to the plan's questions. In
+     the owner's session the plan named helpers/login.ts and auth-01-login-logout.spec.ts, the task named them too, and
+     all twelve files it changed were "not in the plan". Whether scope_creep looks at all is still planNamesCode. */
+  const NAMED_FILE = /(?<![\w./@-])[\w-]+(?:\.[\w-]+)*\.(?:[cm]?[jt]sx?|py|java|kt|cs|go|rb|php|json|ya?ml|toml|feature|robot|sql|sh|md)(?![\w/-])/g;
+  /* Whether the plan names a file in a test or source folder: scope_creep looks only then, as before 0.1.139. Without
+     it, in the owner's sessions a file named in passing turned the check on for long sessions whose plan was about
+     their start only (46 findings became 359) */
+  const planNamesCode = (ev, p, cfg) => {
+    if (p == null) return false;
     const dirs = new Set(["tests", "test", "specs", "spec", "src", "app", ...[...cfg.test_dirs, ...cfg.src_dirs].flatMap((d) => d.split("/"))]);
-    const paths = (ev[p].text.match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []).map((x) => x.replace(/^\.\//, ""));
-    return new Set(
-      paths.filter((x) =>
-        x
-          .split("/")
-          .slice(0, -1)
-          .some((d) => dirs.has(d)),
-      ),
+    return (String(ev[p].text || "").match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []).some((x) =>
+      x
+        .split("/")
+        .slice(0, -1)
+        .some((d) => dirs.has(d)),
     );
+  };
+  const plannedFiles = (ev, p) => {
+    if (p == null) return new Set();
+    const approved = approvalSeq(ev, p);
+    const said = ev.filter((x) => x.kind === "user" && x.seq <= (approved ?? p)).map((x) => x.text);
+    const out = new Set();
+    for (const text of [ev[p].text, ...said]) {
+      const t = String(text || "");
+      for (const x of t.match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []) out.add(x.replace(/^\.\//, ""));
+      for (const x of t.match(NAMED_FILE) || []) out.add(x);
+    }
+    return out;
   };
   // a file the plan names, also when one of the two paths has a prefix the other lacks (./, shop/, an absolute path)
   const inPlan = (f, planned) => {
@@ -3468,10 +3485,11 @@
       return out;
     },
     scope_creep(ev, cfg) {
-      const pl = plannedFiles(ev, planSeq(ev, cfg), cfg);
-      if (!pl.size) return [];
+      const p = planSeq(ev, cfg);
+      if (!planNamesCode(ev, p, cfg)) return [];
+      const pl = plannedFiles(ev, p);
       return ev
-        .filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !e.file.endsWith("README.md"))
+        .filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !DOC_FILE.test(e.file))
         .map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
     },
     /* Since 0.1.125 per request: the edits of a file between two messages of the person, so a file the person asks to
@@ -3700,7 +3718,7 @@
        a runner config); a file the approved plan names is not reported. High right after a red run. */
     product_code_edited(ev, cfg) {
       const p = planSeq(ev, cfg);
-      const planned = approvalSeq(ev, p) != null ? plannedFiles(ev, p, cfg) : new Set();
+      const planned = approvalSeq(ev, p) != null ? plannedFiles(ev, p) : new Set();
       const product = (f) => productFile(f, cfg) && !inPlan(f, planned);
       const byFile = {};
       for (const e of ev) if (["write", "edit"].includes(e.kind) && e.file && product(e.file)) (byFile[e.file] = byFile[e.file] || []).push(e);

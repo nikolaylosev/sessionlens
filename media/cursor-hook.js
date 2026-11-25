@@ -3506,15 +3506,25 @@ var require_lens = __commonJS({
         const e = ev.find((x) => x.seq > p && x.kind === "user");
         return e ? e.seq : null;
       };
-      const plannedFiles = (ev, p, cfg) => {
-        if (p == null) return /* @__PURE__ */ new Set();
+      const NAMED_FILE = /(?<![\w./@-])[\w-]+(?:\.[\w-]+)*\.(?:[cm]?[jt]sx?|py|java|kt|cs|go|rb|php|json|ya?ml|toml|feature|robot|sql|sh|md)(?![\w/-])/g;
+      const planNamesCode = (ev, p, cfg) => {
+        if (p == null) return false;
         const dirs = /* @__PURE__ */ new Set(["tests", "test", "specs", "spec", "src", "app", ...[...cfg.test_dirs, ...cfg.src_dirs].flatMap((d) => d.split("/"))]);
-        const paths = (ev[p].text.match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []).map((x) => x.replace(/^\.\//, ""));
-        return new Set(
-          paths.filter(
-            (x) => x.split("/").slice(0, -1).some((d) => dirs.has(d))
-          )
+        return (String(ev[p].text || "").match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []).some(
+          (x) => x.split("/").slice(0, -1).some((d) => dirs.has(d))
         );
+      };
+      const plannedFiles = (ev, p) => {
+        if (p == null) return /* @__PURE__ */ new Set();
+        const approved = approvalSeq(ev, p);
+        const said = ev.filter((x) => x.kind === "user" && x.seq <= (approved ?? p)).map((x) => x.text);
+        const out = /* @__PURE__ */ new Set();
+        for (const text of [ev[p].text, ...said]) {
+          const t = String(text || "");
+          for (const x of t.match(/[\w.-]+(?:\/[\w.-]+)+\.\w+/g) || []) out.add(x.replace(/^\.\//, ""));
+          for (const x of t.match(NAMED_FILE) || []) out.add(x);
+        }
+        return out;
       };
       const inPlan = (f, planned) => {
         const g = homeless(f).replace(/^\.\//, "");
@@ -3884,9 +3894,10 @@ var require_lens = __commonJS({
           return out;
         },
         scope_creep(ev, cfg) {
-          const pl = plannedFiles(ev, planSeq(ev, cfg), cfg);
-          if (!pl.size) return [];
-          return ev.filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !e.file.endsWith("README.md")).map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
+          const p = planSeq(ev, cfg);
+          if (!planNamesCode(ev, p, cfg)) return [];
+          const pl = plannedFiles(ev, p);
+          return ev.filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !DOC_FILE.test(e.file)).map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
         },
         /* Since 0.1.125 per request: the edits of a file between two messages of the person, so a file the person asks to
            change again starts from zero (the owner's README.md: 3 edits while rewriting the search tests, 2 more while
@@ -4058,7 +4069,7 @@ var require_lens = __commonJS({
            a runner config); a file the approved plan names is not reported. High right after a red run. */
         product_code_edited(ev, cfg) {
           const p = planSeq(ev, cfg);
-          const planned = approvalSeq(ev, p) != null ? plannedFiles(ev, p, cfg) : /* @__PURE__ */ new Set();
+          const planned = approvalSeq(ev, p) != null ? plannedFiles(ev, p) : /* @__PURE__ */ new Set();
           const product = (f) => productFile(f, cfg) && !inPlan(f, planned);
           const byFile = {};
           for (const e of ev) if (["write", "edit"].includes(e.kind) && e.file && product(e.file)) (byFile[e.file] = byFile[e.file] || []).push(e);
