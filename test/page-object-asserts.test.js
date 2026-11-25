@@ -95,7 +95,7 @@ test("a file with tests is still compared test by test; a file in another langua
   ]);
   const cfg = Lens.profile("qa-ts");
   assert.deepEqual(Lens.compareAsserts("expect(a).toBe(1);\nexpect(b).toBe(2);\n", "expect(a).toBe(1);\n", cfg, "checks.txt").removed, [
-    { test: "<file>", before: 2, after: 1 },
+    { test: "<file>", before: 2, after: 1, lines: [{ line: "expect(b).toBe(2);", old: 1, now: 0 }] },
   ]);
 });
 

@@ -9,11 +9,12 @@ const { load } = require("./helpers");
 
 const { Lens } = load();
 
-// steps: ["write", file, content] | ["edit", file, old, new] | ["say", text] (the agent's message)
+// steps: ["write", file, content] | ["edit", file, old, new] | ["say", text] (the agent's message) | ["user", text]
 function transcript(steps) {
   const L = [JSON.stringify({ type: "user", message: { role: "user", content: "Write the tests" } })];
   steps.forEach(([kind, a, b, c], i) => {
     const id = "t" + i;
+    if (kind === "user") return L.push(JSON.stringify({ type: "user", message: { role: "user", content: a } }));
     if (kind === "say") return L.push(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: a }] } }));
     const [name, input] = kind === "write" ? ["Write", { file_path: a, content: b }] : ["Edit", { file_path: a, old_string: b, new_string: c }];
     L.push(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } }));
@@ -346,5 +347,40 @@ test("not reported: a first version, a stronger or equal assertion, an added one
     ]),
     [],
     "another value, as strong",
+  );
+});
+
+/* 0.1.139: moved, not lost. In the owner's session a review moved a helper's two checks into the step of the test that
+   calls it (a step checks what its title promises), and another test now called assertion helpers (expectAlert(page,
+   …)): both read as fewer assertions. A line counts as moved when, by the end of the person's request, the files the
+   session knows hold it at least as many times as before the edit; a call of an expect…() helper, a plain function too,
+   counts as the assertions it holds. */
+test("not reported: assertions moved to the test that calls the helper, or into an expect…() helper", () => {
+  const H = "helpers/reset.ts";
+  const CURRENT = "  await expect(form(page).current).toBeVisible();";
+  const LOCK = "  await expect(form(page).lock, 'the lock button').toBeVisible();";
+  const helper = (body) => `export async function openReset(page) {\n  await page.goto('/reset');\n${body}\n}\n`;
+  const spec = (body) => `test('change password', async ({ page }) => {\n  await openReset(page);\n${body}\n});\n`;
+  const steps = (...between) => [
+    ["write", H, helper(`${CURRENT}\n${LOCK}`)],
+    ["write", F, spec("  await expect(page).toHaveURL(/reset/);")],
+    ["user", "Plan approved"],
+    ["write", H, helper("")],
+    ...between,
+    ["write", F, spec(`  await expect(page).toHaveURL(/reset/);\n${CURRENT}\n${LOCK}`)],
+  ];
+  assert.deepEqual(found("qa-ts", steps()), [], "moved to the spec later in the same request");
+  // the person's next message ends the request: moved later is a check lost now
+  assert.deepEqual(found("qa-ts", steps(["user", "Now the spec"])), [`high: ${H}: openReset — fewer assertions (2 → 0)`]);
+  // a copy that was there already is no move: the lines must not be fewer in all than before
+  const copy = [["write", "e2e/other.spec.ts", spec(`${CURRENT}\n${LOCK}`)], ...steps().slice(0, 4)];
+  assert.deepEqual(found("qa-ts", copy), [`high: ${H}: openReset — fewer assertions (2 → 0)`], "a copy elsewhere before");
+  // a test that now calls an assertion helper, a plain function
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", F, ts("  expect(alert).toHaveText('Wrong');\n  expect(form).toBeVisible();")],
+      ["write", F, ts("  await expectAlert(page, 'Wrong');\n  expect(form).toBeVisible();")],
+    ]),
+    [],
   );
 });

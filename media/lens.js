@@ -838,8 +838,10 @@
   const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
   // a document, not code: a readme, a TODO, notes (edit_churn and fix_after_fail_without_triage leave it out)
   const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
-  // a call of a page object's assertion method, await searchPage.expectSearchOpen() (as ESLint's expect-expect, #154)
-  const PO_ASSERT_CALLS = /\.expect[A-Z]\w*\s*\(/g;
+  /* a call of an assertion helper: a page object's method, await searchPage.expectSearchOpen() (as ESLint's
+     expect-expect, #154), or since 0.1.139 a plain function, expectLoginForm(page). In the owner's session the agent
+     moved its checks into such functions, and a test that called them read as weakened */
+  const EXPECT_HELPER_CALLS = /(?<![\w$])\.?expect[A-Z]\w*\s*\(/g;
   function isAssertLine(ln, cfg) {
     return !/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && cfg.assert_line_patterns.some((p) => p.test(ln));
   }
@@ -996,8 +998,17 @@
         na = asserts(nb);
       /* the assertions moved into a page object: the new test calls an expect…() method it did not call before (a
          rewrite to Page Object Model; the page object's own assertions are compared in its file, 0.1.127) */
-      const moved = (nb.match(PO_ASSERT_CALLS) || []).length > (ob.match(PO_ASSERT_CALLS) || []).length;
-      if (na.length < oa.length && !moved && !onlyRedundantNotsGone(oa, na)) res.removed.push({ test: name, before: oa.length, after: na.length });
+      const moved = (nb.match(EXPECT_HELPER_CALLS) || []).length > (ob.match(EXPECT_HELPER_CALLS) || []).length;
+      if (na.length < oa.length && !moved && !onlyRedundantNotsGone(oa, na)) {
+        /* the assertion lines it lost, with how many times each is in the file before and after (0.1.139): assert_weakened
+           looks for them in the other files the agent changed for the same request (moved to the test that calls it) */
+        const left = [...na],
+          lost = [];
+        for (const l of oa) left.includes(l) ? left.splice(left.indexOf(l), 1) : lost.push(l);
+        const times = (src, l) => src.split("\n").filter((x) => x.trim() === l).length;
+        const lines = lost.map((line) => ({ line, old: times(oldSrc, line), now: times(newSrc, line) }));
+        res.removed.push({ test: name, before: oa.length, after: na.length, lines });
+      }
       for (let i = 0; i < Math.min(oa.length, na.length); i++) {
         for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
           if (strong.test(oa[i]) && !strong.test(na[i]) && weak.test(na[i]) && (!(opt && opt.sameSubject) || subjectOf(oa[i]) === subjectOf(na[i]))) {
@@ -3298,14 +3309,41 @@
       }
       return out;
     },
+    /* Since 0.1.139 assertions moved to another place are not lost: each line a test or a helper lost is, by the end of
+       the person's request, in the files the session knows at least as many times as it was before the edit. In the
+       owner's session a review moved openResetpw's two checks into the step of the test that calls it, as the person's
+       rule asks (a step checks what its title promises), and the helper read as "2 → 0". A test that now calls an
+       assertion helper (expectLoginForm(page)) is not weakened either (compareAsserts). */
     assert_weakened(ev) {
       const out = [];
+      const known = (f, before) => {
+        const v = ev.filter((x) => x.file === f && x.seq < before && x.new_content && !x.fragment_only && ["write", "edit"].includes(x.kind));
+        return v.length ? v[v.length - 1].new_content : null;
+      };
+      // as compareAsserts counts them: a line in a comment is no assertion
+      const times = (f, src, l) =>
+        src == null
+          ? 0
+          : commentLinesBlanked(String(src), f)
+              .split("\n")
+              .filter((x) => x.trim() === l).length;
+      const moved = (e, r) => {
+        if (!Array.isArray(r.lines) || !r.lines.length) return false;
+        const next = ev.find((x) => x.seq > e.seq && x.kind === "user");
+        const end = next ? next.seq : Infinity;
+        const others = [...new Set(ev.filter((x) => x.file && x.file !== e.file && x.seq < end).map((x) => x.file))];
+        return r.lines.every(({ line, old }) => {
+          const before = old + others.reduce((n, f) => n + times(f, known(f, e.seq), line), 0);
+          const after = times(e.file, known(e.file, end), line) + others.reduce((n, f) => n + times(f, known(f, end), line), 0);
+          return after >= before;
+        });
+      };
       for (const e of ev) {
         const d = e.assert_delta;
         if (!d) continue;
         for (const w of d.weakened) out.push(F("assert_weakened", "high", e.seq, T("weakened", { file: e.file, test: w.test, reason: w.reason })));
         for (const r of d.removed)
-          out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
+          if (!moved(e, r)) out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
       }
       return out;
     },
@@ -3557,7 +3595,7 @@
         body
           .split("\n")
           .filter((l) => !/^\s*(?:\/\/|#|\/\*|\*)/.test(l))
-          .reduce((n, l) => n + (isAssertLine(l, cfg) ? 1 : 0) + (l.match(/(?<![\w$])\.?expect[A-Z]\w*\s*\(/g) || []).length, 0);
+          .reduce((n, l) => n + (isAssertLine(l, cfg) ? 1 : 0) + (l.match(EXPECT_HELPER_CALLS) || []).length, 0);
       // ---- a test removed from a file ----
       const last = {};
       for (const e of versions) {
