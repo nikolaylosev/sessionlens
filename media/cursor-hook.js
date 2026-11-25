@@ -3942,6 +3942,15 @@ var require_lens = __commonJS({
             const then = src != null ? tests(src)[name] : void 0;
             return then !== void 0 && norm(then) !== body;
           };
+          const titleWords = (t) => new Set(
+            String(t).toLowerCase().match(/[\p{L}\p{N}]+/gu) || []
+          );
+          const sameTitle = (a, b) => {
+            const [x, y] = [titleWords(a), titleWords(b)];
+            const shared = [...x].filter((w) => y.has(w)).length;
+            return Math.min(x.size, y.size) > 0 && shared / Math.min(x.size, y.size) >= 0.6;
+          };
+          const checksIn = (body) => body.split("\n").filter((l) => !/^\s*(?:\/\/|#|\/\*|\*)/.test(l)).reduce((n, l) => n + (isAssertLine(l, cfg) ? 1 : 0) + (l.match(/(?<![\w$])\.?expect[A-Z]\w*\s*\(/g) || []).length, 0);
           const last = {};
           for (const e of versions) {
             const prev = last[e.file];
@@ -3951,7 +3960,13 @@ var require_lens = __commonJS({
             const om = tests(before), nm = tests(e.new_content);
             const added = Object.keys(nm).filter((k) => !(k in om)).map((k) => norm(nm[k]));
             const renamed = (k) => norm(om[k]) && added.includes(norm(om[k])) && !rewrittenSinceRun(e.file, e.seq, k, norm(om[k]));
-            const gone = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
+            const removed = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
+            const retitled = /* @__PURE__ */ new Set();
+            const gone = removed.filter((k) => {
+              const to = Object.keys(nm).find((n) => !(n in om) && !retitled.has(n) && sameTitle(k, n) && checksIn(nm[n]) >= checksIn(om[k]));
+              if (to) retitled.add(to);
+              return !to;
+            });
             if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, void 0, ownRedRun(e.file, e.seq, gone));
           }
           const same = (x, y) => {

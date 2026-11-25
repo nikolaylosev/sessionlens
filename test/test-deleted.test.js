@@ -175,6 +175,53 @@ function afterUnknownRerun(profile, steps, check) {
   return [unparsed, sev()];
 }
 
+/* 0.1.139: renamed and rewritten in one change. In the owner's session the agent rewrote its tests after a review and
+   renamed "wrong password: stays on /login, …" to "… stays on the login page, …": a test deleted, it said. A removed test
+   is renamed when an added one shares most of the shorter title's words and has no fewer checks (assertion lines and
+   expect…() helper calls). */
+test("renamed and rewritten in one change, most of the title kept and no fewer checks, is no deletion", () => {
+  const file = "e2e/login.spec.ts";
+  const spec = (...tests) => tests.map(([name, body]) => `test('${name}', async ({ page }) => {\n${body}\n});\n`).join("");
+  const URL_AND_ERROR = "  await expect(page).toHaveURL(/login$/);\n  await expect(page.getByRole('alert')).toBeVisible();";
+  const FORM_AND_ERROR = "  await expectLoginForm(page);\n  await expect(page.getByRole('alert')).toHaveText('Wrong');";
+  const OLD = "wrong password: stays on /login, shows an error";
+  const NEW = "wrong password: stays on the login page, shows an error";
+  const was = ["write", file, spec([OLD, URL_AND_ERROR])];
+  assert.deepEqual(deleted("qa-ts", [was, ["write", file, spec([NEW, FORM_AND_ERROR])]]), [], "an expect…() helper counts as a check");
+  const RU_OLD = "3. неверный код: «The entered code is wrong.», вход не выполнен";
+  const RU_NEW = "3. неверный код: сообщение о неверном коде, вход не выполнен";
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, spec([RU_OLD, URL_AND_ERROR])],
+      ["write", file, spec([RU_NEW, FORM_AND_ERROR])],
+    ]),
+    [],
+    "Russian",
+  );
+  // still a deletion: fewer checks, another title (also in Russian), or one added test for two removed ones
+  assert.deepEqual(
+    deleted("qa-ts", [was, ["write", file, spec([NEW, "  await page.goto('/login');"])]]),
+    [`medium: e2e/login.spec.ts: 1 test deleted: ${OLD}`],
+    "fewer checks",
+  );
+  assert.equal(
+    deleted("qa-ts", [
+      ["write", file, spec([RU_OLD, URL_AND_ERROR])],
+      ["write", file, spec(["3. верный пароль", FORM_AND_ERROR])],
+    ]).length,
+    1,
+  );
+  const OLD2 = "wrong password: stays on /login, shows an error twice";
+  assert.deepEqual(
+    deleted("qa-ts", [
+      ["write", file, spec([OLD, URL_AND_ERROR], [OLD2, URL_AND_ERROR])],
+      ["write", file, spec([NEW, FORM_AND_ERROR])],
+    ]),
+    [`medium: e2e/login.spec.ts: 1 test deleted: ${OLD2}`],
+    "each added test stands for one",
+  );
+});
+
 test("a run with no parsed result: unparsed output is skipped, output_missing makes the result unknown (0.1.123)", () => {
   assert.deepEqual(
     deleted("qa-ts", [
