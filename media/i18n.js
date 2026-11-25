@@ -20,6 +20,8 @@
       weak_assert_once: "{file}: “{line}” reads the page once — it never waits or retries; use a web-first assertion, await expect(locator).toBeVisible()",
       fix_no_triage: "Edited {file} right after a failure (seq {seq}) with no triage: product bug / test bug / spec defect",
       fix_cause_only: "Edited {file} right after a failure (seq {seq}): the cause is named, but not whose error it is — product bug / test bug / spec defect",
+      fix_cause_thinking:
+        "Edited {file} right after a failure (seq {seq}): the cause appears only in the agent's reasoning, not in what it reported — product bug / test bug / spec defect",
       scope: "Edited {file}, which is not in the plan",
       churn: "{file}: {n} edits for one request — poking instead of understanding",
       sleep: "{file}: fixed delay (sleep) in a test",

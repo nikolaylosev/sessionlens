@@ -26,6 +26,7 @@ var require_i18n = __commonJS({
           weak_assert_once: "{file}: “{line}” reads the page once — it never waits or retries; use a web-first assertion, await expect(locator).toBeVisible()",
           fix_no_triage: "Edited {file} right after a failure (seq {seq}) with no triage: product bug / test bug / spec defect",
           fix_cause_only: "Edited {file} right after a failure (seq {seq}): the cause is named, but not whose error it is — product bug / test bug / spec defect",
+          fix_cause_thinking: "Edited {file} right after a failure (seq {seq}): the cause appears only in the agent's reasoning, not in what it reported — product bug / test bug / spec defect",
           scope: "Edited {file}, which is not in the plan",
           churn: "{file}: {n} edits for one request — poking instead of understanding",
           sleep: "{file}: fixed delay (sleep) in a test",
@@ -2258,7 +2259,7 @@ var require_lens = __commonJS({
         return { recs, types, main: main2 };
       }
       function fromClaudeJsonl(text, cfg) {
-        const files = {}, out = [], pending = {}, heredocsOf = {};
+        const files = {}, out = [], pending = {}, heredocsOf = {}, thoughts = {};
         let seq = 0, cwd = "";
         const base = (f) => files[f] ?? null;
         const short = (f) => cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f;
@@ -2275,13 +2276,27 @@ var require_lens = __commonJS({
           const blocks = Array.isArray(msg.content) ? msg.content : [{ type: "text", text: msg.content || "" }];
           const agent = rec.isSidechain === true && main2 ? types[rec.agentId] || "subagent" : null;
           const by = (r) => agent ? Object.assign(r, { agent }) : r;
+          const think = (r) => {
+            const k = agent || "";
+            if (role === "assistant" && thoughts[k]) {
+              r.thought = thoughts[k].slice(-2e3);
+              delete thoughts[k];
+            }
+            return r;
+          };
           for (const b of blocks) {
             if (!b || typeof b !== "object") continue;
+            if (b.type === "thinking" && role === "assistant") {
+              const t = String(b.thinking || "").trim();
+              if (t) thoughts[agent || ""] = thoughts[agent || ""] ? thoughts[agent || ""] + "\n" + t : t;
+              continue;
+            }
             if (b.type === "text" && (b.text || "").trim()) {
               if (agent && role === "user") continue;
               const text2 = role === "user" ? rec.isMeta === true || rec.isCompactSummary === true ? "" : personText(b.text) : b.text;
               if (!text2) continue;
-              const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: text2 });
+              const r = think(by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: text2 }));
+              if (r.kind === "user") delete thoughts[""];
               if (r.kind === "message") attachCodeFromText(r);
               out.push(r);
             } else if (b.type === "tool_use" && role === "assistant") {
@@ -2293,7 +2308,7 @@ var require_lens = __commonJS({
                   const o = base(w.file);
                   if (w.append && o == null) continue;
                   const now = w.append ? o + w.text : w.text;
-                  const x = by({ seq: seq++, ts, kind: w.append ? "edit" : "write", tool: "Bash", file: short(w.file), cmd: "" });
+                  const x = think(by({ seq: seq++, ts, kind: w.append ? "edit" : "write", tool: "Bash", file: short(w.file), cmd: "" }));
                   keepBefore(x, w.file, o, cfg);
                   files[w.file] = now;
                   if (o != null && isCode(w.file, cfg)) {
@@ -2304,7 +2319,7 @@ var require_lens = __commonJS({
                   out.push(x);
                   (heredocsOf[b.id || ""] = heredocsOf[b.id || ""] || []).push({ x, file: w.file, before: o });
                 }
-              const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+              const r = think(by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd }));
               if (b.name === "Bash" && here !== cwd) r.dir = short(here);
               if (b.name === "Bash" && cwd && [cwd, homeless(cwd)].some((x) => String(cmd || "").includes(x))) r.root = cwd;
               if (playwrightTestTool(b.name || "") && mcpParts(b.name || "")[1] === "planner_save_plan") {
@@ -3339,6 +3354,7 @@ var require_lens = __commonJS({
         if (s.source_text) return /"bashEditDiff":\{"files":\[\{/.test(String(s.source_text));
         return (s.events || []).some((e) => e.tool === "Bash" && SHELL_EDIT.test(e.cmd || ""));
       }
+      const thinkingBefore139 = (s) => !!s && s.agent === "claude-code" && /"type":"thinking","thinking":"[^"]/.test(String(s.source_text || ""));
       function shellMovedBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
         if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
@@ -3405,7 +3421,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-        if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s))) return true;
+        if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
@@ -3760,6 +3776,10 @@ var require_lens = __commonJS({
            test_cart.py), new: no earlier step of the session names the file (Claude Code's Write does not overwrite a file
            the agent has not read), and no earlier version of it is known. A new helper or fixture still counts, also in a
            tests folder: one that was missing may be the fix ("Cannot find module"). */
+        /* Since 0.1.139, owner's decision: a triage or a cause in the agent's reasoning before the edit (Claude Code's
+           thinking, the step's `thought`) is half a triage, medium with its own message: the rule asks to record the cause,
+           and the reasoning is not what the agent reported. Claude Code often keeps the reasoning with no text, and then
+           nothing changes. */
         fix_after_fail_without_triage(ev, cfg) {
           const out = [], mk = cfg.triage_markers.map((m) => m.toLowerCase());
           const seenBefore = (f, seq) => ev.some((y) => y.seq < seq && (y.file === f || (shellReads(y, cfg) || []).includes(f)));
@@ -3773,9 +3793,10 @@ var require_lens = __commonJS({
                 (n) => String(n).split("::")[0].replace(/:\d+:\d+.*$/, "").trim()
               ).filter(Boolean)
             );
-            let cause = false;
+            let cause = false, reasoned = false;
             for (const x of ev) {
               if (x.seq <= e.seq) continue;
+              if (x.thought && (mk.some((m) => words(x.thought).includes(m)) || CAUSE.test(x.thought))) reasoned = true;
               if (x.kind === "message" && mk.some((m) => words(x.text).includes(m))) break;
               if (x.kind === "message" && CAUSE.test(x.text)) cause = true;
               if (x.kind === "user") break;
@@ -3787,9 +3808,8 @@ var require_lens = __commonJS({
               if (newTest(x) && ![...ff].some((p) => x.file.endsWith(p))) continue;
               const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
               if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
-                out.push(
-                  cause ? F("fix_after_fail_without_triage", "medium", x.seq, T("fix_cause_only", { file: x.file, seq: e.seq })) : F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq }))
-                );
+                const key = cause ? "fix_cause_only" : reasoned ? "fix_cause_thinking" : "fix_no_triage";
+                out.push(F("fix_after_fail_without_triage", cause || reasoned ? "medium" : "high", x.seq, T(key, { file: x.file, seq: e.seq })));
                 break;
               }
             }

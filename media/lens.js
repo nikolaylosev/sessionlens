@@ -1281,7 +1281,8 @@
     const files = {},
       out = [],
       pending = {},
-      heredocsOf = {}; // a Bash call's id → the steps of the files it wrote from here-documents, with each file before it
+      heredocsOf = {}, // a Bash call's id → the steps of the files it wrote from here-documents, with each file before it
+      thoughts = {}; // the agent's reasoning since its last step, by agent ("" the session's own): the next step's `thought`
     let seq = 0,
       cwd = "";
     const base = (f) => files[f] ?? null;
@@ -1311,15 +1312,32 @@
          agent's prompt, not the person's; a subagent's file imported alone keeps it as the task */
       const agent = rec.isSidechain === true && main ? types[rec.agentId] || "subagent" : null;
       const by = (r) => (agent ? Object.assign(r, { agent }) : r);
+      /* the agent's reasoning before a step (0.1.139): Claude Code keeps it in thinking blocks, often with no text (in the
+         owner's sessions 8,695 of 29,025 had one). Its last 2,000 characters go with the agent's next step as `thought`,
+         no step of its own, so the steps keep their numbers; fix_after_fail_without_triage reads it as half a triage. */
+      const think = (r) => {
+        const k = agent || "";
+        if (role === "assistant" && thoughts[k]) {
+          r.thought = thoughts[k].slice(-2000);
+          delete thoughts[k];
+        }
+        return r;
+      };
       for (const b of blocks) {
         if (!b || typeof b !== "object") continue;
+        if (b.type === "thinking" && role === "assistant") {
+          const t = String(b.thinking || "").trim();
+          if (t) thoughts[agent || ""] = thoughts[agent || ""] ? thoughts[agent || ""] + "\n" + t : t;
+          continue;
+        }
         if (b.type === "text" && (b.text || "").trim()) {
           if (agent && role === "user") continue;
           // the person's words only: not what the harness or the editor put into their turn
           // a compacted conversation's summary (isCompactSummary) is Claude Code's text too (0.1.130)
           const text = role === "user" ? (rec.isMeta === true || rec.isCompactSummary === true ? "" : personText(b.text)) : b.text;
           if (!text) continue;
-          const r = by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text });
+          const r = think(by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text }));
+          if (r.kind === "user") delete thoughts[""]; // reasoning the person's message cut off belongs to no later step
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
         } else if (b.type === "tool_use" && role === "assistant") {
@@ -1333,7 +1351,7 @@
               const o = base(w.file);
               if (w.append && o == null) continue; // added to a file this session never saw: its text is not known
               const now = w.append ? o + w.text : w.text;
-              const x = by({ seq: seq++, ts, kind: w.append ? "edit" : "write", tool: "Bash", file: short(w.file), cmd: "" });
+              const x = think(by({ seq: seq++, ts, kind: w.append ? "edit" : "write", tool: "Bash", file: short(w.file), cmd: "" }));
               keepBefore(x, w.file, o, cfg);
               files[w.file] = now;
               if (o != null && isCode(w.file, cfg)) {
@@ -1344,7 +1362,7 @@
               out.push(x);
               (heredocsOf[b.id || ""] = heredocsOf[b.id || ""] || []).push({ x, file: w.file, before: o });
             }
-          const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
+          const r = think(by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd }));
           // where the command ran, from the session's folder (or absolute outside it), when it is not that folder: shellReads
           if (b.name === "Bash" && here !== cwd) r.dir = short(here);
           /* the command names the session's folder (`cd /…/shop/login`, `cd ~/shop`, `cat /…/shop/src/a.ts`): that folder
@@ -2699,6 +2717,8 @@
     if (s.source_text) return /"bashEditDiff":\{"files":\[\{/.test(String(s.source_text));
     return (s.events || []).some((e) => e.tool === "Bash" && SHELL_EDIT.test(e.cmd || ""));
   }
+  // a Claude Code session imported before 0.1.139 whose kept text has reasoning with text in it: its steps have no `thought`
+  const thinkingBefore139 = (s) => !!s && s.agent === "claude-code" && /"type":"thinking","thinking":"[^"]/.test(String(s.source_text || ""));
   function shellMovedBefore139(s) {
     if (!s || s.agent !== "claude-code") return false;
     if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
@@ -2816,7 +2836,7 @@
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-    if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s))) return true;
+    if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
@@ -3303,6 +3323,10 @@
        test_cart.py), new: no earlier step of the session names the file (Claude Code's Write does not overwrite a file
        the agent has not read), and no earlier version of it is known. A new helper or fixture still counts, also in a
        tests folder: one that was missing may be the fix ("Cannot find module"). */
+    /* Since 0.1.139, owner's decision: a triage or a cause in the agent's reasoning before the edit (Claude Code's
+       thinking, the step's `thought`) is half a triage, medium with its own message: the rule asks to record the cause,
+       and the reasoning is not what the agent reported. Claude Code often keeps the reasoning with no text, and then
+       nothing changes. */
     fix_after_fail_without_triage(ev, cfg) {
       const out = [],
         mk = cfg.triage_markers.map((m) => m.toLowerCase());
@@ -3323,9 +3347,12 @@
             )
             .filter(Boolean),
         );
-        let cause = false;
+        let cause = false,
+          reasoned = false;
         for (const x of ev) {
           if (x.seq <= e.seq) continue;
+          // the reasoning before this step (its `thought`, 0.1.139): a triage or a cause in it is half a triage
+          if (x.thought && (mk.some((m) => words(x.thought).includes(m)) || CAUSE.test(x.thought))) reasoned = true;
           if (x.kind === "message" && mk.some((m) => words(x.text).includes(m))) break;
           if (x.kind === "message" && CAUSE.test(x.text)) cause = true;
           if (x.kind === "user") break;
@@ -3340,11 +3367,8 @@
           if (newTest(x) && ![...ff].some((p) => x.file.endsWith(p))) continue;
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
-            out.push(
-              cause
-                ? F("fix_after_fail_without_triage", "medium", x.seq, T("fix_cause_only", { file: x.file, seq: e.seq }))
-                : F("fix_after_fail_without_triage", "high", x.seq, T("fix_no_triage", { file: x.file, seq: e.seq })),
-            );
+            const key = cause ? "fix_cause_only" : reasoned ? "fix_cause_thinking" : "fix_no_triage";
+            out.push(F("fix_after_fail_without_triage", cause || reasoned ? "medium" : "high", x.seq, T(key, { file: x.file, seq: e.seq })));
             break;
           }
         }
