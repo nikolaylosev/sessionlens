@@ -3013,6 +3013,40 @@
     return { text: out, count };
   }
   const F = (check, severity, seq, message) => ({ check, severity, seq, message });
+  /* expected_failure (0.1.139). The person asks for an expected failure: the marker by name, or the words for it, in
+     English or Russian ("as a known failure", "оформить как известную ошибку"). Not when the same clause says no to it
+     ("don't use test.fail()", "без xfail"). */
+  const ASK_XFAIL =
+    /\b(?:test\.fail(?:ing)?|it\.failing|xfail)\b|\bexpected[ -]fail(?:ure|ing)?\b|\bknown (?:failure|bug|issue)\b|известн\S*\s+(?:ошибк|баг)|ожидаем\S*\s+(?:пад|ошибк)/gi;
+  const NOT_ASKED = /(?:^|[^\p{L}])(?:не|нельзя|без|никаких|никогда|no|not|don't|do not|never|without|avoid)(?:$|[^\p{L}])/iu;
+  const asksExpectedFailure = (text) =>
+    [...String(text || "").matchAll(ASK_XFAIL)].some((m) => {
+      const before = text.slice(0, m.index);
+      const clause = before.slice(Math.max(...[".", ",", ";", ":", "!", "?", "\n"].map((p) => before.lastIndexOf(p))) + 1);
+      return !NOT_ASKED.test(clause);
+    });
+  // a bug named in the call: an ID (F-01, ABC-123), #123, a URL, or the word with a number ("bug 12", "баг 7")
+  // the ID in capitals only (utf-8 and retry-3 are none); \b does not see a Cyrillic word's start, so a non-letter bounds it
+  const BUG_ID = /\b[A-Z][A-Z0-9]*-\d+\b/,
+    BUG_WORD = /(?:^|[\s("'`])#\d+\b|https?:\/\/|(?:^|[^\p{L}])(?:bug|issue|ticket|баг|задача)\s*#?\d+/iu;
+  const BUG_REF = { test: (s) => BUG_ID.test(s) || BUG_WORD.test(s) };
+  // the text of the call that starts at `from` (its parentheses; an unclosed one runs to the end of the line)
+  function callText(code, from) {
+    const open = code.indexOf("(", from);
+    if (open < 0 || open - from > 40) return code.slice(from, (code.indexOf("\n", from) + 1 || code.length + 1) - 1);
+    let depth = 0,
+      q = "";
+    for (let i = open; i < code.length && i < open + 2000; i++) {
+      const c = code[i];
+      if (q) {
+        if (c === "\\") i++;
+        else if (c === q) q = "";
+      } else if (c === '"' || c === "'" || c === "`") q = c;
+      else if (c === "(") depth++;
+      else if (c === ")" && --depth === 0) return code.slice(open, i + 1);
+    }
+    return code.slice(open, (code.indexOf("\n", open) + 1 || code.length + 1) - 1);
+  }
   // steps that change no code and say nothing: pass_claim_without_run does not count them in its window
   const QUIET_STEPS = new Set(["read", "search", "tool", "git", "run_other"]);
   const checks = {
@@ -4125,14 +4159,23 @@
     /* test.fail() keeps the suite green while the bug it documents is still open in production. Defensible,
        but it must be a decision someone made, not a detail buried in a spec file. A test that does not run at all
        (@Disabled, t.Skip) is a skip: sleep_or_skip_added, not this (0.1.113). Since 0.1.121: Jest's it.failing /
-       test.failing, and pytest's xfail only as the marker or the call (the word in a docstring or a string is not one). */
+       test.failing, and pytest's xfail only as the marker or the call (the word in a docstring or a string is not one).
+       Since 0.1.139, owner's decision: none when the person asked for it before (the decision is made: in the owner's
+       session the task said "as a known failure (`test.fail()` with a link to F-01)"), and low when every marked test
+       names its bug in the call (F-01, ABC-123, #123, a URL, "bug 12"): the agent may have written that alone, so it stays,
+       but the bug is on record. "Don't use test.fail()" is no request. */
     expected_failure(ev, cfg) {
       const RX = /\btest\.fail\s*\(|\b(?:it|test)\.failing\b|\bmark\.xfail\b|\bpytest\.xfail\s*\(/;
       const out = [];
+      const asked = (seq) => ev.some((u) => u.kind === "user" && u.seq < seq && asksExpectedFailure(u.text));
       for (const e of ev) {
         if (!e.new_content || !RX.test(codeOf(e))) continue;
-        const n = (codeOf(e).match(new RegExp(RX.source, "g")) || []).length;
-        out.push(F("expected_failure", "medium", e.seq, T("expected_failure", { file: e.file || inMsg(), n })));
+        if (asked(e.seq)) continue;
+        const code = codeOf(e),
+          at = [...code.matchAll(new RegExp(RX.source, "g"))];
+        const named = at.every((m) => BUG_REF.test(callText(code, m.index)));
+        const text = T(named ? "expected_failure_ref" : "expected_failure", { file: e.file || inMsg(), n: at.length });
+        out.push(F("expected_failure", named ? "low" : "medium", e.seq, text));
       }
       return out;
     },

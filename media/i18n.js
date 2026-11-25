@@ -58,6 +58,8 @@
       repeat: "User repeated the same request: “{text}”",
       expected_failure:
         "{file}: {n} {n|test|tests} marked as an expected failure — the suite reports green while the bug {n|it documents|they document} is open",
+      expected_failure_ref:
+        "{file}: {n} {n|test|tests} marked as an expected failure, with the bug named in the code — the suite reports green while it is open",
       r_expected_failure: "An expected failure hides a live bug behind a green suite. Report the bug first and say in the test which ticket keeps it red.",
       no_spec: "No specification: impossible to tell which checks are requirements and which are the agent's guesses",
       uncovered: "Requirement {id} has no test: “{text}”",
