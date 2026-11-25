@@ -1280,7 +1280,8 @@
   function fromClaudeJsonl(text, cfg) {
     const files = {},
       out = [],
-      pending = {};
+      pending = {},
+      heredocsOf = {}; // a Bash call's id → the steps of the files it wrote from here-documents, with each file before it
     let seq = 0,
       cwd = "";
     const base = (f) => files[f] ?? null;
@@ -1341,6 +1342,7 @@
               }
               x.new_content = now.slice(0, 200000);
               out.push(x);
+              (heredocsOf[b.id || ""] = heredocsOf[b.id || ""] || []).push({ x, file: w.file, before: o });
             }
           const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
           // where the command ran, from the session's folder (or absolute outside it), when it is not that folder: shellReads
@@ -1408,6 +1410,56 @@
               r.new_content = after.slice(0, 200000);
             }
           }
+          /* the files a shell command changed, as Claude Code (2.1.285 and newer) diffs them: sed -i, python3 - <<EOF,
+             cat >, node -e … (0.1.139). Until then only a here-document's file was known, and a check read the file as
+             its last Write or Edit left it: in the owner's session the model's review said the spec never called a
+             helper that a Python edit had added to it. Each file is an edit after the command (a write when the diff
+             creates it), from the file as the session last knew it; one the session never saw is a fragment, like a
+             first Edit of it. A file the command also wrote from a here-document keeps that step, with the text the
+             diff gives. No diff (an older Claude Code, "unavailable", more files than it lists): as before. */
+          // a Read of the whole file gives its text as it is now: the next command's diff is made on that (0.1.139)
+          const rf = r.tool === "Read" && tur && typeof tur === "object" ? tur.file : null;
+          if (
+            rf &&
+            typeof rf.filePath === "string" &&
+            typeof rf.content === "string" &&
+            rf.startLine === 1 &&
+            rf.numLines === rf.totalLines &&
+            !rf.truncatedByTokenCap
+          )
+            files[rf.filePath] = rf.content;
+          if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
+            const heredocs = heredocsOf[b.tool_use_id || ""] || [];
+            for (const d of tur.bashEditDiff.files) {
+              const full = d && typeof d.filePath === "string" ? d.filePath : "";
+              if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
+              const h = heredocs.find((y) => y.file === full);
+              const made = d.hunks.every((k) => !k.oldStart && !k.oldLines);
+              // the text before; null when the session does not know it, or knows another one than the diff was made on
+              const o0 = made ? null : h ? h.before : base(full);
+              const applied = made ? { text: hunkLines(d.hunks, "+") } : o0 == null ? null : applyHunks(o0, d.hunks);
+              const o = applied ? o0 : null;
+              const after = applied ? applied.text : hunkLines(d.hunks, " +");
+              const x = h ? h.x : by({ seq: seq++, ts, kind: made ? "write" : "edit", tool: "Bash", file: short(full), cmd: "" });
+              if (!h) keepBefore(x, full, o, cfg);
+              delete x.assert_delta;
+              if (o != null && isCode(full, cfg)) {
+                const dd = compareAsserts(o, after, cfg, full);
+                if (dd) x.assert_delta = dd;
+              }
+              x.new_content = after.slice(0, 200000);
+              if (applied) {
+                files[full] = after;
+                delete x.fragment_only;
+              } else {
+                // a fragment: until a Write or a full Read, the file's text is not known
+                delete files[full];
+                delete x.prev_content;
+                x.fragment_only = true;
+              }
+              if (!h) out.push(x);
+            }
+          }
           const c = b.content;
           const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (x && x.text) || "").join("\n") : JSON.stringify(c || "");
           r.text = t.slice(0, 3000);
@@ -1438,6 +1490,39 @@
     } catch {
       return false;
     }
+  }
+  /* Claude Code's diff of a file a command changed (bashEditDiff, 0.1.139): hunks { oldStart, oldLines, lines } whose
+     lines start with " ", "-" or "+". hunkLines gives the lines of the kinds asked for, without their mark.
+     applyHunks applies them to the text the session knows, each where its context and removed lines are: at its line
+     number, or, when the lines moved (the session's text is older at that place), at the nearest place that has them
+     all. A hunk found nowhere means the session knows another text than the one the diff was made on (changed outside
+     the session, or never read in full): null, and the caller keeps the hunks as a fragment rather than a wrong file.
+     In the owner's sessions 92% of the hunks were at their line, 4.5% had moved and 3.5% were nowhere. */
+  const hunkLines = (hunks, kinds) =>
+    hunks
+      .flatMap((k) => k.lines || [])
+      .filter((l) => kinds.includes(l[0]))
+      .map((l) => l.slice(1))
+      .join("\n");
+  function applyHunks(before, hunks) {
+    const lines = String(before).split("\n");
+    let shift = 0;
+    for (const k of hunks) {
+      const body = (k.lines || []).filter((l) => !l.startsWith("\\"));
+      const old = body.filter((l) => l[0] === " " || l[0] === "-").map((l) => l.slice(1));
+      const neu = body.filter((l) => l[0] === " " || l[0] === "+").map((l) => l.slice(1));
+      const there = (q) => q >= 0 && q + old.length <= lines.length && old.every((l, i) => lines[q + i] === l);
+      let at = Math.max(0, (k.oldStart || 1) - 1 + shift);
+      if (!there(at)) {
+        let best = -1;
+        for (let q = 0; q + old.length <= lines.length; q++) if (there(q) && (best < 0 || Math.abs(q - at) < Math.abs(best - at))) best = q;
+        if (best < 0) return null;
+        at = best;
+      }
+      lines.splice(at, old.length, ...neu);
+      shift = at - ((k.oldStart || 1) - 1) + neu.length - old.length;
+    }
+    return { text: lines.join("\n") };
   }
   /* Applies a unified-diff hunk set to the file's last known content. If the file was never seen before
      in this session (edited on disk before Codex started, or first message ever about it), there is no
@@ -2596,13 +2681,24 @@
      13: the code of a .cjs file is kept, as of a .mjs (0.1.136).
      14: a Cursor session's test runs get their results from the chats Cursor stores in parts, and a command no longer
         takes another's output (0.1.138).
-     15: no steps from Claude Code's copies of a request (api-request-blob records), and a Claude Code command's paths
-        from the folder its shell was in (`dir`, 0.1.139). */
+     15: no steps from Claude Code's copies of a request (api-request-blob records), a Claude Code command's paths
+        from the folder its shell was in (`dir`), and the files a command changed, from Claude Code's diff of them
+        (bashEditDiff; 0.1.139). */
   const IMPORT_GEN = 15;
   /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
      at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
      cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
      say which folder its shell was in. */
+  /* A Claude Code session imported before 0.1.139 whose commands changed files (sed -i, python3 - <<EOF, …): the
+     files after them are in the transcript now (bashEditDiff). With the text kept, by a diff with a file in it; without
+     it, by a command that edits a file in place or writes one from a script. */
+  const SHELL_EDIT =
+    /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
+  function shellEditsBefore139(s) {
+    if (!s || s.agent !== "claude-code") return false;
+    if (s.source_text) return /"bashEditDiff":\{"files":\[\{/.test(String(s.source_text));
+    return (s.events || []).some((e) => e.tool === "Bash" && SHELL_EDIT.test(e.cmd || ""));
+  }
   function shellMovedBefore139(s) {
     if (!s || s.agent !== "claude-code") return false;
     if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
@@ -2720,7 +2816,7 @@
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-    if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s))) return true;
+    if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s))) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)

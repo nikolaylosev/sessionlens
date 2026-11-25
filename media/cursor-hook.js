@@ -2258,7 +2258,7 @@ var require_lens = __commonJS({
         return { recs, types, main: main2 };
       }
       function fromClaudeJsonl(text, cfg) {
-        const files = {}, out = [], pending = {};
+        const files = {}, out = [], pending = {}, heredocsOf = {};
         let seq = 0, cwd = "";
         const base = (f) => files[f] ?? null;
         const short = (f) => cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f;
@@ -2302,6 +2302,7 @@ var require_lens = __commonJS({
                   }
                   x.new_content = now.slice(0, 2e5);
                   out.push(x);
+                  (heredocsOf[b.id || ""] = heredocsOf[b.id || ""] || []).push({ x, file: w.file, before: o });
                 }
               const r = by({ seq: seq++, ts, kind, tool: b.name, file: short(f), cmd });
               if (b.name === "Bash" && here !== cwd) r.dir = short(here);
@@ -2361,6 +2362,39 @@ var require_lens = __commonJS({
                   r.new_content = after.slice(0, 2e5);
                 }
               }
+              const rf = r.tool === "Read" && tur && typeof tur === "object" ? tur.file : null;
+              if (rf && typeof rf.filePath === "string" && typeof rf.content === "string" && rf.startLine === 1 && rf.numLines === rf.totalLines && !rf.truncatedByTokenCap)
+                files[rf.filePath] = rf.content;
+              if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
+                const heredocs = heredocsOf[b.tool_use_id || ""] || [];
+                for (const d of tur.bashEditDiff.files) {
+                  const full = d && typeof d.filePath === "string" ? d.filePath : "";
+                  if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
+                  const h = heredocs.find((y) => y.file === full);
+                  const made = d.hunks.every((k) => !k.oldStart && !k.oldLines);
+                  const o0 = made ? null : h ? h.before : base(full);
+                  const applied = made ? { text: hunkLines(d.hunks, "+") } : o0 == null ? null : applyHunks(o0, d.hunks);
+                  const o = applied ? o0 : null;
+                  const after = applied ? applied.text : hunkLines(d.hunks, " +");
+                  const x = h ? h.x : by({ seq: seq++, ts, kind: made ? "write" : "edit", tool: "Bash", file: short(full), cmd: "" });
+                  if (!h) keepBefore(x, full, o, cfg);
+                  delete x.assert_delta;
+                  if (o != null && isCode(full, cfg)) {
+                    const dd = compareAsserts(o, after, cfg, full);
+                    if (dd) x.assert_delta = dd;
+                  }
+                  x.new_content = after.slice(0, 2e5);
+                  if (applied) {
+                    files[full] = after;
+                    delete x.fragment_only;
+                  } else {
+                    delete files[full];
+                    delete x.prev_content;
+                    x.fragment_only = true;
+                  }
+                  if (!h) out.push(x);
+                }
+              }
               const c = b.content;
               const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x && x.text || "").join("\n") : JSON.stringify(c || "");
               r.text = t.slice(0, 3e3);
@@ -2386,6 +2420,27 @@ var require_lens = __commonJS({
         } catch {
           return false;
         }
+      }
+      const hunkLines = (hunks, kinds) => hunks.flatMap((k) => k.lines || []).filter((l) => kinds.includes(l[0])).map((l) => l.slice(1)).join("\n");
+      function applyHunks(before, hunks) {
+        const lines = String(before).split("\n");
+        let shift = 0;
+        for (const k of hunks) {
+          const body = (k.lines || []).filter((l) => !l.startsWith("\\"));
+          const old = body.filter((l) => l[0] === " " || l[0] === "-").map((l) => l.slice(1));
+          const neu = body.filter((l) => l[0] === " " || l[0] === "+").map((l) => l.slice(1));
+          const there = (q) => q >= 0 && q + old.length <= lines.length && old.every((l, i) => lines[q + i] === l);
+          let at = Math.max(0, (k.oldStart || 1) - 1 + shift);
+          if (!there(at)) {
+            let best = -1;
+            for (let q = 0; q + old.length <= lines.length; q++) if (there(q) && (best < 0 || Math.abs(q - at) < Math.abs(best - at))) best = q;
+            if (best < 0) return null;
+            at = best;
+          }
+          lines.splice(at, old.length, ...neu);
+          shift = at - ((k.oldStart || 1) - 1) + neu.length - old.length;
+        }
+        return { text: lines.join("\n") };
       }
       function applyUnifiedDiff(before, diff) {
         const hunks = diff.split(/\n(?=@@ )/).filter((h) => h.trim());
@@ -3278,6 +3333,12 @@ var require_lens = __commonJS({
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
       const IMPORT_GEN = 15;
+      const SHELL_EDIT = /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
+      function shellEditsBefore139(s) {
+        if (!s || s.agent !== "claude-code") return false;
+        if (s.source_text) return /"bashEditDiff":\{"files":\[\{/.test(String(s.source_text));
+        return (s.events || []).some((e) => e.tool === "Bash" && SHELL_EDIT.test(e.cmd || ""));
+      }
       function shellMovedBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
         if (s.source_text) return new Set([...String(s.source_text).matchAll(/"cwd":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])).size > 1;
@@ -3344,7 +3405,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
-        if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s))) return true;
+        if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))

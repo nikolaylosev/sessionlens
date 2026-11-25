@@ -514,9 +514,18 @@ flowchart TD
   <<'EOF' … EOF`, `cat <<EOF > f`, `cat >> f` and `tee [-a] f` become a `write` (an `edit` for `>>`, only of a file the
   session saw) before the command's own step, the path resolved from a `cd` before it in the command or from the
   folder the shell is in. Not a here-document inside `$(…)` (a commit message), one fed to another program
-  (`python3 - <<EOF`: what it writes is not known, nor is a Python or `sed -i` edit), `cat <<EOF` with no file, or a
-  scratch file: a temporary folder, `*.tmp.*`, a path from a shell variable. Cursor's shell commands are read the
-  same way.
+  (`python3 - <<EOF`), `cat <<EOF` with no file, or a scratch file: a temporary folder, `*.tmp.*`, a path from a shell
+  variable. Cursor's shell commands are read the same way.
+  **The files a command changed** (since 0.1.139): Claude Code 2.1.285 and newer diffs them in the tool result
+  (`toolUseResult.bashEditDiff`: `files: [{ filePath, hunks: [{ oldStart, oldLines, newStart, newLines, lines }] }]`,
+  `moreFiles`, `unavailable`), whatever changed them: `sed -i`, `python3 - <<EOF`, `cat >`, `node -e`. Each file is an
+  `edit` step after the command (a `write` when the diff creates it), from the file as the session last knew it
+  (`applyHunks`: each hunk where its context and removed lines are, at its line or the nearest place that has them).
+  A file the session does not know, or knows in another text than the diff was made on (a hunk found nowhere), is a
+  fragment (`fragment_only`, the context and added lines), and its text is unknown until a Write or a full Read. A
+  file the command also wrote from a here-document keeps that step, with the text of the diff. A Read of a whole file
+  (`toolUseResult.file` from line 1, all lines, not cut) gives the session its text as it is then. Without a diff
+  (an older Claude Code, `unavailable`, a file past `moreFiles`) a command's edits are not known, as before.
   **The folder the shell is in** (since 0.1.139): Claude Code writes it into every record (`cwd`), and a `cd` in one
   command moves it for the next. A here-document's path is from it, not from the session's folder (the first `cwd`).
   A `Bash` step keeps it as `dir`, from the session's folder (absolute outside it), when it is another folder, and as
@@ -965,7 +974,7 @@ session is analyzed again after the update (§6.3).
   again (**Import again** in the session's tab, since 0.1.114; `Lens.needsReimport` offers it where a new import
   differs, `IMPORT_GEN` 15: a Cursor session with a test run of unknown result is offered it once, and with no output
   kept it asks for the file, since the database is read when the file is picked; since 0.1.139 also a Claude Code
-  session with steps from Claude Code's copies of a request, or whose shell left its folder). A session whose transcript was too long
+  session with steps from Claude Code's copies of a request, whose shell left its folder, or whose commands changed files). A session whose transcript was too long
   to keep has no agent in its summary until then ("Unknown agent" in the Sessions tree).
 - **The model review** depends on the provider and the prompt; its precision is shown, never used to switch it off.
 - **Secret masking works by pattern** (`Lens.redactSecrets`): a secret of an unusual shape can still reach a
