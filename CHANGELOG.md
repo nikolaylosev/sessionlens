@@ -19,6 +19,10 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **"No specification" is low when your task names one.** When your task said where the specification is, such as
+  "Specification: qa/e2e/auth.md", but it was not added to the review, SessionLens still reported "No specification"
+  as high, as if the agent had worked without one. Now it is low and names the file, so you can add it to check which
+  tests cover the requirements. In our sessions 9 of 36 such findings named their specification in the task.
 - **Test smells are read in the version the next test run sees.** When an agent changed a test file several times in a
   row, numbers it explained or a loop it took out in a later edit were still reported from the earlier versions. Now
   "unexplained number", "branching in a test" and the other test smells only read a version that stays until the next

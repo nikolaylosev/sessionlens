@@ -862,7 +862,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | bloated_background | gherkin | medium | Lens.gherkinChecks() (profile-agnostic) |
 | duplicate_step_text | gherkin | low | Lens.gherkinChecks() on `.feature` files (profile-agnostic) + an engine (Robot) on `.robot` files |
 | empty_test_case | robot | high | engines only (Robot) |
-| no_spec | spec | high | spec.js (LensSpec.checks) |
+| no_spec | spec | high; since 0.1.139 low, naming the file, when a message of the person names a specification (a word for it and a path on one line: `specNamed`) | spec.js (LensSpec.checks) |
 | spec_uncovered | spec | high | spec.js (LensSpec.checks) |
 | test_without_requirement | spec | medium | spec.js (LensSpec.checks) |
 | out_of_scope_tested | spec | medium | spec.js (LensSpec.checks) |
