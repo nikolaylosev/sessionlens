@@ -119,6 +119,60 @@
     });
     return { overrides, ignored };
   }
+  /* A session as the evidence names it (0.1.139): its name, with the task in brackets when that is another. Until then
+     the task alone, so the owner's session DD-004 of task DD-011 read as DD-011 next to the real DD-011. */
+  const sessionLabel = (/** @type {any} */ s) => {
+    const name = s.name || s.task || "";
+    return s.task && s.task !== name ? `${name} (${s.task})` : name;
+  };
+  /* A note that is a reviewer's mark, not a rule (0.1.139): the same words on confirmed findings of three or more checks.
+     The owner wrote "проанализировать" (analyse this) on 40 findings of 12 checks, and it became the evidence of most
+     proposed rules and the input of a skill. confirmed: [{ f: { check }, vd: { note } }] → the set of such notes */
+  function markNotes(/** @type {any[]} */ confirmed) {
+    const by = new Map();
+    for (const c of confirmed) {
+      const n = String((c.vd && c.vd.note) || "").trim();
+      if (n) by.set(n, (by.get(n) || new Set()).add(c.f.check));
+    }
+    return new Set([...by].filter(([, ks]) => ks.size >= 3).map(([n]) => n));
+  }
+  // a snippet that is code (the finding's evidence or its marked line), not the finding's own words (Lens.snippet falls
+  // back to the message): "Not like this" shows code only
+  const fromCode = (/** @type {any} */ f) => {
+    const norm = (/** @type {any} */ x) =>
+      String(x || "")
+        .replace(/\s+/g, " ")
+        .replace(/…$/, "")
+        .trim();
+    const sn = norm(f.snippet),
+      m = norm(f.message);
+    return !!sn && !m.startsWith(sn.slice(0, 60)) && !sn.startsWith(m.slice(0, 60));
+  };
+  /* A proposed rule as Markdown, for CLAUDE.md / AGENTS.md and as the input of a skill. list: the rule's confirmed
+     findings [{ s: session summary, f: { check, seq, message, snippet }, vd: { note } }]; marks: markNotes() of all.
+     Since 0.1.139 the model's categories (ai_*) have no rule text of their own: the rule is the reviewers' notes. */
+  function ruleMarkdown(/** @type {string} */ k, /** @type {any[]} */ list, /** @type {Set<string>} */ marks, /** @type {any} */ overrides) {
+    const note = (/** @type {any} */ x) => {
+      const n = String((x.vd && x.vd.note) || "").trim();
+      return n && !marks.has(n) ? n : "";
+    };
+    const bad = [...new Set(list.filter((x) => fromCode(x.f)).map((x) => x.f.snippet))].slice(0, 2);
+    const good = exampleGood(k, overrides);
+    const own = (CHECKS[k] || {}).ruleKey === "r_ai" ? [...new Set(list.map(note).filter(Boolean))] : [];
+    const rule = own.length ? [T("rules_rule"), "", ...own.map((n) => `- ${n}`)] : [`${T("rules_rule")} ${ruleText(k, overrides)}`];
+    return [
+      `## ${T("rule_hdr", { k, n: list.length, s: new Set(list.map((x) => x.s.id)).size })}`,
+      "",
+      ...rule,
+      "",
+      ...(bad.length ? [T("md_bad"), ...bad.map((b) => "```\n" + b + "\n```")] : []),
+      good ? `${T("md_good")}\n\n\`\`\`\n${good}\n\`\`\`` : "",
+      "",
+      T("rules_ev"),
+      ...list.slice(0, 5).map((x) => `- ${sessionLabel(x.s)}, seq ${x.f.seq}${note(x) ? ` — «${note(x)}»` : ""}`),
+      "",
+    ].join("\n");
+  }
   /* A skill's examples/ folder: for each picked rule, up to perRule files the agent really wrote, at the step of a
      confirmed finding of that rule, one session first; secrets masked, cut at maxChars. confirmedOf(check) gives
      [{ s, f }]: the session and its confirmed finding. → { files: [README, …], rows, masked }.
@@ -146,7 +200,7 @@
         used.add(id + "|" + k);
         n++;
         const later = (s.events || []).find((/** @type {any} */ x) => x.seq > f.seq && e.file && x.file === e.file && /^(?:write|edit)$/.test(x.kind));
-        const row = { path: "", k, session: s.task || s.name, seq: f.seq, message: f.message, masked: 0, cut: false, later: later ? later.seq : null };
+        const row = { path: "", k, session: sessionLabel(s), seq: f.seq, message: f.message, masked: 0, cut: false, later: later ? later.seq : null };
         const copy = copies.get(id + "|" + f.seq);
         if (copy) Object.assign(row, { path: copy.path, shared: true });
         else {
@@ -184,5 +238,22 @@
     ].join("\n");
     return { files: [{ path: "examples/README.md", content: readme }, ...files], rows, masked: rows.reduce((a, r) => a + r.masked, 0) };
   }
-  return { GROUPS, DEFAULT_SEVERITY, GOOD, ALL, book, apply, ruleText, exampleGood, disabledChecks, toJson, fromJson, groupOf, skillExamples };
+  return {
+    GROUPS,
+    DEFAULT_SEVERITY,
+    GOOD,
+    ALL,
+    book,
+    apply,
+    ruleText,
+    exampleGood,
+    disabledChecks,
+    toJson,
+    fromJson,
+    groupOf,
+    skillExamples,
+    ruleMarkdown,
+    markNotes,
+    sessionLabel,
+  };
 });

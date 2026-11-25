@@ -388,24 +388,9 @@ export function renderCalib() {
   const rules = Object.entries(by)
     .filter(([k, l]) => l.length >= min && !state.rulesDismissed[k])
     .sort((a, b) => b[1].length - a[1].length);
-  const snippet = (f) => f.snippet; // Lens.snippet(), computed when the session was saved
-  const ruleMd = (k, l) => {
-    const bad = [...new Set(l.map((x) => snippet(x.f)))].slice(0, 2);
-    const good = LensRules.exampleGood(k, state.ruleOverrides);
-    return [
-      `## ${T("rule_hdr", { k, n: l.length, s: new Set(l.map((x) => x.s.id)).size })}`,
-      "",
-      `${T("rules_rule")} ${LensRules.ruleText(k, state.ruleOverrides)}`,
-      "",
-      `${T("md_bad")}`,
-      ...bad.map((b) => "```\n" + b + "\n```"),
-      good ? `${T("md_good")}\n\n\`\`\`\n${good}\n\`\`\`` : "",
-      "",
-      `${T("rules_ev")}`,
-      ...l.slice(0, 5).map((x) => `- ${x.s.task || x.s.name}, seq ${x.f.seq}${x.vd.note ? ` — «${x.vd.note}»` : ""}`),
-      "",
-    ].join("\n");
-  };
+  // the rule's Markdown (LensRules.ruleMarkdown, 0.1.139): a reviewer's mark is no evidence, "Not like this" is code only
+  const marks = LensRules.markNotes(confirmed);
+  const ruleMd = (k, l) => LensRules.ruleMarkdown(k, l, marks, state.ruleOverrides);
   $("#rules-pick-row").hidden = !rules.length;
   const dismissedCount = Object.keys(state.rulesDismissed).length;
   $("#dismissed-row").hidden = !dismissedCount;
@@ -423,7 +408,7 @@ export function renderCalib() {
           .slice(0, 5)
           .map(
             (x) =>
-              `${esc(x.s.task || x.s.name)}, seq ${esc(x.f.seq)}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`,
+              `${esc(LensRules.sessionLabel(x.s))}, seq ${esc(x.f.seq)}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`,
           )
           .join("<br>")}</div></details>
         <div class="row actions rule-actions">${ap ? `<span class="applied">${esc(T("applied", { f: rulesTargetLabel() }))}</span><input type="date" class="applied-at" value="${esc(String(ap).slice(0, 10))}" title="${esc(T("applied_at_title", { f: rulesTargetLabel() }))}"><button class="btn tiny ghost unmark-applied">${T("unmark_applied")}</button>` : `<button class="btn tiny ghost mark-applied">${esc(T("mark_applied", { f: rulesTargetLabel() }))}</button>`}<button class="btn tiny ghost danger del-rule">${T("delete")}</button></div>

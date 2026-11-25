@@ -19,6 +19,15 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **Proposed rules and skills no longer take a review mark for a rule.** The rules proposed for `CLAUDE.md` and
+  `AGENTS.md`, and the skills made from them, had four problems:
+  - a note you wrote on many findings as a reminder, such as "analyse this", appeared as their evidence;
+  - "Not like this" showed the finding's own words when the finding had no code;
+  - findings of the model review got "write the rule from the evidence below" instead of a rule;
+  - a session was named by its task, so two sessions of one task looked like one.
+
+  Now a note that is the same on findings of three or more checks is left out, "Not like this" shows code only, and
+  the rule for a model finding is made of your notes on it. A session is named by its name, with the task in brackets.
 - **"Poking instead of understanding" now needs tries after failures.** Many edits of one file were reported
   whatever caused them, so an agent carrying out an approved plan step by step, with its tests green after each step,
   got the finding for every file it changed. Now at least two of the edits must come right after a red test run, and
