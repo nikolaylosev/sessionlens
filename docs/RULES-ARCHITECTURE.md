@@ -816,7 +816,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | scope_creep | process | medium | regex (lens.js) |
 | browser_check_not_in_test | process | medium | regex (lens.js) |
 | edit_churn | process | medium | regex (lens.js) |
-| assumption_instead_of_question | process | medium | regex (lens.js) |
+| assumption_instead_of_question | process | medium; since 0.1.139 not in a message that triages a failure (the triage words, after a red run since the person's last message) | regex (lens.js) |
 | user_frustration | process | medium | regex (lens.js) |
 | product_code_edited | process | high | regex (lens.js) |
 | snapshot_overwritten | process | high | regex (lens.js) |

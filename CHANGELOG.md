@@ -19,6 +19,10 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **A triage that guesses at the cause of a failure is no longer "an assumption instead of a question".** When an
+  agent wrote a triage after a red run, as asked, and said that the cause was "probably" a wrapper around a field,
+  that was reported as an assumption. A triage is a guess at a cause by design. Now a message with triage words after a
+  red run since your last message is not reported. Elsewhere, such as a list of ideas, it still is.
 - **"No specification" is low when your task names one.** When your task said where the specification is, such as
   "Specification: qa/e2e/auth.md", but it was not added to the review, SessionLens still reported "No specification"
   as high, as if the agent had worked without one. Now it is low and names the file, so you can add it to check which
