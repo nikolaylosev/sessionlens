@@ -3805,8 +3805,22 @@ var require_lens = __commonJS({
            thinking, the step's `thought`) is half a triage, medium with its own message: the rule asks to record the cause,
            and the reasoning is not what the agent reported. Claude Code often keeps the reasoning with no text, and then
            nothing changes. */
+        /* Since 0.1.139 an edit that puts a file back as it was before the agent's last change of it before the run is no
+           fix: it takes back that change, and the failure it caused is over. The owner asks agents to prove that tests can
+           fail (break the password, see red, put it back); in the owner's session both the password in stand.ts and the
+           bug's signature in the spec were put back right after their red runs, and each was a high finding. Taking back a
+           new assertion still weakens the test against the version before it: assert_weakened reports that. */
         fix_after_fail_without_triage(ev, cfg) {
           const out = [], mk = cfg.triage_markers.map((m) => m.toLowerCase());
+          const takesBack = (x) => {
+            if (!x.new_content || x.fragment_only) return false;
+            const changes = ev.filter((y) => y.seq < x.seq && y.file === x.file && ["edit", "write"].includes(y.kind));
+            const last = changes[changes.length - 1];
+            if (!last || last.fragment_only) return false;
+            const earlier = changes[changes.length - 2];
+            const before = last.prev_content ?? (earlier && !earlier.fragment_only ? earlier.new_content : null);
+            return before != null && before === x.new_content;
+          };
           const seenBefore = (f, seq) => ev.some((y) => y.seq < seq && (y.file === f || (shellReads(y, cfg) || []).includes(f)));
           const newTest = (x) => x.kind === "write" && TEST_FILE_RX.test(x.file || "") && x.prev_content == null && !seenBefore(x.file, x.seq);
           const CAUSE = /\b(?:because|due to|root cause|caused by|the cause|the reason|mismatch)\b|из-за|потому что|причин[аеуы]|так как|расхожден/i;
@@ -3831,6 +3845,7 @@ var require_lens = __commonJS({
               }
               if (["edit", "write"].includes(x.kind) && DOC_FILE.test(x.file || "")) continue;
               if (newTest(x) && ![...ff].some((p) => x.file.endsWith(p))) continue;
+              if (["edit", "write"].includes(x.kind) && takesBack(x)) break;
               const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
               if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
                 const key = cause ? "fix_cause_only" : reasoned ? "fix_cause_thinking" : "fix_no_triage";

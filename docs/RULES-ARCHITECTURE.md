@@ -811,7 +811,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | peeked_at_src_before_plan | method | high | regex (lens.js) |
 | stop_markers_missing | method | medium | regex (lens.js) |
 | pass_claim_without_run | process | high | regex (lens.js) |
-| fix_after_fail_without_triage | process | high (medium when the cause is named in words but not whose error it is, 0.1.127); a new test file that is not one of the failed ones is no fix (0.1.139); medium, with its own message, when the cause is only in the agent's reasoning before the edit (Claude Code's thinking, the step's `thought`, 0.1.139) | regex (lens.js) |
+| fix_after_fail_without_triage | process | high (medium when the cause is named in words but not whose error it is, 0.1.127); a new test file that is not one of the failed ones is no fix (0.1.139); medium, with its own message, when the cause is only in the agent's reasoning before the edit (Claude Code's thinking, the step's `thought`, 0.1.139); an edit that puts a file back as it was before the agent's last change of it is no fix and ends that run's failure (a test proven to fail, then put back; 0.1.139) | regex (lens.js) |
 | tests_never_run | process | high | regex (lens.js) — sorted first (sortPriority) |
 | scope_creep | process | medium | regex (lens.js) |
 | browser_check_not_in_test | process | medium | regex (lens.js) |
