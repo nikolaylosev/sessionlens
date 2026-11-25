@@ -759,16 +759,23 @@ A separate neighbouring mechanism (the Calibration tab, not Rules), but it
 uses `LensRules.exampleGood()`/`ruleText()` directly:
 
 ```js
-const ruleMd = (k, l) => {
-  const good = LensRules.exampleGood(k, state.ruleOverrides);
-  return [`## ...`, `${T("rules_rule")} ${LensRules.ruleText(k, state.ruleOverrides)}`,
-          ...bad.map(...), good ? `...${good}...` : "", ...].join("\n");
-};
+const marks = LensRules.markNotes(confirmed);
+const ruleMd = (k, l) => LensRules.ruleMarkdown(k, l, marks, state.ruleOverrides);
 ```
 
 A rule becomes a markdown block with the rule text, an example of
 bad code (taken from real findings of the session) and an example of good code
-(from `GOOD`/the override). The threshold "how many confirmed findings are needed to
+(from `GOOD`/the override). Since 0.1.139 `LensRules.ruleMarkdown` builds it (tested in Node), and:
+- "Not like this" shows only a snippet that is code (the finding's evidence or marked line), not the finding's own
+  words that `Lens.snippet` falls back to;
+- a note that is the same on confirmed findings of three or more checks is a reviewer's mark (`markNotes`: the owner's
+  "проанализировать" on 40 findings of 12 checks), left out of the evidence;
+- for the model's categories (`ai_*`, rule text `r_ai`) the rule is the reviewers' notes, one per line; with none, the
+  `r_ai` text asks for one;
+- a session is named by its name, with its task in brackets when that is another (`sessionLabel`), here, in the rule's
+  evidence list and in a skill's `examples/README.md`.
+
+The skill generator gets these blocks as its input, so a mark or a finding's words no longer reach a skill either. The threshold "how many confirmed findings are needed to
 propose a rule" is the configurable `min` (the UI field `#min-count`), not
 part of the Rules system as such.
 
