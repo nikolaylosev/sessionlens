@@ -827,7 +827,7 @@ column), kept by hand: no test compares them, so a new check adds its row here t
 | hardcoded_date | code | medium | regex (lens.js) |
 | fragile_wait | code | medium | regex (lens.js) + engines (ESLint Playwright, ESLint Cypress, ESLint Detox), an engine replaces the kinds it finds itself (§6.3) |
 | expected_failure | code | medium; none when the person asked for it before, low when every marked test names its bug in the call (0.1.139) | regex (lens.js) |
-| magic_number | code | low; since 0.1.139 not for a number the test's title or the comment lines right above the assertion name, nor for digits inside a string | regex (lens.js) |
+| magic_number | code | low; since 0.1.139 not for a number the test's title or the comment lines right above the assertion name ("±2" names 2 and -2), nor for digits inside a string; like `assertion_roulette`, `conditional_logic` and `duplicate_assert`, only in a version of the file the next test run sees (`stays`: not changed again before a run or the person's message) | regex (lens.js) |
 | assertion_roulette | code | low | regex (lens.js) + Ruff (PT018, `assert a and b`), both kept (0.1.129) |
 | conditional_logic | code | low | regex (lens.js) + engines (ESLint Playwright), an engine replaces the kinds it finds itself (§6.3) |
 | duplicate_assert | code | low | regex (lens.js) |

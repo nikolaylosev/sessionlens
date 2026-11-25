@@ -191,3 +191,25 @@ test("not run on qa-robot and qa-generic, which have no assertion patterns", () 
   assert.equal(Lens.profile("qa-robot").checks.includes("magic_number"), false);
   assert.equal(Lens.profile("qa-generic").checks.includes("magic_number"), false);
 });
+
+/* 0.1.139: a version the agent changed again before the next run is a step on the way, not code a run saw. In the
+   owner's session the agent explained a unit test's numbers in four edits in a row, and the first edit's version still
+   had them: three findings on numbers explained an edit later. The other test smells read the same versions. And "±2"
+   in the comment above names 2 and -2 ("not equal to any code within ±2 steps"). */
+test("not reported: a number a later edit explains before the next run; ±N in the comment above names N and -N", () => {
+  const F = "e2e/totp.spec.ts";
+  const first = ["write", F, pw("  expect(totp(secret, t, 8)).toBe(code);\n", "RFC 6238 vectors")];
+  const then = ["edit", F, "t, 8)", "t, DIGITS)"];
+  assert.deepEqual(found("qa-ts", [first, then]), [], "explained one edit later");
+  assert.deepEqual(found("qa-ts", [first, ["bash", "npx playwright test", "1 passed"], then]), [msg(F, "RFC 6238 vectors", "8")], "a run saw it");
+  // the other smells read the same versions: a loop taken out before the run
+  const cfg = Lens.profile("qa-ts");
+  const loops = (steps) => Lens.runChecks(Lens.importAny(transcript(steps), cfg), cfg).filter((f) => f.check === "conditional_logic").length;
+  const loop = ["write", F, pw("  for (const c of codes) expect(c).toBeTruthy();\n", "codes")];
+  assert.equal(loops([loop, ["edit", F, "for (const c of codes) expect(c)", "expect(codes)"]]), 0);
+  assert.equal(loops([loop]), 1);
+  // ±2
+  const near = pw("  // not equal to any code within ±2 steps\n  for (const k of [-2, -1, 0, 1, 2]) expect(wrong).not.toBe(at(k));\n", "wrong code");
+  assert.deepEqual(found("qa-ts", [["write", F, near]]), []);
+  assert.deepEqual(found("qa-ts", [["write", F, near.replace("±2", "two")]]), [msg(F, "wrong code", "-2")]);
+});

@@ -19,6 +19,11 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **Test smells are read in the version the next test run sees.** When an agent changed a test file several times in a
+  row, numbers it explained or a loop it took out in a later edit were still reported from the earlier versions. Now
+  "unexplained number", "branching in a test" and the other test smells only read a version that stays until the next
+  test run or your next message. And a comment such as "within ±2 steps" now explains 2 and -2. In our sessions this
+  removes 11 of 373 unexplained numbers and 23 of 332 branching findings, and adds none.
 - **Files the plan or your task names are no longer "not in the plan".** A plan that named its files as
   `helpers/login.ts` or just `login.spec.ts`, or a task that listed them, still left every edit of those files reported
   as outside the plan: only paths in a tests or source folder were read. Now any path or file name in the plan, and in
