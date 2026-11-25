@@ -1232,6 +1232,38 @@
     return out;
   }
 
+  /* Whether a file in a command's diff is the command's own (0.1.139). Claude Code diffs every file that changed while
+     the command ran, whoever changed it: in the owner's session `npm run typecheck; npx playwright test`, run in qa-ts/,
+     listed four files of qa/compare/ that another session was writing at that time, and they became the agent's edits
+     right after a failure. A file is the command's when it lies in the folder its shell was in, or is, or lies under, a
+     path the command names, from that folder or one it `cd`s to (`ruff format app ../extract` from backend/,
+     `Path("../tests/a.py")` after `cd backend/app`; not / or the home folder).
+     In the owner's sessions this leaves out 4 of 14,671 files, those four. With no folder known, all are the command's. */
+  function commandOwns(file, cmd, dir) {
+    if (!dir) return true;
+    const text = String(cmd || "");
+    const home = (/^(\/Users\/[^/]+|\/home\/[^/]+)/.exec(dir) || [])[1] || "";
+    const norm = (p) => {
+      const parts = [];
+      for (const s of p.split("/")) {
+        if (s === "..") parts.pop();
+        else if (s && s !== ".") parts.push(s);
+      }
+      return "/" + parts.join("/");
+    };
+    const resolve = (p, from) => (p.startsWith("~/") && home ? norm(home + p.slice(1)) : norm(p.startsWith("/") ? p : from + "/" + p));
+    const under = (q) => q !== "/" && q !== home && (file === q || file.startsWith(q + "/"));
+    if (file.startsWith(dir + "/")) return true;
+    // the words that may be paths, also inside a script's quotes (`Path("tests/a.py")`), from the folder and from each
+    // folder the command goes to with `cd` (`cd backend/app && … ../tests/test_api.py`)
+    const words = (text.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).filter((w) => !w.includes("$"));
+    const dirs = [
+      dir,
+      ...[...text.matchAll(/(?:^|[;&|\n(]|&&)\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|)]+)/g)].map((m) => resolve(m[1].replace(/^(['"])(.*)\1$/, "$2"), dir)),
+    ];
+    return words.some((w) => dirs.some((d) => under(resolve(w, d))));
+  }
+
   /* Claude Code keeps a subagent's steps (the Agent tool: Playwright's planner, generator and healer, Explore…) in
      <session>/subagents/agent-<id>.jsonl, next to agent-<id>.meta.json with its agentType; the session's own file has
      only the Agent call and its answer. The host appends those files to the session's text (0.1.127): a line
@@ -1282,6 +1314,7 @@
       out = [],
       pending = {},
       heredocsOf = {}, // a Bash call's id → the steps of the files it wrote from here-documents, with each file before it
+      shellOf = {}, // a Bash call's id → its command and the folder its shell was in: whose files its diff lists
       thoughts = {}; // the agent's reasoning since its last step, by agent ("" the session's own): the next step's `thought`
     let seq = 0,
       cwd = "";
@@ -1346,6 +1379,7 @@
           // Playwright's MCP server takes a path from the project's folder; Write's is absolute (0.1.127)
           const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
           // a file the command writes from a here-document: a write (or an edit, for >>) of its own before the command
+          if (b.name === "Bash") shellOf[b.id || ""] = { cmd: inp.command, dir: here };
           if (b.name === "Bash")
             for (const w of heredocWrites(inp.command, here)) {
               const o = base(w.file);
@@ -1448,9 +1482,11 @@
             files[rf.filePath] = rf.content;
           if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
             const heredocs = heredocsOf[b.tool_use_id || ""] || [];
+            const sh = shellOf[b.tool_use_id || ""] || {};
             for (const d of tur.bashEditDiff.files) {
               const full = d && typeof d.filePath === "string" ? d.filePath : "";
               if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
+              if (!commandOwns(full, sh.cmd, sh.dir)) continue; // changed meanwhile by something else, not by this command
               const h = heredocs.find((y) => y.file === full);
               const made = d.hunks.every((k) => !k.oldStart && !k.oldLines);
               // the text before; null when the session does not know it, or knows another one than the diff was made on

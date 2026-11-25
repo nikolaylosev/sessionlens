@@ -530,6 +530,10 @@ flowchart TD
   file the command also wrote from a here-document keeps that step, with the text of the diff. A Read of a whole file
   (`toolUseResult.file` from line 1, all lines, not cut) gives the session its text as it is then. Without a diff
   (an older Claude Code, `unavailable`, a file past `moreFiles`) a command's edits are not known, as before.
+  The diff lists every file that changed while the command ran, whoever changed it, so a file is taken only when it is
+  the command's (`commandOwns`): in the folder its shell was in, or at or under a path the command names (also inside a
+  script's quotes), read from that folder or one the command `cd`s to. In the owner's session a test run in `qa-ts/`
+  listed four files of `qa/compare/` that another session was writing then.
   **The folder the shell is in** (since 0.1.139): Claude Code writes it into every record (`cwd`), and a `cd` in one
   command moves it for the next. A here-document's path is from it, not from the session's folder (the first `cwd`).
   A `Bash` step keeps it as `dir`, from the session's folder (absolute outside it), when it is another folder, and as
