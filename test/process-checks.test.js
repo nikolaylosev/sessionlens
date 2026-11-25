@@ -149,6 +149,31 @@ test("fix_after_fail_without_triage, not reported: a new test file after the red
   assert.equal(found([TASK, WRITE, RED, ["edit", "tests/old.spec.ts", "a", "b"]], check).length, 1, "an edit of an older test");
 });
 
+/* Since 0.1.139 putting a file back as it was before the agent's last change of it, made before the red run, is no fix:
+   the owner asks agents to prove that tests can fail (break the password, see red, put it back), and in the owner's
+   session both put-backs were high findings. Taking back a new assertion still shows as a weakened test. */
+test("fix_after_fail_without_triage, not reported: a file put back as it was before the change that made the run red", () => {
+  const check = "fix_after_fail_without_triage";
+  const HELPER = "helpers/stand.ts"; // outside the tests folders, as in qa-ts: no prev_content kept
+  const STAND = ["write", HELPER, "export const PASSWORD = 'right';\n"];
+  const BREAK = ["edit", HELPER, "'right'", "'broken'"];
+  const BACK = ["edit", HELPER, "'broken'", "'right'"];
+  assert.deepEqual(found([TASK, STAND, WRITE, BREAK, RED, BACK], check), [], "a helper put back");
+  assert.deepEqual(found([TASK, WRITE, FIX, RED, ["edit", SPEC, "toBe(4)", "toBe(3)"]], check), [], "the spec put back");
+  // the run's failure is over: the next break and its own put-back are not fixes of it either
+  const BREAK_SPEC = ["edit", SPEC, "toBe(3)", "toBe(9)"];
+  assert.deepEqual(found([TASK, STAND, WRITE, BREAK, RED, BACK, BREAK_SPEC, RED, ["edit", SPEC, "toBe(9)", "toBe(3)"]], check), []);
+  // still a fix: another text than before, a fix made first, a file the agent did not change before the run
+  assert.equal(found([TASK, STAND, WRITE, BREAK, RED, ["edit", HELPER, "'broken'", "'other'"]], check).length, 1, "another text");
+  assert.equal(found([TASK, WRITE, RED, FIX, ["edit", SPEC, "toBe(4)", "toBe(3)"]], check).length, 1, "a fix, then put back: the fix counts");
+  assert.equal(found([TASK, STAND, WRITE, RED, BREAK], check).length, 1, "no change before the run");
+  // taking back a new assertion after a red run is a weakened test
+  const MORE = ["edit", SPEC, "toBe(3);", "toBe(3);\n  expect(cart.tax()).toBe(1);"];
+  const LESS = ["edit", SPEC, "toBe(3);\n  expect(cart.tax()).toBe(1);", "toBe(3);"];
+  assert.deepEqual(found([TASK, WRITE, MORE, RED, LESS], check), []);
+  assert.equal(found([TASK, WRITE, MORE, RED, LESS], "assert_weakened").length, 1, "assert_weakened still sees it");
+});
+
 test("peeked_at_src_before_plan: product code read or searched before the plan was approved", () => {
   const peeked = (file) => `high: Read ${file} before the plan was approved — product code is off-limits during generation`;
   assert.deepEqual(found([TASK, ["read", "src/cart.ts"], WRITE], "peeked_at_src_before_plan"), [peeked("src/cart.ts")], "no plan at all");

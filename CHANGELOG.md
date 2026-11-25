@@ -19,6 +19,11 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **Putting a file back after a red run is no longer taken for a fix.** When the agent proves that a test can fail
+  (it breaks the password, sees the run go red, and puts the password back), the edit that puts it back was reported
+  as "Edited right after a failure with no triage". Now an edit that makes a file exactly what it was before the
+  agent's last change of it is not a fix, and that run's failure counts as over. Taking back a new assertion is still
+  reported as a weakened test. In our sessions this removes 2 false findings, both from such a check.
 - **Files that another program changed while a command ran are no longer taken for the agent's edits.** Claude Code
   records every file that changed while a command ran, whoever changed it. In one of our sessions, the agent ran its
   tests while another session was writing files in a different folder, and SessionLens reported those files as edits
