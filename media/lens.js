@@ -1284,8 +1284,13 @@
     for (const rec of recs) {
       if (!rec || typeof rec !== "object") continue;
       if (!cwd && typeof rec.cwd === "string") cwd = rec.cwd.replace(/\/+$/, "");
-      // newer Claude Code writes bookkeeping records (attachment, mode, cost-state…) that carry no conversation
-      if (rec.type && !["user", "assistant"].includes(rec.type) && !rec.message) continue;
+      /* newer Claude Code writes bookkeeping records (attachment, mode, cost-state…) that carry no conversation. Since
+         0.1.139 one with a message is skipped too: api-request-blob (Claude Code 2.1.292 and newer) keeps a copy of a
+         request, with the person's message and the agent's earlier steps in it, and no time. Read as the conversation,
+         it repeated them: in 30 of the owner's sessions, 58,441 steps instead of 38,886 and 3,904 test runs instead of
+         2,258, and the first message twice, so user_frustration found "the same request repeated". A record with no
+         type (a line { role, message }) is still read by its role. */
+      if (rec.type && !["user", "assistant"].includes(rec.type)) continue;
       const msg = rec.message && typeof rec.message === "object" ? rec.message : rec;
       const role = ["user", "assistant"].includes(rec.type) ? rec.type : msg.role;
       if (!["user", "assistant"].includes(role)) continue;
@@ -2573,8 +2578,24 @@
      12: no user message for what an MCP app sent in a Codex session (0.1.135).
      13: the code of a .cjs file is kept, as of a .mjs (0.1.136).
      14: a Cursor session's test runs get their results from the chats Cursor stores in parts, and a command no longer
-        takes another's output (0.1.138). */
-  const IMPORT_GEN = 14;
+        takes another's output (0.1.138).
+     15: no steps from Claude Code's copies of a request (api-request-blob records, 0.1.139). */
+  const IMPORT_GEN = 15;
+  /* A Claude Code session imported before 0.1.139 with steps from Claude Code's copies of a request (api-request-blob).
+     With the text kept, the text says so. Without it (a transcript of 400 KB or more), the steps do: such a copy has no
+     time, and every user and assistant record of Claude Code has one, so a session with steps both with and without a
+     time has them. */
+  const REQUEST_COPY = '"type":"api-request-blob"';
+  function requestCopiesBefore139(s) {
+    if (!s || s.agent !== "claude-code") return false;
+    if (s.source_text) return String(s.source_text).includes(REQUEST_COPY);
+    return requestCopySteps(s.events).length > 0;
+  }
+  // the steps of a Claude Code import before 0.1.139 that came from a copy of a request: those with no time, when others have one
+  function requestCopySteps(events) {
+    const ev = events || [];
+    return ev.some((e) => e.ts) ? ev.filter((e) => !e.ts) : [];
+  }
   /* A Claude Code session that started subagents (the Agent tool, Task before it) and has none of their steps: imported
      before 0.1.127, or from a text with no subagents in it. Its transcript has to be picked again, since the subagents'
      files lie next to it and the text kept at import does not have them. */
@@ -2672,6 +2693,7 @@
     if ((s.importGen || 0) < 9 && subagentsMissing(s)) return true;
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
+    if ((s.importGen || 0) < 15 && requestCopiesBefore139(s)) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
@@ -2710,7 +2732,10 @@
     const sig = (e) => [e.kind, homeless(e.file || ""), homeless(e.cmd || ""), said(e)].join("|");
     // a Codex 0.159 command stored before 0.1.121 as a bare "tool exec" step is the same step as its command now
     const same = (x, y) => sig(x) === sig(y) || (x.kind === "tool" && x.tool === "exec" && y.tool === "exec");
-    const a = stored || [],
+    /* the steps a Claude Code import before 0.1.139 took from copies of a request have no time, and the new import has
+       none of them: they do not count against the match (0.1.139; in the owner's session 62 of 200 steps, 69%) */
+    const copies = new Set(requestCopySteps(fresh).length ? [] : requestCopySteps(stored));
+    const a = (stored || []).filter((e) => !copies.has(e)),
       b = fresh || [];
     if (!a.length) return b.length ? 0 : 1;
     let j = 0,
@@ -4356,7 +4381,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.138";
+  const ANALYSIS_VERSION = "0.1.139";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.139
+
+### Fixed
+- **A Claude Code session no longer counts its steps twice.** Since version 2.1.292, Claude Code also writes into the
+  session's log a copy of each request it sends to the model. The copy includes your message and the agent's earlier
+  steps. SessionLens read these copies as part of the conversation. So your first message appeared twice, and a
+  session got a "the same request repeated" finding it should not have. The agent's steps and test runs were counted
+  again too, so counts such as test runs and edits were too high, and some findings were wrong. In 30 of our sessions,
+  a third of all steps were such copies, and there were 179 extra findings. SessionLens now skips the copies. A session
+  imported before shows **Import again**, and the copied steps no longer make it ask whether the transcript is the
+  same.
+
 ## 0.1.138
 
 ### Added
