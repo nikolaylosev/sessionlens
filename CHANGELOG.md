@@ -11,6 +11,12 @@
   a third of all steps were such copies, and there were 179 extra findings. SessionLens now skips the copies. A session
   imported before shows **Import again**, and the copied steps no longer make it ask whether the transcript is the
   same.
+- **Paths in an agent's commands are read from the folder it was in.** When a Claude Code agent changed folders in
+  the terminal (`cd qa-ts`), SessionLens still read the paths in its later commands from the session's folder. A file
+  it wrote with `cat > helpers/teardown.ts` appeared at a path that does not exist, a model review could then report
+  it as a stray copy, and text it added with `cat >>` was lost. "Read before the plan" named the wrong file, such as
+  `src/Account.php` for `login/src/Account.php`, and could take the agent's own files for product code. In 28 of our 65
+  sessions the agent changed folders. A session imported before shows **Import again**.
 
 ## 0.1.138
 
