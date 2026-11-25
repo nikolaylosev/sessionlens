@@ -686,15 +686,20 @@
   }
 
   // ---------- assert comparison (regex, per profile) ----------
-  function blocksByTest(src, pat) {
-    if (!pat) return { "<file>": src };
-    const out = {};
+  // the tests of a text in order, each with where it starts: [{ name, body, at }] (0.1.139: magic_number reads the lines above)
+  function testBlocks(src, pat) {
+    if (!pat) return [{ name: "<file>", body: src, at: 0 }];
     const ms = (Array.isArray(pat) ? pat.flatMap((p) => [...src.matchAll(p)]) : [...src.matchAll(pat)]).sort((a, b) => a.index - b.index);
-    ms.forEach((m, i) => {
+    return ms.map((m, i) => {
       const end = i + 1 < ms.length ? ms[i + 1].index : src.length;
       const name = m.groups && m.groups.name !== undefined ? m.groups.name.replace(/\\(['"`\\])/g, "$1") : m[1];
-      out[name] = src.slice(m.index, end);
+      return { name, body: src.slice(m.index, end), at: m.index };
     });
+  }
+  // name → body; of two tests with one name, the later one's body
+  function blocksByTest(src, pat) {
+    const out = {};
+    for (const b of testBlocks(src, pat)) out[b.name] = b.body;
     return out;
   }
   /* The code of a text with its comments blanked out, line for line, for the checks that look for a pattern anywhere in
@@ -4059,22 +4064,47 @@
     // ---- test smells (taxonomy: TsDetect / Pynose), per test block ----
     /* A line with a comment is skipped: the comment may explain the number, or the line is commented out. Since 0.1.120
        only a real comment counts: "#" or "//" inside a string (a CSS id, a URL) or `this.#field` is not one, and a line
-       inside a block comment ("* expect(…)", and since 0.1.121 a line there with no leading *) is. */
+       inside a block comment ("* expect(…)", and since 0.1.121 a line there with no leading *) is.
+       Since 0.1.139, owner's decision: a number is explained by the test's title that names it ("base32: the RFC 6238 key
+       decodes to ASCII 12345678901234567890"), and by the comment lines right above the assertion, or above the run of
+       assertion lines it is in, when they name it ("// 1499 = 14.99 in cents"); "// the old total" above names no number
+       and explains none. Digits inside a string are no number: in the owner's sessions 279 of 738 findings were such
+       (dates '2026-10-13', 'chat (3)', ids in a URL, XML attributes), and TsDetect's smell is a numeric literal. */
     magic_number(ev, cfg) {
       const out = [],
         OK = new Set([0, 1, 2, 100, 200, 201, 204, 301, 302, 400, 401, 403, 404, 405, 409, 422, 423, 429, 500, 502, 503]);
       const STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
       const commented = (ln) => /\/\/|\/\*|(?:^|\s)#|^\s*\*/.test(ln.replace(STRING, '""'));
+      // the number as a whole word of a text: 8 in "8 digits", not in "18" or "8.5"
+      const names = (text, num) => new RegExp(`(?<![\\w.])${num.replace(/[.\-]/g, "\\$&")}(?![\\w.]|\\.\\d)`).test(text);
       for (const e of ev) {
         if (!e.new_content || !cfg.assert_line_patterns) continue;
-        for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
-          const nums = new Set();
-          for (const ln of body.split("\n"))
-            if (cfg.assert_line_patterns.some((p) => p.test(ln)) && !commented(ln))
-              for (const m of ln.matchAll(/(?<![\w.])(-?\d+(?:\.\d+)?)(?![\w.])/g)) {
-                const n = +m[1];
-                if (!OK.has(n) && Math.abs(n) > 1) nums.add(m[1]);
-              }
+        // the text with its comment lines blanked, line for line, and as written: a blanked line that had text was a comment
+        const blanked = linesOf(e),
+          raw = String(e.new_content).split("\n");
+        const isAssert = (ln) => cfg.assert_line_patterns.some((p) => p.test(ln)) && !commented(ln);
+        const tests = new Map();
+        for (const b of testBlocks(blanked, cfg.test_fn_pattern)) tests.set(b.name, b);
+        for (const { name, body, at } of tests.values()) {
+          const nums = new Set(),
+            lines = body.split("\n"),
+            first = blanked.slice(0, at).split("\n").length - 1;
+          // the comment lines right above line i of the test, past the assertion lines just before it
+          const above = (i) => {
+            let j = i - 1;
+            while (j >= 0 && isAssert(lines[j])) j--;
+            const said = [];
+            for (; j >= 0 && !lines[j].trim() && (raw[first + j] || "").trim(); j--) said.unshift(raw[first + j]);
+            return said.join("\n");
+          };
+          lines.forEach((ln, i) => {
+            if (!isAssert(ln)) return;
+            for (const m of ln.replace(STRING, '""').matchAll(/(?<![\w.])(-?\d+(?:\.\d+)?)(?![\w.])/g)) {
+              const n = +m[1];
+              if (OK.has(n) || Math.abs(n) <= 1 || names(name, m[1]) || names(above(i), m[1])) continue;
+              nums.add(m[1]);
+            }
+          });
           if (nums.size) out.push(F("magic_number", "low", e.seq, T("magic", { file: e.file || inMsg(), test: name, nums: [...nums].slice(0, 4).join(", ") })));
         }
       }

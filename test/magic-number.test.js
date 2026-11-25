@@ -34,7 +34,7 @@ const pw = (body, name = "cart total") => `import { test, expect } from "@playwr
 const msg = (file, name, nums) => `low: ${file}: ${name} — unexplained numbers in assertions: ${nums} (Magic Number)`;
 
 test("a number in an assertion is reported once per test, with the test's name", () => {
-  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw('  await expect(page.getByTestId("total")).toHaveText("1499");\n')]]), [
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw('  await expect(page.getByTestId("total")).toHaveValue(1499);\n')]]), [
     msg("e2e/cart.spec.ts", "cart total", "1499"),
   ]);
   const two = pw("  expect(items).toHaveLength(3);\n") + 'test("cart discount", async () => {\n  expect(discount).toBe(15);\n});\n';
@@ -84,15 +84,16 @@ test("not reported: a comment that explains the number, and a commented-out asse
   ]);
 });
 
+/* Since 0.1.139 the numbers of these cases are outside the strings: digits inside a string are no number (below). */
 test("a # or // inside a string is not a comment: a CSS id, a URL, a hash in Python (0.1.120)", () => {
-  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw('  await expect(page.locator("#total")).toHaveText("42");\n')]]), [
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw('  await expect(page.locator("#total")).toHaveCount(42);\n')]]), [
     msg("e2e/cart.spec.ts", "cart total", "42"),
   ]);
-  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  await expect(page).toHaveURL('https://shop.test/cart?page=7');\n")]]), [
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  expect(await pages('https://shop.test/cart')).toBe(7);\n")]]), [
     msg("e2e/cart.spec.ts", "cart total", "7"),
   ]);
   assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  expect(this.#count).toBe(12);\n")]]), [msg("e2e/cart.spec.ts", "cart total", "12")]);
-  assert.deepEqual(found("qa-python", [["write", "tests/test_cart.py", 'def test_badge():\n    assert badge.text == "#3 of 15"\n']]), [
+  assert.deepEqual(found("qa-python", [["write", "tests/test_cart.py", 'def test_badge():\n    assert badge.text.index("#") == 3 and badge.size == 15\n']]), [
     msg("tests/test_cart.py", "test_badge", "3, 15"),
   ]);
   assert.deepEqual(
@@ -124,6 +125,63 @@ test("a number an Edit puts into an assertion is reported; the same number in la
     ]),
     [msg("e2e/cart.spec.ts", "cart total", "1499")],
   );
+});
+
+/* 0.1.139, owner's decision. In the owner's session a TOTP test got four findings, and its numbers were explained in the
+   test's title or were text: "base32: the RFC 6238 key decodes to ASCII 12345678901234567890". Over the owner's sessions
+   279 of 738 findings were digits inside a string. */
+test("not reported: digits inside a string are text, not a number", () => {
+  for (const line of [
+    '  await expect(page.getByTestId("total")).toHaveText("1499");\n',
+    "  expect(localDate(LATE_UTC)).toBe('2026-10-13');\n",
+    "  expect(folder).toBe(`AI Chats/chat (3)`);\n",
+    "  await expect(page).toHaveURL('https://shop.test/cart?page=7');\n",
+  ])
+    assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw(line)]]), [], line);
+  assert.deepEqual(found("qa-python", [["write", "tests/test_cart.py", 'def test_badge():\n    assert badge.text == "#3 of 15"\n']]), []);
+  // a number next to a string on the line still counts
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw('  expect(text("1499")).toHaveLength(37);\n')]]), [
+    msg("e2e/cart.spec.ts", "cart total", "37"),
+  ]);
+});
+
+test("not reported: a number the test's title names", () => {
+  const rfc = pw('  expect(decode(KEY).toString("ascii")).toBe(SEED);\n  expect(totp(KEY, 59, 8)).toBe(code);\n', "RFC 6238: 8 digits at T=59");
+  assert.deepEqual(found("qa-ts", [["write", "e2e/totp.spec.ts", rfc]]), []);
+  // a part of a number in the title is no name of it
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  expect(total).toBe(14);\n", "total of 1499 cents")]]), [
+    msg("e2e/cart.spec.ts", "total of 1499 cents", "14"),
+  ]);
+});
+
+test("not reported: a number the comment lines right above the assertion name, also above a run of assertions", () => {
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  // 1499 = 14.99 in cents, spec 3.2\n  expect(total).toBe(1499);\n")]]), []);
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", "e2e/cart.spec.ts", pw("  // spec 3.2: three items,\n  // 1499 cents in all\n  expect(items).toHaveLength(3);\n  expect(total).toBe(1499);\n")],
+    ]),
+    [msg("e2e/cart.spec.ts", "cart total", "3")],
+    "two comment lines; 3 is not named as a number",
+  );
+  assert.deepEqual(
+    found("qa-python", [["write", "tests/test_cart.py", "def test_total():\n    # 1499 cents, spec 3.2\n    assert total == 1499\n"]]),
+    [],
+    "Python",
+  );
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  /* 1499 cents */\n  expect(total).toBe(1499);\n")]]), [], "a block comment");
+  // still reported: a comment that names no number, one with a blank line or other code between, a comment below
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  // 1499 cents\n\n  expect(total).toBe(1499);\n")]]), [
+    msg("e2e/cart.spec.ts", "cart total", "1499"),
+  ]);
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  // 1499 cents\n  await page.reload();\n  expect(total).toBe(1499);\n")]]), [
+    msg("e2e/cart.spec.ts", "cart total", "1499"),
+  ]);
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  expect(total).toBe(1499);\n  // 1499 cents\n")]]), [
+    msg("e2e/cart.spec.ts", "cart total", "1499"),
+  ]);
+  assert.deepEqual(found("qa-ts", [["write", "e2e/cart.spec.ts", pw("  // 14990 cents\n  expect(total).toBe(1499);\n")]]), [
+    msg("e2e/cart.spec.ts", "cart total", "1499"),
+  ]);
 });
 
 test("not run on qa-robot and qa-generic, which have no assertion patterns", () => {

@@ -31,6 +31,11 @@
   the same step, for example a raw locator and `.first()` in one helper, the file was copied into the folder of each
   rule. Now there is one copy, and both rules refer to it. `examples/README.md` also says when the session changed the
   file later, because the example is the version at the finding's step, not the last one.
+- **Fewer false "unexplained numbers" findings.** Digits inside a string are no longer taken for a magic number: a
+  date such as `'2026-10-13'`, a name such as `'chat (3)'` or a number in a URL. A number is also explained when
+  the test's title names it, or when the comment right above the assertion names it (`// 1499 = 14.99 in cents`). A
+  comment above that names no number, such as `// the old total`, still explains nothing. In our sessions this
+  removes 290 of 750 findings, and 49 more list fewer numbers.
 
 ## 0.1.138
 
