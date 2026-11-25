@@ -19,6 +19,10 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **"Poking instead of understanding" now needs tries after failures.** Many edits of one file were reported
+  whatever caused them, so an agent carrying out an approved plan step by step, with its tests green after each step,
+  got the finding for every file it changed. Now at least two of the edits must come right after a red test run, and
+  putting a file back after a test proven to fail does not count. In our sessions 7 of 172 such findings remain.
 - **A triage that guesses at the cause of a failure is no longer "an assumption instead of a question".** When an
   agent wrote a triage after a red run, as asked, and said that the cause was "probably" a wrapper around a field,
   that was reported as an assumption. A triage is a guess at a cause by design. Now a message with triage words after a

@@ -1282,6 +1282,8 @@ var require_lens = __commonJS({
           /\bseems like\b/i
         ],
         edit_churn_threshold: 4,
+        edit_churn_red_runs: 2,
+        // edit_churn: how many of the edits came right after a red run (0.1.139)
         pass_claim_lookback: 6
       };
       const PROCESS = [
@@ -1933,6 +1935,15 @@ var require_lens = __commonJS({
         );
       }
       const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
+      function takesBackChange(ev, x) {
+        if (!x.new_content || x.fragment_only) return false;
+        const changes = ev.filter((y) => y.seq < x.seq && y.file === x.file && ["edit", "write"].includes(y.kind));
+        const last = changes[changes.length - 1];
+        if (!last || last.fragment_only) return false;
+        const earlier = changes[changes.length - 2];
+        const before = last.prev_content ?? (earlier && !earlier.fragment_only ? earlier.new_content : null);
+        return before != null && before === x.new_content;
+      }
       const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
       const stays = (ev, e) => {
         if (!e.file) return true;
@@ -3859,15 +3870,7 @@ var require_lens = __commonJS({
            new assertion still weakens the test against the version before it: assert_weakened reports that. */
         fix_after_fail_without_triage(ev, cfg) {
           const out = [], mk = cfg.triage_markers.map((m) => m.toLowerCase());
-          const takesBack = (x) => {
-            if (!x.new_content || x.fragment_only) return false;
-            const changes = ev.filter((y) => y.seq < x.seq && y.file === x.file && ["edit", "write"].includes(y.kind));
-            const last = changes[changes.length - 1];
-            if (!last || last.fragment_only) return false;
-            const earlier = changes[changes.length - 2];
-            const before = last.prev_content ?? (earlier && !earlier.fragment_only ? earlier.new_content : null);
-            return before != null && before === x.new_content;
-          };
+          const takesBack = (x) => takesBackChange(ev, x);
           const seenBefore = (f, seq) => ev.some((y) => y.seq < seq && (y.file === f || (shellReads(y, cfg) || []).includes(f)));
           const newTest = (x) => x.kind === "write" && TEST_FILE_RX.test(x.file || "") && x.prev_content == null && !seenBefore(x.file, x.seq);
           const CAUSE = /\b(?:because|due to|root cause|caused by|the cause|the reason|mismatch)\b|из-за|потому что|причин[аеуы]|так как|расхожден/i;
@@ -3913,17 +3916,25 @@ var require_lens = __commonJS({
            change again starts from zero (the owner's README.md: 3 edits while rewriting the search tests, 2 more while
            rewriting the navigation, one finding for the whole session). Docs (.md, .txt, .rst…) are not counted: an agent
            updates the readme along with each change, which is no poking. */
+        /* Since 0.1.139 poking is trying again after a failure: of the edits, at least edit_churn_red_runs came right after a
+           red test run (the file's first edit after it). Many edits in a row with no red run between them are a plan carried
+           out: in the owner's session a review changed eight files as its approved plan said, ran each file's tests green,
+           and got eight findings. Over the owner's sessions 84 of 193 findings had no edit after a red run, 64 had one. */
         edit_churn(ev, cfg) {
           const c = /* @__PURE__ */ new Map();
-          let request = 0;
+          let request = 0, start = -1, lastRun = null;
           for (const e of ev) {
-            if (e.kind === "user") request++;
+            if (e.kind === "user") [request, start] = [request + 1, e.seq];
+            else if (e.kind === "run_tests" && e.tests) lastRun = e;
             else if (["edit", "write"].includes(e.kind) && e.file && !DOC_FILE.test(e.file)) {
               const k = request + "|" + e.file;
-              c.set(k, [...c.get(k) || [], { file: e.file, seq: e.seq }]);
+              const steps = c.get(k) || [];
+              const red = lastRun && (lastRun.tests.failed || lastRun.tests.errors);
+              const afterRed = !!red && lastRun.seq > (steps.length ? steps[steps.length - 1].seq : start) && !takesBackChange(ev, e);
+              c.set(k, [...steps, { file: e.file, seq: e.seq, afterRed }]);
             }
           }
-          return [...c.values()].filter((s) => s.length > cfg.edit_churn_threshold).map((s) => F("edit_churn", "medium", s[cfg.edit_churn_threshold].seq, T("churn", { file: s[0].file, n: s.length })));
+          return [...c.values()].filter((s) => s.length > cfg.edit_churn_threshold && s.filter((x) => x.afterRed).length >= cfg.edit_churn_red_runs).map((s) => F("edit_churn", "medium", s[cfg.edit_churn_threshold].seq, T("churn", { file: s[0].file, n: s.length })));
         },
         sleep_or_skip_added(ev, cfg) {
           const out = [];
