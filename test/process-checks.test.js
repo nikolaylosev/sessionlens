@@ -222,6 +222,20 @@ test("assumption_instead_of_question, not reported: a question, code, the user, 
     assert.deepEqual(found([TASK, ["say", text]], "assumption_instead_of_question"), [], text);
 });
 
+/* 0.1.139: a triage guesses at a cause, as it should. In the owner's session the triage block after a red run said the
+   field "most likely sits in a wrapper", the next run proved it, and the triage was a finding. A "hypothesis" in a list
+   of ideas with no red run before it is no triage. */
+test("assumption_instead_of_question, not reported: a triage after a red run guesses at the cause", () => {
+  const check = "assumption_instead_of_question";
+  const triage = ["say", "Triage: a test bug. The field probably sits in a wrapper, so the locator misses it."];
+  assert.deepEqual(found([TASK, WRITE, RED, triage], check), []);
+  assert.deepEqual(found([TASK, WRITE, RED, ["say", "Триаж: ошибка теста. Скорее всего поле лежит в обёртке."]], check), [], "Russian");
+  // still reported: no red run since the person's last message, or no triage words
+  assert.equal(found([TASK, WRITE, triage], check).length, 1, "no red run");
+  assert.equal(found([TASK, WRITE, RED, ["user", "Go on"], triage], check).length, 1, "the red run was before the person spoke");
+  assert.equal(found([TASK, WRITE, RED, ["say", "The field probably sits in a wrapper."]], check).length, 1, "no triage");
+});
+
 test("scope_creep: a file the approved plan does not name", () => {
   assert.deepEqual(found([TASK, PLAN, APPROVED, WRITE, ["write", "tests/checkout.spec.ts", "test('pay', () => {});\n"]], "scope_creep"), [
     "medium: Edited tests/checkout.spec.ts, which is not in the plan",

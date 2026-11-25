@@ -4215,10 +4215,21 @@ var require_lens = __commonJS({
           }
           return out;
         },
+        /* Since 0.1.139 a triage is no assumption: a message that triages a failure (the words fix_after_fail_without_triage
+           looks for, after a red run since the person's last message) guesses at its cause, as a triage should. In the
+           owner's session the triage block said the answer field "most likely sits in a wrapper", the next run proved it,
+           and the triage became a finding. */
         assumption_instead_of_question(ev, cfg) {
-          const out = [];
+          const out = [], mk = cfg.triage_markers.map((m) => m.toLowerCase());
+          const redSinceRequest = (e) => {
+            for (let i = ev.indexOf(e) - 1; i >= 0 && ev[i].kind !== "user"; i--)
+              if (ev[i].kind === "run_tests" && ev[i].tests && (ev[i].tests.failed || ev[i].tests.errors)) return true;
+            return false;
+          };
           for (const e of ev) {
             if (e.kind !== "message") continue;
+            const said = e.text.toLowerCase().replace(/[*`]/g, "").replace(/[’ʼ]/g, "'");
+            if (mk.some((m) => said.includes(m)) && redSinceRequest(e)) continue;
             const prose = e.text.replace(/```[\s\S]*?```/g, "");
             const hits = cfg.assumption_patterns.filter((p) => p.test(prose));
             if (!hits.length) continue;
