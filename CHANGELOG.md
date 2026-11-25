@@ -19,6 +19,11 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **Assertions moved to another place are no longer reported as weakened.** When an agent moved a helper's checks into
+  the test that calls it, or replaced checks in a test with a call of an assertion helper such as
+  `expectLoginForm(page)`, SessionLens reported "fewer assertions". Now an assertion counts as moved when, by your next
+  message, it is still in the files the agent worked on as many times as before. Moved later, or onto a copy that was
+  already there, it still counts as lost. In our sessions this removes 13 of 34 such findings.
 - **A test renamed while it was rewritten is no longer reported as deleted.** When an agent rewrote a test and adjusted
   its title in the same change, such as "wrong password: stays on /login" becoming "wrong password: stays on the login
   page", SessionLens reported the old test as deleted, often right after a failing run. Now a test counts as renamed
