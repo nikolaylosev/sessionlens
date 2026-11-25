@@ -19,6 +19,11 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **Files the plan or your task names are no longer "not in the plan".** A plan that named its files as
+  `helpers/login.ts` or just `login.spec.ts`, or a task that listed them, still left every edit of those files reported
+  as outside the plan: only paths in a tests or source folder were read. Now any path or file name in the plan, and in
+  your messages up to the approval, counts, and editing a document such as the readme or notes is not reported. In
+  one of our sessions every such finding was of this kind; over all our sessions this removes 25 of 46.
 - **Assertions moved to another place are no longer reported as weakened.** When an agent moved a helper's checks into
   the test that calls it, or replaced checks in a test with a call of an assertion helper such as
   `expectLoginForm(page)`, SessionLens reported "fewer assertions". Now an assertion counts as moved when, by your next

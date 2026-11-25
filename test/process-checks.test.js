@@ -234,6 +234,25 @@ test("scope_creep, not reported: a planned file, README.md, a plan that names no
   assert.deepEqual(found([TASK, ["say", "PLAN: cover the cart total"], APPROVED, ["write", "tests/x.spec.ts", "test('x', () => {});\n"]], "scope_creep"), []);
 });
 
+/* 0.1.139: the owner's plan named its files as helpers/login.ts and auth-01-login-logout.spec.ts, and the task named
+   them too: all twelve files the agent changed were "not in the plan". Now any path with an extension, a bare file
+   name, and the files the person named before the approval count; a document is no scope creep. The check still looks
+   only when the plan names a file in a test or source folder. */
+test("scope_creep, not reported: a helper path, a bare file name, a file the task named, a document", () => {
+  const check = "scope_creep";
+  const plan = ["say", "PLAN\n- tests/cart.spec.ts: the total\n- helpers/login.ts: role locators\n- global-setup.ts: restore the route"];
+  const edit = (file) => ["write", file, "export const x = 1;\n"];
+  assert.deepEqual(found([TASK, plan, APPROVED, WRITE, edit("helpers/login.ts"), edit("qa-ts/helpers/global-setup.ts")], check), []);
+  const task = ["user", "Review the tests, helpers/stand.ts included"];
+  assert.deepEqual(found([task, plan, APPROVED, WRITE, edit("helpers/stand.ts")], check), [], "named in the task");
+  assert.deepEqual(found([TASK, plan, ["user", "Yes, and fixtures.ts too"], WRITE, edit("helpers/fixtures.ts")], check), [], "in the approval");
+  assert.deepEqual(found([TASK, plan, APPROVED, WRITE, ["write", "qa/FINDINGS.md", "# F-38\n"]], check), [], "a document");
+  // still reported: a file named only after the approval; no check at all when the plan names no test or source path
+  assert.equal(found([TASK, plan, APPROVED, ["user", "now stand.ts"], edit("helpers/stand.ts")], check).length, 1, "named later");
+  const bare = ["say", "PLAN\n- global-setup.ts: restore the route"];
+  assert.deepEqual(found([TASK, bare, APPROVED, edit("helpers/stand.ts")], check), [], "no test or source path in the plan");
+});
+
 test("stop_markers_missing: code with no plan, or a plan with no stop for approval", () => {
   assert.deepEqual(found([TASK, WRITE], "stop_markers_missing"), ["medium: Code written without a plan"]);
   assert.deepEqual(
