@@ -3162,9 +3162,17 @@
     /* Since 0.1.127 a cause named in words before the edit ("due to duplicate headings", "Key root cause: the site has
        no <nav>", or the same in Russian) without whose error it is gets a medium finding that says so: half of the
        triage. */
+    /* Since 0.1.139 a new test file that is not one of the failed ones is no fix: a test that did not exist at the run
+       cannot be what failed in it, so writing it is new work. In the owner's session the agent wrote the next scenario's
+       spec after another spec's red run, and got a high finding on it. A test file by its name (cart.spec.ts,
+       test_cart.py), new: no earlier step of the session names the file (Claude Code's Write does not overwrite a file
+       the agent has not read), and no earlier version of it is known. A new helper or fixture still counts, also in a
+       tests folder: one that was missing may be the fix ("Cannot find module"). */
     fix_after_fail_without_triage(ev, cfg) {
       const out = [],
         mk = cfg.triage_markers.map((m) => m.toLowerCase());
+      const seenBefore = (f, seq) => ev.some((y) => y.seq < seq && (y.file === f || (shellReads(y, cfg) || []).includes(f)));
+      const newTest = (x) => x.kind === "write" && TEST_FILE_RX.test(x.file || "") && x.prev_content == null && !seenBefore(x.file, x.seq);
       const CAUSE = /\b(?:because|due to|root cause|caused by|the cause|the reason|mismatch)\b|из-за|потому что|причин[аеуы]|так как|расхожден/i;
       const words = (text) => text.toLowerCase().replace(/[*`]/g, "").replace(/[’ʼ]/g, "'");
       for (const e of ev) {
@@ -3194,6 +3202,7 @@
             if (x.tests.passed >= all || (ff.size && [...ff].every((p) => (x.cmd || "").includes(p)))) break;
           }
           if (["edit", "write"].includes(x.kind) && DOC_FILE.test(x.file || "")) continue;
+          if (newTest(x) && ![...ff].some((p) => x.file.endsWith(p))) continue;
           const isCodeFile = x.file && (!cfg.code_ext.length || cfg.code_ext.some((ext) => x.file.endsWith(ext)));
           if (["edit", "write"].includes(x.kind) && (!ff.size || [...ff].some((p) => x.file.endsWith(p)) || inDirs(x.file, cfg.test_dirs) || isCodeFile)) {
             out.push(
