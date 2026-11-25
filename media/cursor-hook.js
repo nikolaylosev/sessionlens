@@ -1933,6 +1933,15 @@ var require_lens = __commonJS({
       }
       const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
       const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
+      const stays = (ev, e) => {
+        if (!e.file) return true;
+        for (const x of ev) {
+          if (x.seq <= e.seq) continue;
+          if (x.kind === "run_tests" || x.kind === "user") return true;
+          if (x.file === e.file && ["write", "edit"].includes(x.kind)) return false;
+        }
+        return true;
+      };
       const EXPECT_HELPER_CALLS = /(?<![\w$])\.?expect[A-Z]\w*\s*\(/g;
       function isAssertLine(ln, cfg) {
         return !/^\s*(?:\/\/|#|\/\*|\*)/.test(ln) && cfg.assert_line_patterns.some((p) => p.test(ln));
@@ -4615,9 +4624,9 @@ var require_lens = __commonJS({
           const out = [], OK = /* @__PURE__ */ new Set([0, 1, 2, 100, 200, 201, 204, 301, 302, 400, 401, 403, 404, 405, 409, 422, 423, 429, 500, 502, 503]);
           const STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
           const commented = (ln) => /\/\/|\/\*|(?:^|\s)#|^\s*\*/.test(ln.replace(STRING, '""'));
-          const names = (text, num2) => new RegExp(`(?<![\\w.])${num2.replace(/[.\-]/g, "\\$&")}(?![\\w.]|\\.\\d)`).test(text);
+          const names = (text, num2) => [num2, "±" + num2.replace(/^-/, "")].some((n) => new RegExp(`(?<![\\w.])${n.replace(/[.\-]/g, "\\$&")}(?![\\w.]|\\.\\d)`).test(text));
           for (const e of ev) {
-            if (!e.new_content || !cfg.assert_line_patterns) continue;
+            if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
             const blanked = linesOf(e), raw = String(e.new_content).split("\n");
             const isAssert = (ln) => cfg.assert_line_patterns.some((p) => p.test(ln)) && !commented(ln);
             const tests = /* @__PURE__ */ new Map();
@@ -4648,7 +4657,7 @@ var require_lens = __commonJS({
           const out = [];
           if (!["python", "java"].includes(cfg.language)) return out;
           for (const e of ev) {
-            if (!e.new_content || !cfg.assert_line_patterns) continue;
+            if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
             for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
               const as = body.split("\n").filter((l) => isAssertLine(l, cfg));
               const withMsg = as.filter((l) => cfg.language === "python" ? /,\s*(?:f?["'])/.test(l) : /assert\w+\s*\("[^"]*",/.test(l)).length;
@@ -4661,7 +4670,7 @@ var require_lens = __commonJS({
         conditional_logic(ev, cfg) {
           const out = [];
           for (const e of ev) {
-            if (!e.new_content || !cfg.test_fn_pattern) continue;
+            if (!e.new_content || !cfg.test_fn_pattern || !stays(ev, e)) continue;
             for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
               const inner = body.split("\n").slice(1).join("\n");
               const m = inner.match(/^[ \t]+(?:if|for|foreach|while|switch|try)\b[^\n]*/m) || inner.match(/^[ \t]+[^\n]*\.(?:forEach|ForEach)\s*\([^\n]*/m);
@@ -4681,7 +4690,7 @@ var require_lens = __commonJS({
         duplicate_assert(ev, cfg) {
           const out = [];
           for (const e of ev) {
-            if (!e.new_content || !cfg.assert_line_patterns) continue;
+            if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
             for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
               const at = /* @__PURE__ */ new Map();
               let steps = 0, dup = null;

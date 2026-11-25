@@ -838,6 +838,19 @@
   const saysFailure = (t) => [...t.matchAll(FAILURE_WORD)].some((m) => !DENIED.test(t.slice(Math.max(0, m.index - 16), m.index)));
   // a document, not code: a readme, a TODO, notes (edit_churn and fix_after_fail_without_triage leave it out)
   const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i;
+  /* A version of a file the agent changed again before the next test run (or the person's next message) is a step on
+     the way, not code a run saw (0.1.139): the test smells read only the version that stays. In the owner's session the
+     agent explained the numbers of a unit test in four edits in a row, and the first edit's version still had them: three
+     magic_number findings on numbers explained one edit later. A version shown in a message (no file) always counts. */
+  const stays = (ev, e) => {
+    if (!e.file) return true;
+    for (const x of ev) {
+      if (x.seq <= e.seq) continue;
+      if (x.kind === "run_tests" || x.kind === "user") return true;
+      if (x.file === e.file && ["write", "edit"].includes(x.kind)) return false;
+    }
+    return true;
+  };
   /* a call of an assertion helper: a page object's method, await searchPage.expectSearchOpen() (as ESLint's
      expect-expect, #154), or since 0.1.139 a plain function, expectLoginForm(page). In the owner's session the agent
      moved its checks into such functions, and a test that called them read as weakened */
@@ -4334,9 +4347,11 @@
       const STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
       const commented = (ln) => /\/\/|\/\*|(?:^|\s)#|^\s*\*/.test(ln.replace(STRING, '""'));
       // the number as a whole word of a text: 8 in "8 digits", not in "18" or "8.5"
-      const names = (text, num) => new RegExp(`(?<![\\w.])${num.replace(/[.\-]/g, "\\$&")}(?![\\w.]|\\.\\d)`).test(text);
+      // since 0.1.139 "±2" names 2 and -2 too ("not equal to any code within ±2 steps")
+      const names = (text, num) =>
+        [num, "±" + num.replace(/^-/, "")].some((n) => new RegExp(`(?<![\\w.])${n.replace(/[.\-]/g, "\\$&")}(?![\\w.]|\\.\\d)`).test(text));
       for (const e of ev) {
-        if (!e.new_content || !cfg.assert_line_patterns) continue;
+        if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
         // the text with its comment lines blanked, line for line, and as written: a blanked line that had text was a comment
         const blanked = linesOf(e),
           raw = String(e.new_content).split("\n");
@@ -4372,7 +4387,7 @@
       const out = [];
       if (!["python", "java"].includes(cfg.language)) return out;
       for (const e of ev) {
-        if (!e.new_content || !cfg.assert_line_patterns) continue;
+        if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
         for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
           const as = body.split("\n").filter((l) => isAssertLine(l, cfg));
           const withMsg = as.filter((l) => (cfg.language === "python" ? /,\s*(?:f?["'])/.test(l) : /assert\w+\s*\("[^"]*",/.test(l))).length;
@@ -4385,7 +4400,7 @@
     conditional_logic(ev, cfg) {
       const out = [];
       for (const e of ev) {
-        if (!e.new_content || !cfg.test_fn_pattern) continue;
+        if (!e.new_content || !cfg.test_fn_pattern || !stays(ev, e)) continue;
         for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
           const inner = body.split("\n").slice(1).join("\n");
           // since 0.1.121 also C#'s foreach and a loop written as a call: rows.forEach(…), list.ForEach(…). A line with no
@@ -4408,7 +4423,7 @@
     duplicate_assert(ev, cfg) {
       const out = [];
       for (const e of ev) {
-        if (!e.new_content || !cfg.assert_line_patterns) continue;
+        if (!e.new_content || !cfg.assert_line_patterns || !stays(ev, e)) continue;
         for (const [name, body] of Object.entries(blocksByTest(linesOf(e), cfg.test_fn_pattern))) {
           const at = new Map(); // assertion → how many code lines that are no assertion came before it
           let steps = 0,
