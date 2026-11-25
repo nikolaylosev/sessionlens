@@ -332,11 +332,30 @@
     return { tests: all, covered, uncovered: ids.filter((id) => !covered[id].length), unlinked, hasIds: spec.requirements.some((r) => !r.auto) };
   }
 
+  /* The specification the person named in their messages (0.1.139): a line with a word for it and a path, such as
+     "Specification: qa/e2e/auth.md (E2E-auth-01, -03, -08)" or "Спецификация: specs/DD-11.md". In the owner's session
+     the task named it, the agent read it, and the review said "no specification" (high): it is the review that lacks it,
+     not the agent. → the first path, or "" */
+  const SPEC_WORD = /\b(?:spec(?:ification)?s?|requirements?)\b|спецификаци|требовани/i;
+  function specNamed(events) {
+    for (const e of events || [])
+      if (e.kind === "user")
+        for (const line of String(e.text || "").split("\n")) {
+          const path = SPEC_WORD.test(line) && line.match(/[\w.-]+(?:\/[\w.-]+)*\.(?:md|markdown|txt|feature|ya?ml|json|adoc|rst|pdf|docx)\b/i);
+          if (path) return path[0];
+        }
+    return "";
+  }
+
   function checks(spec, events, language) {
     const F = (check, severity, seq, message) => ({ check, severity, seq, message, source: "spec" });
     const lastCode = [...events].reverse().find((e) => e.new_content);
     if (!lastCode) return { findings: [], coverage: null };
-    if (!spec || !spec.requirements.length) return { findings: [F("no_spec", "high", lastCode.seq, T("no_spec"))], coverage: null };
+    if (!spec || !spec.requirements.length) {
+      const named = specNamed(events);
+      const f = named ? F("no_spec", "low", lastCode.seq, T("no_spec_named", { file: named })) : F("no_spec", "high", lastCode.seq, T("no_spec"));
+      return { findings: [f], coverage: null };
+    }
     const cov = coverage(spec, events, language);
     const out = [];
     if (!cov) return { findings: [], coverage: null };

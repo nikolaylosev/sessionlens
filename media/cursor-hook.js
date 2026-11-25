@@ -67,6 +67,7 @@ var require_i18n = __commonJS({
           expected_failure_ref: "{file}: {n} {n|test|tests} marked as an expected failure, with the bug named in the code — the suite reports green while it is open",
           r_expected_failure: "An expected failure hides a live bug behind a green suite. Report the bug first and say in the test which ticket keeps it red.",
           no_spec: "No specification: impossible to tell which checks are requirements and which are the agent's guesses",
+          no_spec_named: "The task names a specification ({file}), but the review does not have it: add it to check which tests cover the requirements",
           uncovered: "Requirement {id} has no test: “{text}”",
           unlinked: "Test {name} references no requirement — what does it check?",
           oos: "There is a test for something explicitly out of scope: “{text}”",

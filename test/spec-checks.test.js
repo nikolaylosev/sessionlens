@@ -85,3 +85,23 @@ test("out_of_scope_tested, not reported: a keyword inside another word, one keyw
   const ru = "## Требования\nR1. Корзина показывает сумму\n\n## Вне scope\n- Доставка через курьера\n";
   assert.deepEqual(found(ru, t("R1 сумма через минуту"), "out_of_scope_tested"), [], '"через" is a common word, not a keyword');
 });
+
+/* 0.1.139: the task named the specification ("Спецификация: qa/e2e/auth.md (E2E-auth-01, -03, -08)"), the agent read
+   it, and the review said "no specification", high. The review lacks it, not the agent: low, with the file named. */
+test("no_spec: low and naming the file when the person's message names a specification; high otherwise", () => {
+  const code = { seq: 2, kind: "write", file: "e2e/cart.spec.ts", new_content: t("total") };
+  const said = (text) => LensSpec.checks(null, [{ seq: 1, kind: "user", text }, code], "typescript").findings.map((f) => `${f.severity}: ${f.message}`);
+  const named = (file) => `low: The task names a specification (${file}), but the review does not have it: add it to check which tests cover the requirements`;
+  assert.deepEqual(said("Review the tests.\nСпецификация: qa/e2e/auth.md (E2E-auth-01, -03, -08)."), [named("qa/e2e/auth.md")]);
+  assert.deepEqual(said("Use section 1 of specs/todos.md"), [named("specs/todos.md")], "a specs folder");
+  assert.deepEqual(said("The requirements are in docs/cart.feature"), [named("docs/cart.feature")]);
+  const none = ["high: No specification: impossible to tell which checks are requirements and which are the agent's guesses"];
+  assert.deepEqual(said("Write tests for the cart"), none, "no file");
+  assert.deepEqual(said("Update qa/e2e/README.md: the catalog's format"), none, "a file, but not named as the specification");
+  assert.deepEqual(LensSpec.checks(null, [{ seq: 1, kind: "message", text: "Specification: docs/spec.md" }, code], "typescript").findings.length, 1);
+  assert.equal(
+    LensSpec.checks(null, [{ seq: 1, kind: "message", text: "Specification: docs/spec.md" }, code], "typescript").findings[0].severity,
+    "high",
+    "the agent's words",
+  );
+});
