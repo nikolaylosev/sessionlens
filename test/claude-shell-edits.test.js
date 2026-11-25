@@ -193,6 +193,37 @@ test("the checks see the edit: a weakened assertion, a fix after a red run, a te
   );
 });
 
+/* Claude Code diffs every file that changed while a command ran, whoever changed it. In the owner's session a test run in
+   qa-ts/ listed four files of qa/compare/ that another session was writing then, and the first became an edit right
+   after the failure. A file is the command's when it lies in a folder the command ran in or under a path it names. */
+test("a file the diff lists outside the command's folders and paths is not the agent's", () => {
+  const RED = "Running 1 test using 1 worker\n\n  1) [chromium] › e2e/cart.spec.ts:1:1 › total\n\n  1 failed\n";
+  // a command run with the shell in `dir`: the folder Claude Code writes into the call's record
+  const bashIn = (dir, command, diff, output = "ok") => {
+    const t = "t" + id++;
+    return [
+      rec("assistant", [{ type: "tool_use", id: t, name: "Bash", input: { command } }], { cwd: dir }),
+      rec("user", [{ type: "tool_result", tool_use_id: t, content: output }], { cwd: dir, toolUseResult: { stdout: output, bashEditDiff: diff } }),
+    ];
+  };
+  const runner = ["/w/shop/qa/compare/runner.py", [hunk(0, 0, 1, 1, ["+print('run')"])]];
+  const report = ["qa-ts/reports/last.json", [hunk(0, 0, 1, 1, ["+{}"])]];
+  const run = importOf(bashIn(`${ROOT}/qa-ts`, "npm run typecheck; npx playwright test", diffOf(runner, report), RED));
+  assert.deepEqual(
+    changes(run).map((e) => e.file),
+    ["qa-ts/reports/last.json"],
+    "the run's own report stays, the file another session wrote is gone",
+  );
+  assert.ok(!checks(run).some((c) => c.startsWith("fix_after_fail")), checks(run).join(", "));
+  // a path the command names: a folder, one inside a script's quotes, one from the folder a cd goes to
+  const edited = (file) => [file, [hunk(1, 1, 1, 1, ["-a", "+b"])]];
+  const owned = (dir, command, file) => changes(importOf(bashIn(dir, command, diffOf(edited(file))))).length;
+  assert.equal(owned(`${ROOT}/backend`, "uv run ruff format app ../extract | tail -1", "/w/shop/extract/import_log.py"), 1, "../extract");
+  assert.equal(owned(`${ROOT}/plugins/dash`, "python3 - <<'EOF'\nedit('../../README.md', [('a', 'b')])\nEOF", "/w/shop/README.md"), 1, "in quotes");
+  const cdThen = "cd /w/shop/backend/app && python3 - <<'EOF'\nPath('../tests/test_api.py').write_text(s)\nEOF";
+  assert.equal(owned(`${ROOT}/frontend`, cdThen, "/w/shop/backend/tests/test_api.py"), 1, "from the folder cd goes to");
+});
+
 test("a Claude Code session imported before whose commands changed files asks to be imported again (IMPORT_GEN 15)", () => {
   const s = (extra) => Object.assign({ profile: "qa-ts", agent: "claude-code", importGen: 14, events: [{ seq: 0, ts: "t", kind: "user", text: "Go" }] }, extra);
   const step = (cmd) => ({

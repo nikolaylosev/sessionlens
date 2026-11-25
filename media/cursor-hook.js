@@ -2221,6 +2221,28 @@ var require_lens = __commonJS({
         }
         return out;
       }
+      function commandOwns(file, cmd, dir) {
+        if (!dir) return true;
+        const text = String(cmd || "");
+        const home = (/^(\/Users\/[^/]+|\/home\/[^/]+)/.exec(dir) || [])[1] || "";
+        const norm = (p) => {
+          const parts = [];
+          for (const s of p.split("/")) {
+            if (s === "..") parts.pop();
+            else if (s && s !== ".") parts.push(s);
+          }
+          return "/" + parts.join("/");
+        };
+        const resolve = (p, from) => p.startsWith("~/") && home ? norm(home + p.slice(1)) : norm(p.startsWith("/") ? p : from + "/" + p);
+        const under = (q) => q !== "/" && q !== home && (file === q || file.startsWith(q + "/"));
+        if (file.startsWith(dir + "/")) return true;
+        const words = (text.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).filter((w) => !w.includes("$"));
+        const dirs = [
+          dir,
+          ...[...text.matchAll(/(?:^|[;&|\n(]|&&)\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|)]+)/g)].map((m) => resolve(m[1].replace(/^(['"])(.*)\1$/, "$2"), dir))
+        ];
+        return words.some((w) => dirs.some((d) => under(resolve(w, d))));
+      }
       const SUBAGENT_LINE = "sessionlens-subagent";
       function joinSubagents(text, subs) {
         const parts = [String(text || "").replace(/\n+$/, "")];
@@ -2259,7 +2281,7 @@ var require_lens = __commonJS({
         return { recs, types, main: main2 };
       }
       function fromClaudeJsonl(text, cfg) {
-        const files = {}, out = [], pending = {}, heredocsOf = {}, thoughts = {};
+        const files = {}, out = [], pending = {}, heredocsOf = {}, shellOf = {}, thoughts = {};
         let seq = 0, cwd = "";
         const base = (f) => files[f] ?? null;
         const short = (f) => cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f;
@@ -2303,6 +2325,7 @@ var require_lens = __commonJS({
               const inp = toolInput(b.name || "", b.input || {});
               const [kind, f0, cmd] = classify(b.name || "", inp, cfg);
               const f = f0 && !f0.startsWith("/") && cwd && playwrightTestTool(b.name || "") ? cwd + "/" + f0 : f0;
+              if (b.name === "Bash") shellOf[b.id || ""] = { cmd: inp.command, dir: here };
               if (b.name === "Bash")
                 for (const w of heredocWrites(inp.command, here)) {
                   const o = base(w.file);
@@ -2382,9 +2405,11 @@ var require_lens = __commonJS({
                 files[rf.filePath] = rf.content;
               if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
                 const heredocs = heredocsOf[b.tool_use_id || ""] || [];
+                const sh = shellOf[b.tool_use_id || ""] || {};
                 for (const d of tur.bashEditDiff.files) {
                   const full = d && typeof d.filePath === "string" ? d.filePath : "";
                   if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
+                  if (!commandOwns(full, sh.cmd, sh.dir)) continue;
                   const h = heredocs.find((y) => y.file === full);
                   const made = d.hunks.every((k) => !k.oldStart && !k.oldLines);
                   const o0 = made ? null : h ? h.before : base(full);
