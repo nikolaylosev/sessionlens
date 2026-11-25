@@ -828,8 +828,9 @@ written in {LANG}, in this exact shape — study it before writing anything:
      qualify, OMIT this path entirely rather than forcing a weak script.
   Do NOT write any file under "examples/": sessionlens adds that folder itself, from real files of the sessions.
   When the input ends with an "## Example files" list, end every AP-xx section whose rule (check id) is listed there
-  with a line "**Real example:** \`examples/<check>/<file>\`" naming those files exactly as listed. Never invent
-  an example path and never write example code of your own.
+  with a line "**Real example:** \`<path>\`" naming the files listed for that rule exactly as listed (a file may be
+  listed for two rules and sit in the other rule's folder). Never invent an example path and never write example
+  code of your own.
 
 Reply ONLY with a JSON object: {"skill_name": "...", "files": [{"path": "...", "content": "..."}, ...]}. No
 prose outside the JSON, no code fences around the JSON itself. Each file's "content" is the complete file text

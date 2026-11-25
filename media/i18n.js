@@ -754,6 +754,7 @@
       ex_col: "| File | Rule | Session | Seq | Finding |",
       ex_masked: "{n} {n|secret|secrets} masked",
       ex_truncated: "cut at {n} characters",
+      ex_changed_later: "the session changed this file later, at step {seq}",
       s_routes: "Model per request",
       s_routes_sub: "Choose which of your configured models answers each kind of request. Add models above first — this list only offers to pick among them.",
       route_default: "Default ({m})",

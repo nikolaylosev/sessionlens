@@ -119,5 +119,70 @@
     });
     return { overrides, ignored };
   }
-  return { GROUPS, DEFAULT_SEVERITY, GOOD, ALL, book, apply, ruleText, exampleGood, disabledChecks, toJson, fromJson, groupOf };
+  /* A skill's examples/ folder: for each picked rule, up to perRule files the agent really wrote, at the step of a
+     confirmed finding of that rule, one session first; secrets masked, cut at maxChars. confirmedOf(check) gives
+     [{ s, f }]: the session and its confirmed finding. → { files: [README, …], rows, masked }.
+     Since 0.1.139 one file at one step is one copy: a rule that needs a file another rule already took refers to that
+     copy (the owner's skill had the same two files in raw_locator/ and positional_locator/, byte for byte). A README row
+     says when the session changed the file later: the example is the version at the finding's step, not the last. */
+  /** @param {string[]} keys @param {(k: string) => any[]} confirmedOf @param {{ perRule: number, maxChars: number }} opts */
+  function skillExamples(keys, confirmedOf, opts) {
+    const files = [],
+      rows = [],
+      used = new Set(),
+      copies = new Map(); // session|file|step → its path
+    for (const k of keys) {
+      const cand = confirmedOf(k)
+        .map(({ s, f }) => ({ s, f, e: s.events.find((/** @type {any} */ x) => x.seq === f.seq) }))
+        .filter((x) => x.e && x.e.new_content && !x.e.fragment_only);
+      const bySession = new Set();
+      const order = [...cand.filter((x) => !bySession.has(x.s.id) && bySession.add(x.s.id)), ...cand]; // one per session first
+      let n = 0,
+        named = 0;
+      for (const { s, f, e } of order) {
+        if (n >= opts.perRule) break;
+        const id = `${s.id}|${e.file || "seq" + f.seq}`;
+        if (used.has(id + "|" + k)) continue;
+        used.add(id + "|" + k);
+        n++;
+        const later = (s.events || []).find((/** @type {any} */ x) => x.seq > f.seq && e.file && x.file === e.file && /^(?:write|edit)$/.test(x.kind));
+        const row = { path: "", k, session: s.task || s.name, seq: f.seq, message: f.message, masked: 0, cut: false, later: later ? later.seq : null };
+        const copy = copies.get(id + "|" + f.seq);
+        if (copy) Object.assign(row, { path: copy.path, shared: true });
+        else {
+          const base = ((e.file || "").split("/").pop() || `from-chat-seq${f.seq}.txt`).replace(/[^\w.\-]/g, "_");
+          const red = L().redactSecrets(e.new_content.slice(0, opts.maxChars));
+          Object.assign(row, { path: `examples/${k}/${++named}-${base}`, masked: red.count, cut: e.new_content.length > opts.maxChars });
+          files.push({ path: row.path, content: red.text });
+          copies.set(id + "|" + f.seq, row);
+        }
+        rows.push(row);
+      }
+    }
+    if (!files.length) return { files: [], rows: [], masked: 0 };
+    const cell = (/** @type {any} */ x) => String(x).replace(/\|/g, "\\|").replace(/\s+/g, " ").trim().slice(0, 160);
+    const notes = (/** @type {any} */ r) =>
+      [
+        r.masked ? T("ex_masked", { n: r.masked }) : "",
+        r.cut ? T("ex_truncated", { n: opts.maxChars }) : "",
+        r.later != null ? T("ex_changed_later", { seq: r.later }) : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
+    const readme = [
+      T("ex_readme_title"),
+      "",
+      T("ex_readme_body"),
+      "",
+      T("ex_col"),
+      "|---|---|---|---|---|",
+      ...rows.map(
+        (r) =>
+          `| \`${r.path.replace("examples/", "")}\` | ${r.k} | ${cell(r.session)} | ${r.seq} | ${cell(r.message)}${notes(r) ? " (" + notes(r) + ")" : ""} |`,
+      ),
+      "",
+    ].join("\n");
+    return { files: [{ path: "examples/README.md", content: readme }, ...files], rows, masked: rows.reduce((a, r) => a + r.masked, 0) };
+  }
+  return { GROUPS, DEFAULT_SEVERITY, GOOD, ALL, book, apply, ruleText, exampleGood, disabledChecks, toJson, fromJson, groupOf, skillExamples };
 });
