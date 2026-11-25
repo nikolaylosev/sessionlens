@@ -3536,6 +3536,28 @@
         const then = src != null ? tests(src)[name] : undefined;
         return then !== undefined && norm(then) !== body;
       };
+      /* 0.1.139: renamed and rewritten in one change, most of the title kept. In the owner's session the agent rewrote its
+         tests after a review and renamed "wrong password: stays on /login, …" to "… stays on the login page, …", and
+         "3. wrong code: «The entered code is wrong.», …" to "3. wrong code: a message about the wrong code, …": two
+         medium findings. A removed test is renamed when a test added in the same change shares most of the words of the
+         shorter title (0.6 of them) and has no fewer checks: assertion lines and calls of expect…() helpers. With fewer
+         checks it is still a deletion. Each added test stands for one removed test. */
+      const titleWords = (t) =>
+        new Set(
+          String(t)
+            .toLowerCase()
+            .match(/[\p{L}\p{N}]+/gu) || [],
+        );
+      const sameTitle = (a, b) => {
+        const [x, y] = [titleWords(a), titleWords(b)];
+        const shared = [...x].filter((w) => y.has(w)).length;
+        return Math.min(x.size, y.size) > 0 && shared / Math.min(x.size, y.size) >= 0.6;
+      };
+      const checksIn = (body) =>
+        body
+          .split("\n")
+          .filter((l) => !/^\s*(?:\/\/|#|\/\*|\*)/.test(l))
+          .reduce((n, l) => n + (isAssertLine(l, cfg) ? 1 : 0) + (l.match(/(?<![\w$])\.?expect[A-Z]\w*\s*\(/g) || []).length, 0);
       // ---- a test removed from a file ----
       const last = {};
       for (const e of versions) {
@@ -3550,7 +3572,13 @@
           .filter((k) => !(k in om))
           .map((k) => norm(nm[k]));
         const renamed = (k) => norm(om[k]) && added.includes(norm(om[k])) && !rewrittenSinceRun(e.file, e.seq, k, norm(om[k]));
-        const gone = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
+        const removed = Object.keys(om).filter((k) => !(k in nm) && !renamed(k) && !kept(e.file, e.seq, k));
+        const retitled = new Set(); // the added tests that already stand for a removed one
+        const gone = removed.filter((k) => {
+          const to = Object.keys(nm).find((n) => !(n in om) && !retitled.has(n) && sameTitle(k, n) && checksIn(nm[n]) >= checksIn(om[k]));
+          if (to) retitled.add(to);
+          return !to;
+        });
         if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, undefined, ownRedRun(e.file, e.seq, gone));
       }
       // ---- a test file deleted ----

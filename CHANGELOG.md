@@ -19,6 +19,11 @@
   not fit the text SessionLens knows (the file changed outside the session), the edit is kept as a fragment, not
   guessed. This also brings real findings that were hidden: tests deleted, assertions weakened and edits right after a
   failure made with such commands. A session imported before shows **Import again**.
+- **A test renamed while it was rewritten is no longer reported as deleted.** When an agent rewrote a test and adjusted
+  its title in the same change, such as "wrong password: stays on /login" becoming "wrong password: stays on the login
+  page", SessionLens reported the old test as deleted, often right after a failing run. Now a test counts as renamed
+  when a new test in the same change keeps most of the words of its title and has no fewer checks. With fewer checks it
+  is still reported. In our sessions this removes 30 of 69 such findings, all of them renames.
 - **Putting a file back after a red run is no longer taken for a fix.** When the agent proves that a test can fail
   (it breaks the password, sees the run go red, and puts the password back), the edit that puts it back was reported
   as "Edited right after a failure with no triage". Now an edit that makes a file exactly what it was before the
