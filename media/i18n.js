@@ -66,6 +66,8 @@
       r_expected_failure: "An expected failure hides a live bug behind a green suite. Report the bug first and say in the test which ticket keeps it red.",
       no_spec: "No specification: impossible to tell which checks are requirements and which are the agent's guesses",
       no_spec_named: "The task names a specification ({file}), but the review does not have it: add it to check which tests cover the requirements",
+      no_spec_named_here:
+        "The task names a specification ({file}), and the session has its text, but the review does not have it: take it under Specification to check which tests cover the requirements",
       uncovered: "Requirement {id} has no test: “{text}”",
       unlinked: "Test {name} references no requirement — what does it check?",
       oos: "There is a test for something explicitly out of scope: “{text}”",
@@ -252,6 +254,7 @@
       spec_offer_plan: "The agent saved a test plan, {f}: {n} {n|scenario|scenarios}.",
       spec_offer_cases: "The agent wrote test cases, {f}: {n} with IDs.",
       spec_offer_use: "Use as specification",
+      spec_offer_named: "The task names {f} as the specification, and the session has its text: {n} {n|requirement|requirements}.",
       spec_auto: " · numbered automatically, coverage not checked",
       spec_unparsed: "(text given, no requirements recognised — number them or use R1., R2.)",
       spec_count: "({n} {n|requirement|requirements}{oos})",

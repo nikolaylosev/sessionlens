@@ -353,7 +353,11 @@
     if (!lastCode) return { findings: [], coverage: null };
     if (!spec || !spec.requirements.length) {
       const named = specNamed(events);
-      const f = named ? F("no_spec", "low", lastCode.seq, T("no_spec_named", { file: named })) : F("no_spec", "high", lastCode.seq, T("no_spec"));
+      // the session has its text: the Specification section offers it (0.1.140)
+      const here = named && offers(events).some((o) => o.kind === "named");
+      const f = named
+        ? F("no_spec", "low", lastCode.seq, T(here ? "no_spec_named_here" : "no_spec_named", { file: named }))
+        : F("no_spec", "high", lastCode.seq, T("no_spec"));
       return { findings: [f], coverage: null };
     }
     const cov = coverage(spec, events, language);
@@ -384,8 +388,13 @@
   /* What the agent wrote in the session that could be its specification (0.1.130): a plan it saved with Playwright's
      planner (the step's plan), or a document it wrote (.md, .txt) whose requirements have IDs, two at least (a document
      of test cases: "### NAV-01. …"). The last version of each file, newest first. The panel offers them while the
-     session has no specification; nothing is taken without the person's click. → [{ file, kind: "plan" | "cases", n, text }] */
+     session has no specification; nothing is taken without the person's click. → [{ file, kind: "plan" | "cases" | "named", n, text }]
+     Since 0.1.140 also the specification the person named (specNamed), as the session has its whole text: read whole
+     (the import keeps it then) or written. Any requirement counts for it, with an ID or numbered by the parser: the
+     person called it the specification. In one of our sessions the task named docs/spec.md, the agent read it, and the
+     review said "no specification" with no way to take it from there. */
   function offers(events) {
+    const spec = specNamed(events);
     const last = new Map();
     for (const e of events || []) {
       if (!e || !e.file) continue;
@@ -398,10 +407,15 @@
     }
     const out = [];
     for (const [file, o] of last) {
-      const n = parse(o.text).requirements.filter((r) => !r.auto).length;
-      if (o.kind === "plan" ? n >= 1 : n >= 2) out.push({ file, kind: o.kind, n, text: o.text, seq: o.seq });
+      const reqs = parse(o.text).requirements;
+      const n = reqs.filter((r) => !r.auto).length;
+      if (o.kind === "cases" && spec && sameFile(file, spec) && reqs.length) out.push({ file, kind: "named", n: reqs.length, text: o.text, seq: o.seq });
+      else if (o.kind === "plan" ? n >= 1 : n >= 2) out.push({ file, kind: o.kind, n, text: o.text, seq: o.seq });
     }
-    return out.sort((a, b) => b.seq - a.seq).map(({ file, kind, n, text }) => ({ file, kind, n, text }));
+    // the named one first, then the newest
+    return out
+      .sort((a, b) => Number(b.kind === "named") - Number(a.kind === "named") || b.seq - a.seq)
+      .map(({ file, kind, n, text }) => ({ file, kind, n, text }));
   }
   return { parse, tests, coverage, checks, refs, supports, extractorFor, offers };
 });

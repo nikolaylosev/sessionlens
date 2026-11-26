@@ -418,7 +418,7 @@ export function renderReview() {
   $("#spec-offer").innerHTML = offers
     .map(
       (o, i) =>
-        `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : "spec_offer_cases", { f: o.file, n: o.n }))}</span>` +
+        `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : o.kind === "named" ? "spec_offer_named" : "spec_offer_cases", { f: o.file, n: o.n }))}</span>` +
         `<button class="btn tiny" data-offer="${i}">${esc(T("spec_offer_use"))}</button></div>`,
     )
     .join("");

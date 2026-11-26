@@ -750,7 +750,10 @@ they differ from what the pinned package gives.
 
 The reviewer pastes requirements (`R1. …`, `AUTH-142/R3 …`, since 0.1.130 a key of a test management tool such as
 `NAV-01` or `CIP-T123`, an "Out of scope" part) on the session's tab, or takes with one click a plan the agent saved
-with Playwright's planner or a document of test cases it wrote (`LensSpec.offers`, 0.1.130, RA §17.1).
+with Playwright's planner or a document of test cases it wrote (`LensSpec.offers`, 0.1.130, RA §17.1). Since 0.1.140
+it also offers, first, the specification the person named (`specNamed`) when the session has its whole text: a
+document the agent wrote, or one Claude Code's Read gave whole (the import keeps a document's text on the Read,
+`doc_content`, only when the person's messages before it name the file).
 `spec.js` parses them; `LensSpec.checks` finds the tests in the session's code (per language, RA §17) and links a
 requirement to a test when the test's name, docstring, the comment above it or its first lines mention the ID.
 Results: the coverage matrix on the tab and the `spec` findings. For a specification without IDs the tab says that

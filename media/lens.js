@@ -1467,6 +1467,13 @@
       cwd = "";
     const base = (f) => files[f] ?? null;
     const short = (f) => (cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f);
+    // a file the person's messages so far name, by its path from the session's folder or its name with a folder
+    const named = [];
+    const namedBefore = (f) => {
+      const rel = short(f);
+      const tail = rel.split("/").slice(-2).join("/");
+      return named.some((t) => t.includes(rel) || (tail.includes("/") && t.includes(tail)));
+    };
     const { recs, types, main } = claudeRecords(text);
     for (const rec of recs) {
       if (!rec || typeof rec !== "object") continue;
@@ -1518,6 +1525,7 @@
           if (!text) continue;
           const r = think(by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text }));
           if (r.kind === "user") delete thoughts[""]; // reasoning the person's message cut off belongs to no later step
+          if (r.kind === "user" && !agent) named.push(text);
           if (r.kind === "message") attachCodeFromText(r);
           out.push(r);
         } else if (b.type === "tool_use" && role === "assistant") {
@@ -1625,8 +1633,13 @@
             rf.startLine === 1 &&
             rf.numLines === rf.totalLines &&
             !rf.truncatedByTokenCap
-          )
+          ) {
             files[rf.filePath] = rf.content;
+            /* a document the person named before, read whole (0.1.140): its text, so the review can offer it as the
+               specification (LensSpec.offers). Only one they named: the agent reads many documents (a skill's, a
+               README) and their texts would only take room */
+            if (DOC_RX.test(rf.filePath) && namedBefore(rf.filePath)) r.doc_content = rf.content.slice(0, 100000);
+          }
           // the output, and a test run's result: before the command's files, which go before a run they came before
           const c = b.content;
           const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (x && x.text) || "").join("\n") : JSON.stringify(c || "");
@@ -2888,8 +2901,10 @@
      17: a file a Claude Code command changed before it ran its tests is a step before the run, not after it
         (changedBeforeRun, 0.1.140).
      18: a package script's command whose output reads as a test result is a test run (`npm run -s unit`, testResult,
-        0.1.140). */
-  const IMPORT_GEN = 18;
+        0.1.140).
+     19: a document the person named, read whole by Claude Code's Read, keeps its text (doc_content), so the review can
+        offer it as the specification (0.1.140). */
+  const IMPORT_GEN = 19;
   /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
      at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
      cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
@@ -3026,6 +3041,19 @@
       return false;
     });
   }
+  /* A Claude Code session imported before 0.1.140 (IMPORT_GEN 19) whose agent read a document the person's messages
+     before it name, with no text kept: it may have been read whole. */
+  function namedDocRead(s) {
+    const said = [];
+    for (const e of s.events) {
+      if (e.kind === "user") said.push(String(e.text || ""));
+      else if (e.kind === "read" && e.tool === "Read" && DOC_RX.test(e.file || "") && e.doc_content == null) {
+        const tail = String(e.file).split("/").slice(-2).join("/");
+        if (said.some((t) => t.includes(e.file) || (tail.includes("/") && t.includes(tail)))) return true;
+      }
+    }
+    return false;
+  }
   function needsReimport(s) {
     if (!s || !Array.isArray(s.events) || s.importGen >= IMPORT_GEN) return false;
     if ((s.importGen || 0) < 3 && codexChangesBefore121(s)) return true;
@@ -3045,6 +3073,7 @@
       s.events.some((e) => e.kind === "run_other" && runsScript(e.cmd) && (parseTests(e.text || "", profile(s.profile)) || (e.text || "").length >= 3000))
     )
       return true;
+    if ((s.importGen || 0) < 19 && namedDocRead(s)) return true;
     // a run followed by a file its own command changed before it (0.1.140)
     if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
     // fewer assertions in an edit, without what the file's other blocks gained in it (0.1.140)
