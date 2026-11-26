@@ -365,6 +365,7 @@ var require_i18n = __commonJS({
           rules_title: "# Proposed rules for {f}",
           rules_rule: "**Rule:**",
           rules_ev: "Evidence:",
+          rules_notes: "Reviewers' notes:",
           ev_summary: "Evidence",
           rules_copied: "Copied",
           rules_copy: "Copy rules.md",
@@ -5224,7 +5225,7 @@ var require_lens = __commonJS({
         const ev = f.evidence || (f.code ? (f.code.split("\n").find((l) => l.includes("▸")) || "").replace(/^\s*\d+\s*▸\s?/, "") : "");
         return clip((ev || f.message).replace(/\s+/g, " ").trim(), 140);
       }
-      const ANALYSIS_VERSION = "0.1.140";
+      const ANALYSIS_VERSION = "0.1.141";
       function canon(v) {
         if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
         if (v && typeof v === "object")

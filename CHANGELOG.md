@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.141
+
+### Changed
+- **A generated skill is shorter and says each rule once.** A skill generated from the rules had three files that each
+  described every rule: `SKILL.md`, a file of patterns and a file of antipatterns, with two numberings (`P-01`… and
+  `AP-01`…) that did not match. It also carried the history of the reviews: session names, steps and dates. One
+  reviewed skill grew to 150 KB in 15 files, and its examples used functions the project does not have. Now
+  `SKILL.md` is at most 8,000 characters, with one line per rule and a few general review questions, and every rule
+  has one entry in `references/rules.md`: a bad snippet of one to three lines, the good one, and why. One numbering,
+  `P-NN`, is used by every file and by the check script, which prints the file and line of each hit and does not
+  check the skill's own examples. The model gets the rules without their sessions and steps, only your notes, and is
+  told not to invent helpers in its examples. The built-in prompt on the Model rules tab shows the new text.
+
 ## 0.1.140
 
 ### Fixed

@@ -846,6 +846,13 @@ flowchart TD
   RM --> MV[Moved → effect: did the finding's<br/>frequency drop afterwards?]
 ```
 
+- **Generate skill** (`LensAI.generateSkill`, `GENERATE_SKILL_TPL`): since 0.1.141 the shape the owner's audit of a
+  generated skill asked for: `SKILL.md` (at most 8,000 characters, `description` at most 400; workflow, one line per
+  rule, review questions, a checklist of what the script cannot check), `references/rules.md` (one entry per rule:
+  bad in one to three lines, good, why, an exception only when evidenced), one numbering `P-NN` in every file, and an
+  optional `scripts/check_<name>.sh` labelled by those numbers (`grep -rHn`, `--exclude-dir` for examples and
+  `skill-history`, a header listing what it does not check). No history in the skill. The model gets the picked
+  rules through `LensRules.skillInput`: the evidence without its sessions and steps, only the reviewers' notes.
 - **Target file** (`rulesTarget`): `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/sessionlens.mdc` (0.1.121), or both
   Markdown files. `both` does not include the Cursor file. The `.mdc` file is written with frontmatter
   (`alwaysApply: true`); without it Cursor skips the rule. The other targets are plain Markdown.

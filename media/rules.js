@@ -182,6 +182,36 @@
       "",
     ].join("\n");
   }
+  /* The proposed rules as a skill's input (0.1.141): each rule's evidence without its sessions and steps, only the
+     reviewers' notes, once each. A skill keeps no history (the owner's audit of a generated skill, 26.11: dates, steps
+     and verdicts in it, the same story in five files); a note can hold a decision of the project, which the skill keeps
+     as its result. An evidence line with no note goes; so does the heading of an evidence list left empty. */
+  function skillInput(/** @type {string} */ md) {
+    const out = [];
+    let notes = null;
+    const flush = () => {
+      if (notes && notes.length) out.push(T("rules_notes"), ...[...new Set(notes)].map((n) => `- ${n}`));
+      notes = null;
+    };
+    for (const line of String(md || "").split("\n")) {
+      if (line.trim() === T("rules_ev")) {
+        flush();
+        notes = [];
+        continue;
+      }
+      if (notes) {
+        if (/^- /.test(line)) {
+          const m = /— «(.*)»\s*$/.exec(line);
+          if (m && m[1].trim()) notes.push(m[1].trim());
+          continue;
+        }
+        flush();
+      }
+      out.push(line);
+    }
+    flush();
+    return out.join("\n");
+  }
   /* A skill's examples/ folder: for each picked rule, up to perRule files the agent really wrote, at the step of a
      confirmed finding of that rule, one session first; secrets masked, cut at maxChars. confirmedOf(check) gives
      [{ s, f }]: the session and its confirmed finding. → { files: [README, …], rows, masked }.
@@ -261,6 +291,7 @@
     fromJson,
     groupOf,
     skillExamples,
+    skillInput,
     ruleMarkdown,
     markNotes,
     sessionLabel,

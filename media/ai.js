@@ -836,39 +836,51 @@ with real newline characters>"}. No prose outside the JSON, no code fences aroun
     return { markdown, raw };
   }
 
-  /* Turns the same "Rules for {TARGET}" markdown as compressRules into a full Agent Skill package in the
-     house style used by e.g. an "autotest-writing" skill: SKILL.md with numbered Core rules (P-xx), a
-     references/patterns.md and references/antipatterns.md pair cross-referenced by ID, and — only when the
-     evidence actually supports it — a grep-based scripts/check_*.sh. It never writes an examples/ folder itself:
-     the app assembles that from real files of the sessions (secrets masked) and the model only links to them. */
+  /* Turns the same "Rules for {TARGET}" markdown as compressRules into an Agent Skill package. Since 0.1.141 in the
+     shape the owner's audit of a generated skill asked for (26.11: 150 KB in 15 files, each rule in three to five
+     places, two numberings P-xx and AP-xx that did not match, examples with functions the code does not have):
+     SKILL.md under 8,000 characters, one file of rules with one entry per rule (bad / good / why), one numbering P-NN
+     used by every file and the script, no history in the skill (no dates, sessions, steps or verdicts), and a script
+     whose labels are the rule numbers. It never writes an examples/ folder itself: the app assembles that from real
+     files of the sessions (secrets masked) and the model only links to them. */
   const GENERATE_SKILL_TPL = `You turn a set of confirmed {TARGET} rules (each with a rule statement, one or two
-real bad snippets pulled from actual sessions, and sometimes a known-good snippet) into an Agent Skill package,
-written in {LANG}, in this exact shape — study it before writing anything:
+real bad snippets pulled from actual sessions, sometimes a known-good snippet, and sometimes the reviewers' notes) into
+an Agent Skill package, written in {LANG}, in this exact shape — study it before writing anything:
 
 - A short "skill_name" — lowercase, hyphenated, matching the domain of the rules (e.g. "playwright-test-review").
+- One numbering only: every rule gets one id "P-01", "P-02", … in the order of SKILL.md's rules, and SKILL.md,
+  references/rules.md and the script all use that id. Never a second series (no "AP-xx" or any other prefix); a check
+  name of the input (such as raw_locator) is no id.
 - "files", covering exactly these paths (skip a path only where its own rule below says to):
-  1. "SKILL.md" — YAML frontmatter (\`name\` = skill_name, \`description\` = one pushy sentence naming the stack/
-     domain and the concrete situations that should trigger this skill), then a short "## Workflow" (numbered,
-     ends in "self-review against references/antipatterns.md"), then "## Core rules" — one bullet per rule, one
-     sentence, each tagged \`(P-xx)\` matching its id in references/patterns.md, ordered highest-impact first,
-     then "## When to read what" (patterns.md for "how do I", antipatterns.md for "reviewing/fixing"), then a
-     concrete, checkable "## Done checklist".
-  2. "references/patterns.md" — one \`## P-xx: <name>\` section per rule, same order as SKILL.md's Core rules:
-     the good snippet as a fenced code block (use the rule's own good example verbatim when one was given),
-     a **Why:** sentence stating the real consequence of skipping it, and only a real **Exception:** line if
-     one is evidenced — never "Exception: none".
-  3. "references/antipatterns.md" — one \`## AP-xx: <name>\` section per rule (numbered independently of the
-     P-xx list): **Bad:** using the rule's own real bad snippet(s) as close to verbatim as given, **Good:**
-     the fix (name the \`(P-xx)\` it matches instead of repeating the code when that's clearer), **Why:** the
-     concrete failure mode.
-  4. "scripts/check_<skill_name>.sh" — INCLUDE THIS FILE ONLY IF at least two of the rules' bad snippets share
-     a plausible literal/regex signature (a specific banned call, literal, or import — not a judgment call).
-     Shape: a bash script with one \`check "<description naming its AP-xx>" "<extended-regex>"\` line per
-     mechanically-catchable antipattern, grep over \`--include\` patterns appropriate to the stack, and a final
-     pass/fail summary — mirror the reference shape, adjusted to the stack at hand. If fewer than two rules
-     qualify, OMIT this path entirely rather than forcing a weak script.
+  1. "SKILL.md" — AT MOST 8,000 characters in all. YAML frontmatter: \`name\` = skill_name, \`description\` = at
+     most 400 characters, only the signs that should make an agent use this skill (the stack, the kind of task). Then
+     "## Workflow" (numbered steps; the last one: check the work against references/rules.md), "## Rules" (one line
+     per rule: "P-NN — <what to do>", highest impact first, no examples), "## Review questions" (three to five general
+     questions a reviewer asks of any change in this domain, such as "what happens if the condition already holds
+     before the action?", "what happens if this line does not parse?", "what happens if the locator finds nothing?":
+     they catch what no rule names yet), and a short "## Done checklist" with only what the script cannot check.
+     Nothing else: no examples, no history.
+  2. "references/rules.md" — one section per rule, in the same order: "## P-NN: <name>", then **Bad:** one to three
+     lines of the rule's own real bad snippet, as close to verbatim as given; **Good:** the fix as a fenced code
+     block (the rule's own good example verbatim when one was given); **Why:** the concrete failure the rule
+     prevents; and an **Exception:** line only when the input evidences one (a reviewer's note that allows a case).
+     Write each rule in full in its own section: never "see above" or an addendum under it.
+  3. "scripts/check_<skill_name>.sh" — INCLUDE THIS FILE ONLY IF at least two rules have a bad snippet with a
+     plausible literal/regex signature (a specific banned call, literal or import — not a judgment call). A bash
+     script: a header comment listing by id the rules it does NOT check; one \`check "P-NN <what it found>"
+     "<extended-regex>"\` line per mechanically checkable rule; grep with -rHn (file and line in every hit), with
+     --include patterns for the stack and --exclude-dir for examples, skill-history and node_modules; a final pass/fail
+     summary. A pattern must not match the rule's own good example. If fewer than two rules qualify, OMIT this path.
+- Never put history into the skill: no dates, session names, step numbers (seq), verdicts, "new rule" or "changed on"
+  notes. A reviewer's note that records a decision of the project goes in as its result ("the counter is checked as
+  'did not grow'"), not as the discussion.
+- Code in Good: only the names that appear in the input's snippets, or the testing framework's own API. Never invent a
+  helper, a fixture or a page-object method; where an example needs a name the input does not give, write a plain
+  placeholder and say in a comment that it is one.
+- Every Good example follows every rule of the skill, not only its own (a positive check before a negative one, no raw
+  locator, no fixed wait…).
   Do NOT write any file under "examples/": sessionlens adds that folder itself, from real files of the sessions.
-  When the input ends with an "## Example files" list, end every AP-xx section whose rule (check id) is listed there
+  When the input ends with an "## Example files" list, end the rules.md section of every rule (check id) listed there
   with a line "**Real example:** \`<path>\`" naming the files listed for that rule exactly as listed (a file may be
   listed for two rules and sit in the other rule's folder). Never invent an example path and never write example
   code of your own.
