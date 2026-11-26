@@ -40,7 +40,9 @@
     }
     // phase 8: calibration per check and source, after the merge (a superseded regex finding is gone before it) and
     // before the Rules tab's overrides
-    const cal = lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai], opts.calibStats, overrides);
+    // a test file the agent made, ran green and deleted is its own check, not what the session leaves (0.1.140)
+    const kept = lens.temporaryFindings([...base, ...gherkin, ...sc.findings, ...ai], s.events, cfg);
+    const cal = lens.calibrate(kept, opts.calibStats, overrides);
     s.findings = lens.sortFindings(R().apply(cal.findings, overrides));
     s.coverage = sc.coverage;
     s.specParsed = { n: spec.requirements.length, oos: spec.outOfScope.length, hasIds: spec.requirements.some((r) => !r.auto) };

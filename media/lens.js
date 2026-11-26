@@ -3261,6 +3261,115 @@
   }
   // steps that change no code and say nothing: pass_claim_without_run does not count them in its window
   const QUIET_STEPS = new Set(["read", "search", "tool", "git", "run_other"]);
+
+  // ---- files a step deletes (test_deleted, temporaryFiles) ----
+  const cmdParts = (cmd) => String(cmd || "").split(/&&|\|\||;|\n/);
+  const RM = /^\s*(?:sudo\s+)?(?:git\s+rm|rm|unlink|del|Remove-Item)\s+(.*)$/;
+  // what a step deletes, as it names it: a delete event's file, or the arguments of rm, git rm, unlink, del, Remove-Item
+  function deleteTargets(e) {
+    if (e.kind === "delete" && e.file) return [e.file];
+    const out = [];
+    for (const part of e.cmd ? cmdParts(e.cmd) : []) {
+      const m = part.match(RM);
+      if (m)
+        out.push(
+          ...m[1]
+            .split(/\s+/)
+            .filter((t) => t && !t.startsWith("-"))
+            .map((t) => t.replace(/^["']|["']$/g, "").replace(/\/+$/, "")),
+        );
+    }
+    return out;
+  }
+  // a target as a test of a file's path: a glob (tmp-*), else the file, a folder of it, or the same path with a prefix
+  function deletes(t) {
+    if (/[*?]/.test(t)) {
+      const rx = new RegExp(
+        "(?:^|/)" +
+          t
+            .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+            .replace(/\*/g, "[^/]*")
+            .replace(/\?/g, "[^/]") +
+          "$",
+      );
+      return (f) => rx.test(f);
+    }
+    // one of the two may have the home folder spelled out (a session imported before 0.1.124)
+    return (f) => {
+      const [a, b] = [homeless(f), homeless(t)];
+      return a === b || a.endsWith("/" + b) || b.endsWith("/" + a) || f.startsWith(t + "/") || f.includes("/" + t + "/");
+    };
+  }
+  /* 0.1.127: a command that runs the tests and then deletes a file (`npx playwright test x.spec.ts; rm x.spec.ts`): its
+     own run is the one the deletion came after, not the run of an earlier step */
+  const ranFirst = (e, cfg) => {
+    if (e.kind !== "run_tests" || !e.tests) return false;
+    const p = cmdParts(e.cmd);
+    const run = p.findIndex((x) => isTestRun(x, cfg)),
+      rm = p.findIndex((x) => RM.test(x));
+    return run >= 0 && rm > run;
+  };
+  const runBefore = (ev, e, cfg) => (ranFirst(e, cfg) ? e : [...ev].reverse().find((x) => x.seq < e.seq && x.kind === "run_tests" && x.tests) || null);
+  // the run ran the file: it names it, or names no test file at all (the whole suite)
+  const ranFile = (run, f, cfg) => {
+    const p = cmdParts(run.cmd).filter((x) => isTestRun(x, cfg));
+    const name = f.split("/").pop();
+    return p.some((x) => x.includes(name) || !/\S+(?:\.(?:spec|test|cy)\.[cm]?[jt]sx?|_test\.(?:py|go)|\.py)\b|::/.test(x));
+  };
+  const greenRun = (run) => !!run && !run.tests.failed && !run.tests.errors && run.tests.passed > 0;
+  // the versions of the session's code files, in order: what test_deleted and temporaryFiles compare
+  const codeVersions = (ev, cfg) => ev.filter((e) => ["write", "edit"].includes(e.kind) && e.file && e.new_content && isCode(e.file, cfg));
+  // the session made the file: its first version is a write with nothing before it
+  const createdHere = (versions, f) => {
+    const first = versions.find((v) => v.file === f);
+    return !!first && first.kind === "write" && first.prev_content == null;
+  };
+  /* The session's temporary test files (0.1.140): a test file the agent created, ran green and deleted while doing one
+     request of the person (no message of theirs between its first version and its deletion), and did not write again.
+     It is a check of the agent's own, not part of what the session leaves: test_deleted has not reported its deletion
+     since 0.1.127, and since 0.1.140 temporaryFindings() leaves out what the other checks found in it. In the owner's
+     session the agent wrote three such files, each with the comment "TEMPORARY file … delete after the run" (the task
+     asked for one of them: delay /logincheck and prove the helper waits), deleted each a step or two later, and got
+     eight findings on them, three of them high. A file deleted after a red run hides a failure, and one deleted for a
+     later request (a feature taken out) was part of an earlier result: neither is a temporary file.
+     → Map file → the step that deleted it */
+  function temporaryFiles(ev, cfg) {
+    const versions = codeVersions(ev, cfg);
+    const out = new Map();
+    const askedBetween = (from, to) => ev.some((x) => x.kind === "user" && x.seq > from && x.seq < to);
+    for (const e of ev)
+      for (const t of deleteTargets(e)) {
+        const hit = deletes(t);
+        for (const f of new Set(versions.filter((v) => v.seq < e.seq && hit(v.file)).map((v) => v.file))) {
+          if (!isTestFile(f, cfg) || !createdHere(versions, f) || versions.some((v) => v.file === f && v.seq > e.seq)) continue;
+          if (askedBetween(versions.find((v) => v.file === f).seq, e.seq)) continue;
+          const run = runBefore(ev, e, cfg);
+          if (greenRun(run) && ranFile(run, f, cfg)) out.set(f, e.seq);
+        }
+      }
+    return out;
+  }
+  /* What is left of the findings when the temporary files are taken out (0.1.140). Gone: what the checks of the code
+     found in such a file (lint, the test smells, test_deleted of one of its tests), scope_creep and edit_churn of it,
+     and the specification's heuristic checks of its tests. A fix of it right after a failure is low, with the file's
+     deletion in its text: the agent changed its own check, but the triage is still not in what it reported. A secret
+     written into it stays: it was on disk and in the transcript. A finding belongs to the file its step changed. */
+  const TEMP_LEFT_OUT = new Set(["scope_creep", "edit_churn", "test_without_requirement", "out_of_scope_tested"]);
+  function temporaryFindings(findings, ev, cfg) {
+    const temp = temporaryFiles(ev, cfg);
+    if (!temp.size) return findings;
+    const fileAt = new Map(ev.filter((e) => e.file).map((e) => [e.seq, e.file]));
+    const out = [];
+    for (const f of findings) {
+      const gone = temp.get(fileAt.get(f.seq));
+      const group = (C().CHECKS[f.check] || {}).group;
+      if (gone === undefined || f.check === "hardcoded_secret") out.push(f);
+      else if (f.check === "fix_after_fail_without_triage") out.push({ ...f, severity: "low", message: f.message + T("temp_file_note", { seq: gone }) });
+      else if (!(f.source === "lint" || group === "code" || TEMP_LEFT_OUT.has(f.check))) out.push(f);
+    }
+    return out;
+  }
+
   const checks = {
     /* since 0.1.119 also a src folder deeper in the path, but not test-side code or a dependency under it. Since 0.1.125
        not a file the agent wrote or edited earlier in the session: reading back its own page object in src/pages is no
@@ -3574,7 +3683,7 @@
           .map((l) => l.trim())
           .filter((l) => l && !/^[})\];,]*$/.test(l))
           .join("\n");
-      const versions = ev.filter((e) => ["write", "edit"].includes(e.kind) && e.file && e.new_content && isCode(e.file, cfg));
+      const versions = codeVersions(ev, cfg);
       const seen = versions.flatMap((e) => Object.keys(tests(e.new_content)).map((name) => ({ file: e.file, seq: e.seq, name })));
       // kept: the same test elsewhere at any time (moved) or in the same file after the deletion (restored)
       const kept = (file, seq, name) => seen.some((t) => t.name === name && (t.file !== file || t.seq > seq));
@@ -3666,77 +3775,27 @@
         if (gone.length) push("test_deleted_msg", e.file, e.seq, gone, undefined, ownRedRun(e.file, e.seq, gone));
       }
       // ---- a test file deleted ----
-      // one of the two may have the home folder spelled out (a session imported before 0.1.124)
-      const same = (x, y) => {
-        const [a, b] = [homeless(x), homeless(y)];
-        return a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
-      };
       const testFile = (f) => isCode(f, cfg) && (TEST_FILE_RX.test(f) || inDirs(f, cfg.test_dirs));
-      /* 0.1.127: a command that runs the tests and then deletes a file (`npx playwright test x.spec.ts; rm x.spec.ts`):
-         its own run is the one the deletion came after, not the run of an earlier step. And a test file the session
-         itself created, deleted after a green run that ran it, is a temporary check cleaned up (the owner's test-pw:
-         a check of a page object's new methods, written, run, removed). Deleted after a red run it is still a test
-         hidden; a test taken out of a file, and a file that was there before, are still reported. */
-      const parts = (cmd) => String(cmd || "").split(/&&|\|\||;|\n/);
-      const RM = /^\s*(?:sudo\s+)?(?:git\s+rm|rm|unlink|del|Remove-Item)\s/;
-      const ranFirst = (e) => {
-        if (e.kind !== "run_tests" || !e.tests) return false;
-        const p = parts(e.cmd);
-        const run = p.findIndex((x) => isTestRun(x, cfg)),
-          rm = p.findIndex((x) => RM.test(x));
-        return run >= 0 && rm > run;
-      };
-      const runBefore = (e) => (ranFirst(e) ? e : [...ev].reverse().find((x) => x.seq < e.seq && x.kind === "run_tests" && x.tests) || null);
-      const ranFile = (run, f) => {
-        const p = parts(run.cmd).filter((x) => isTestRun(x, cfg));
-        const name = f.split("/").pop();
-        // the file named in it, or no test file named at all: the whole suite
-        return p.some((x) => x.includes(name) || !/\S+(?:\.(?:spec|test|cy)\.[cm]?[jt]sx?|_test\.(?:py|go)|\.py)\b|::/.test(x));
-      };
-      const createdHere = (f) => {
-        const first = versions.find((v) => v.file === f);
-        return !!first && first.kind === "write" && first.prev_content == null;
-      };
+      /* A test file the session itself created, deleted after a green run that ran it, is a temporary check cleaned up
+         (0.1.127, the owner's test-pw: a check of a page object's new methods, written, run, removed). Deleted after a
+         red run it is still a test hidden; a test taken out of a file, and a file that was there before, are still
+         reported. The run before is the command's own when it runs the tests before its rm (ranFirst). */
       for (const e of ev) {
-        let targets = [];
-        if (e.kind === "delete" && e.file) targets = [e.file];
-        else if (e.cmd)
-          for (const part of e.cmd.split(/&&|\|\||;|\n/)) {
-            const m = part.match(/^\s*(?:sudo\s+)?(?:git\s+rm|rm|unlink|del|Remove-Item)\s+(.*)$/);
-            if (m)
-              targets.push(
-                ...m[1]
-                  .split(/\s+/)
-                  .filter((t) => t && !t.startsWith("-"))
-                  .map((t) => t.replace(/^["']|["']$/g, "").replace(/\/+$/, "")),
-              );
-          }
-        for (const t of targets) {
-          const glob = /[*?]/.test(t)
-            ? new RegExp(
-                "(?:^|/)" +
-                  t
-                    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-                    .replace(/\*/g, "[^/]*")
-                    .replace(/\?/g, "[^/]") +
-                  "$",
-              )
-            : null;
-          const known = [...new Set(versions.filter((v) => v.seq < e.seq).map((v) => v.file))].filter((f) =>
-            glob ? glob.test(f) : same(f, t) || f.startsWith(t + "/") || f.includes("/" + t + "/"),
-          );
+        for (const t of deleteTargets(e)) {
+          const hit = deletes(t);
+          const known = [...new Set(versions.filter((v) => v.seq < e.seq).map((v) => v.file))].filter(hit);
           for (const f of known) {
             const lastV = versions.filter((v) => v.file === f && v.seq < e.seq).pop();
             const names = Object.keys(tests(lastV.new_content));
             if (!names.length && !testFile(f)) continue;
             const gone = names.filter((k) => !kept(f, e.seq, k));
             if (names.length && !gone.length) continue; // every test of it lives on elsewhere: moved
-            const run = runBefore(e);
-            const green = !!run && !run.tests.failed && !run.tests.errors && run.tests.passed > 0;
-            if (green && createdHere(f) && ranFile(run, f)) continue; // a temporary check, run green and cleaned up
-            push("test_file_deleted_msg", f, e.seq, gone, ranFirst(e) ? (green ? null : e) : undefined);
+            const run = runBefore(ev, e, cfg);
+            const green = greenRun(run);
+            if (green && createdHere(versions, f) && ranFile(run, f, cfg)) continue; // a temporary check, run green and cleaned up
+            push("test_file_deleted_msg", f, e.seq, gone, ranFirst(e, cfg) ? (green ? null : e) : undefined);
           }
-          if (!known.length && !glob && testFile(t)) push("test_file_deleted_msg", t, e.seq, []);
+          if (!known.length && !/[*?]/.test(t) && testFile(t)) push("test_file_deleted_msg", t, e.seq, []);
         }
       }
       return out;
@@ -4811,7 +4870,7 @@
   // wholesale: verdict import), and since 0.1.116 the version of the analysis. Until then an update left every
   // stored session with the findings of the version that analyzed it: no new check showed up in it until a Rules
   // edit. The version is package.json's (test/reanalyze-after-update.test.js keeps the two equal).
-  const ANALYSIS_VERSION = "0.1.139";
+  const ANALYSIS_VERSION = "0.1.140";
   function canon(v) {
     if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
     if (v && typeof v === "object")
@@ -5112,6 +5171,8 @@
     transcriptMatch,
     pickConversation,
     runChecks,
+    temporaryFiles,
+    temporaryFindings,
     calibrate,
     isCalibrated: (check, source) => calibrated({ check, source }),
     isTrial,
