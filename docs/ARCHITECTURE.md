@@ -853,6 +853,16 @@ flowchart TD
   optional `scripts/check_<name>.sh` labelled by those numbers (`grep -rHn`, `--exclude-dir` for examples and
   `skill-history`, a header listing what it does not check). No history in the skill. The model gets the picked
   rules through `LensRules.skillInput`: the evidence without its sessions and steps, only the reviewers' notes.
+- **Check of the skill** (`LensRules.checkSkill(files, { code, check })`, since 0.1.141): no model. Sizes (`SKILL.md`
+  8,000, `description` 400, `SKILL.md` + `references/rules.md` 30,000), numbering (every `P-NN` of `SKILL.md` has an
+  entry, every entry a line, no entry twice, no `AP-…`), history outside code (`seq N`, dates), entries (Bad at most
+  3 lines; each fenced Good block: called names against the code of the sessions of the picked rules and a list of the
+  language's and test frameworks' API, a name the block defines itself is known; `check(code, lang)`: the profile's
+  regex checks that read code alone and its lint engine on the snippet), the script (`check "P-NN …" "<regex>"` lines:
+  a known id, the pattern against its rule's Bad and every Good; `grep -H`; `--exclude-dir` when the skill has
+  `examples/`). Labels English or Russian, bold or not, with a note in brackets or after a dash. The panel stores the
+  result with the generated skill (`skillResults[].check`) and shows it under it; `examples/` and `skill-history/`
+  are not read.
 - **Target file** (`rulesTarget`): `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/sessionlens.mdc` (0.1.121), or both
   Markdown files. `both` does not include the Cursor file. The `.mdc` file is written with frontmatter
   (`alwaysApply: true`); without it Cursor skips the rule. The other targets are plain Markdown.

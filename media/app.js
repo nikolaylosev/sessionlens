@@ -486,15 +486,23 @@
       try {
         const r = await LensAI.generateSkill(md, state.settings, void 0, rulesTargetLabel());
         r.files = r.files.filter((f) => !/^examples\//.test(f.path)).concat(ex.files);
+        try {
+          r.check = LensRules.checkSkill(r.files, await skillContext(pickedRuleKeys()));
+        } catch (e) {
+          r.check = null;
+        }
         if (overwriteId) {
           state.skillResults = state.skillResults.map(
-            (x) => x.id === overwriteId ? { id: overwriteId, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body } : x
+            (x) => x.id === overwriteId ? { id: overwriteId, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check } : x
           );
           await save();
           renderSkillResults(overwriteId);
         } else {
           const id = genId();
-          state.skillResults = [{ id, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body }, ...state.skillResults || []];
+          state.skillResults = [
+            { id, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check },
+            ...state.skillResults || []
+          ];
           await save();
           renderSkillResults(id);
         }
@@ -790,12 +798,54 @@ ${en.raw}`).join("\n\n\n");
     );
     return LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS });
   }
+  var SNIPPET_CHECKS = /* @__PURE__ */ new Set(["sleep_or_skip_added", "focused_test", "debug_leftover", "weak_assert", "fragile_wait", "hardcoded_secret"]);
+  async function skillContext(keys) {
+    const full = {};
+    await fetchSessions(
+      metas().filter((m) => (m.confirmed || []).some((c) => keys.includes(c.check))).map((m) => m.id),
+      (s) => {
+        full[s.id] = s;
+      }
+    );
+    const sessions = Object.values(full);
+    const code = sessions.flatMap((s) => (s.events || []).map((e) => e.new_content).filter((t) => typeof t === "string"));
+    const count = {};
+    for (const s of sessions) count[s.profile] = (count[s.profile] || 0) + 1;
+    const profile = Object.keys(count).sort((a, b) => count[b] - count[a])[0] || state.settings.profile;
+    if (profile) await needEngine(profile);
+    const cfg = Lens.profile(profile);
+    const check = (snippet, lang) => {
+      const py = /^(?:py|python)$/.test(lang);
+      if (lang && !py && !/^(?:ts|typescript|js|javascript|tsx|jsx|mjs|cjs)$/.test(lang)) return [];
+      const file = py ? "test_skill_example.py" : "skill-example.spec.ts";
+      const out = /* @__PURE__ */ new Map();
+      for (const f of Lens.runChecks([{ seq: 0, ts: "", kind: "write", file, new_content: snippet }], cfg))
+        if (SNIPPET_CHECKS.has(f.check)) out.set(f.check, { check: f.check, line: f.line });
+      if (state.settings.lint !== false) {
+        const lr = LensLint.run({ events: [{ seq: 0, kind: "message", new_content: snippet }] }, cfg, state.settings);
+        if (lr.ran) {
+          for (const f of lr.findings) if (!out.has(f.check)) out.set(f.check, { check: f.check, line: f.line });
+        }
+      }
+      return [...out.values()];
+    };
+    return { code, check };
+  }
+  function skillCheckHtml(c) {
+    if (!c) return "";
+    const e = c.issues.filter((i) => i.level === "error").length, w = c.issues.length - e;
+    return `<details class="gen-file gen-check"${c.issues.length ? " open" : ""}><summary>${esc(c.issues.length ? T("sc_title", { e, w }) : T("sc_ok"))}</summary>
+        <p class="muted">${esc(T("sc_stats", { s: c.stats.skill, d: c.stats.description, r: c.stats.read, f: c.stats.files }))}</p>
+        ${c.issues.length ? `<ul class="sc-list">${c.issues.map((i) => `<li class="sc-${esc(i.level)}" data-key="${esc(i.key)}">${esc(i.text)}</li>`).join("")}</ul>` : ""}
+      </details>`;
+  }
   function renderSkillResults(openId) {
     const list = state.skillResults || [];
     $("#gen-skill-d").hidden = !list.length;
     $("#gen-skill-results").innerHTML = list.map(
       (r) => `<details class="sec-d gen-result" data-id="${esc(r.id)}" ${r.id === openId ? "open" : ""}>
       <summary class="h2">${esc(r.at.replace("T", " ").slice(0, 19))} — ${esc(r.skill_name)}</summary>
+      ${skillCheckHtml(r.check)}
       <div class="gen-skill-files">${r.files.map((f, i) => `<details class="gen-file"${i === 0 ? " open" : ""}><summary>${esc(f.path)}</summary><textarea readonly style="height:160px;font-family:monospace;font-size:12px">${esc(f.content)}</textarea></details>`).join("")}</div>
       <p class="muted">${T("gen_skill_note")}</p>
       <details class="gen-file"><summary>${esc(stubTitle())}</summary>

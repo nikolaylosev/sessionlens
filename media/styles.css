@@ -40,7 +40,7 @@ details{margin:8px 0}summary{cursor:pointer;font-weight:600;padding:4px 0}
 .f{padding:8px 0;border-top:1px solid var(--rail)}.f .sev{font-size:11.5px;font-weight:700;text-transform:uppercase}.f .sev.high{color:var(--red)}.f .sev.medium{color:var(--amber)}.f .sev.low{color:var(--slate)}
 .f .msg{margin:2px 0}.f .chk{color:var(--muted);font-size:12px}.f .chk a{color:var(--slate);text-decoration:none}
 .f .vb{display:flex;gap:6px;margin-top:6px;align-items:center}.f .vb .btn.on{background:var(--slate);color:var(--btn-fg)}.f .vb .btn.on.fp{background:var(--red);border-color:var(--red)}.f .vb .btn.on.later{background:transparent;color:inherit;border-style:dashed}
-.f .vb input{flex:1;min-width:0}.f.done{opacity:.75}
+.f .vb input{flex:1;min-width:0}.gen-check .sc-list{margin:4px 0;padding-left:18px}.gen-check .sc-error{color:var(--red)}.f.done{opacity:.75}
 .tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--rail)}.tl li{position:relative;padding:3px 0 3px 18px;font-size:12.5px}
 .tl li::before{content:"";position:absolute;left:-5px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--rail)}
 .tl li.edit::before,.tl li.write::before{background:var(--slate)}.tl li.run_tests::before{background:var(--green)}.tl li.run_tests.fail::before{background:var(--red)}

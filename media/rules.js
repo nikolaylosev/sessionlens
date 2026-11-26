@@ -212,6 +212,184 @@
     flush();
     return out.join("\n");
   }
+  /* A generated skill, checked without a model (0.1.141), as the owner's requirements for a skill say (26.11):
+     sizes and what an agent reads, one numbering in every file, no history, examples with names the sessions' code has
+     and that follow the skill's own rules, a script whose patterns catch the bad example and not the good one.
+     files: [{ path, content }] of the skill; ctx: { code: [text of the sessions' code], check?: (code, lang) =>
+     [{ check, line }] } (the app's lint and regex checks on a snippet). → { stats, issues: [{ level, key, rule, text }] },
+     level "error" or "warn"; key names the kind of problem, text says it for the person. */
+  const SKILL_MAX = 8000,
+    DESC_MAX = 400,
+    READ_MAX = 30000,
+    BAD_MAX_LINES = 3;
+  // names a snippet may call that no project defines: the language's own and the test frameworks' API
+  const KNOWN_API = new Set(
+    (
+      "require import console log warn error Promise all race resolve reject then catch finally setTimeout clearTimeout Date now " +
+      "Math max min round floor ceil abs random JSON parse stringify String Number Boolean Array from isArray of Object keys values " +
+      "entries assign freeze Set Map has get set add delete clear map filter find findIndex some every reduce forEach includes " +
+      "indexOf lastIndexOf push pop shift unshift slice splice concat join split replace replaceAll match matchAll test exec " +
+      "trim trimStart trimEnd padStart padEnd startsWith endsWith toLowerCase toUpperCase toString toFixed sort reverse flat flatMap " +
+      "fill at length RegExp Error encodeURIComponent decodeURIComponent fetch text json " +
+      "test describe step skip only fixme fail slow beforeEach afterEach beforeAll afterAll use info expect poll soft toPass " +
+      "page context browser request goto reload click dblclick fill press type check uncheck hover focus blur selectOption " +
+      "setInputFiles dispatchEvent tap isVisible isHidden isEnabled isChecked textContent innerText inputValue getAttribute count " +
+      "all allInnerTexts allTextContents first last nth and or locator getByRole getByText getByLabel getByPlaceholder getByAltText " +
+      "getByTitle getByTestId frameLocator contentFrame waitFor waitForURL waitForResponse waitForRequest waitForEvent " +
+      "waitForLoadState route unroute fulfill abort continue on off once evaluate screenshot url title status ok body headers " +
+      "post put patch newPage close addInitScript clearCookies cookies addCookies storageState " +
+      "assert def print len range str int float dict list tuple isinstance raises fixture mark parametrize approx"
+    ).split(" "),
+  );
+  function checkSkill(/** @type {{path: string, content: string}[]} */ files, /** @type {any} */ ctx) {
+    ctx = ctx || {};
+    const issues = /** @type {{level: string, key: string, rule: string, text: string}[]} */ ([]);
+    const add = (/** @type {string} */ level, /** @type {string} */ key, /** @type {string} */ rule, /** @type {any} */ v) =>
+      issues.push({ level, key, rule, text: T("sc_" + key, Object.assign({ r: rule }, v || {})) });
+    const own = files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path));
+    const get = (/** @type {RegExp} */ rx) => own.find((f) => rx.test(f.path));
+    const skill = get(/^SKILL\.md$/),
+      rules = get(/^references\/rules\.md$/),
+      script = get(/^scripts\/.*\.sh$/);
+    // ---- sizes, and what an agent reads at work: SKILL.md and the rules ----
+    const desc = ((/^---\n([\s\S]*?)\n---/.exec((skill && skill.content) || "") || [])[1] || "").match(/^description:\s*(.*)$/m);
+    const stats = {
+      skill: skill ? skill.content.length : 0,
+      description: desc ? desc[1].replace(/^["']|["']$/g, "").length : 0,
+      read: (skill ? skill.content.length : 0) + (rules ? rules.content.length : 0),
+      files: own.length,
+    };
+    if (!skill) add("error", "no_skill", "");
+    if (!rules) add("error", "no_rules", "");
+    if (stats.skill > SKILL_MAX) add("warn", "skill_long", "", { n: stats.skill, max: SKILL_MAX });
+    if (stats.description > DESC_MAX) add("warn", "desc_long", "", { n: stats.description, max: DESC_MAX });
+    if (stats.read > READ_MAX) add("warn", "read_long", "", { n: stats.read, max: READ_MAX });
+    // ---- one numbering ----
+    const ids = (/** @type {string} */ t) => [...t.matchAll(/\bP-(\d{2,})\b/g)].map((m) => "P-" + m[1]);
+    const inSkill = new Set(ids((skill && skill.content) || ""));
+    const heads = [...((rules && rules.content) || "").matchAll(/^##\s+(P-\d{2,})\b/gm)].map((m) => m[1]);
+    const entries = new Set(heads);
+    for (const id of new Set(heads.filter((h, i) => heads.indexOf(h) !== i))) add("error", "dup_entry", id);
+    for (const id of inSkill) if (rules && !entries.has(id)) add("error", "no_entry", id);
+    for (const id of entries) if (skill && !inSkill.has(id)) add("warn", "not_in_skill", id);
+    for (const f of own) if (/\bAP-\d+/.test(f.content)) add("error", "second_numbering", "", { f: f.path });
+    // ---- no history: steps and dates outside code ----
+    for (const f of own.filter((x) => /\.md$/.test(x.path))) {
+      const prose = f.content.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+      const m = /\bseq\s*#?\d+|\b\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4})\b|\b20\d\d-\d\d-\d\d\b/i.exec(prose);
+      if (m) add("warn", "history", "", { f: f.path, x: m[0] });
+    }
+    // ---- the rules' entries: Bad short; Good with known names, following every rule ----
+    const known = new Set(KNOWN_API);
+    for (const t of ctx.code || []) for (const m of String(t).matchAll(/[A-Za-z_$][\w$]*/g)) known.add(m[0]);
+    const goods = /** @type {{id: string, code: string, lang: string}[]} */ ([]),
+      bads = /** @type {{id: string, text: string}[]} */ ([]);
+    for (const sec of ((rules && rules.content) || "").split(/^(?=##\s+P-\d{2,}\b)/m)) {
+      const id = (/^##\s+(P-\d{2,})/.exec(sec) || [])[1];
+      if (!id) continue;
+      // the parts of an entry by their labels at the start of a line, bold or not, English or Russian (the owner's skill)
+      const parts = /** @type {Record<string, string>} */ ({});
+      const marks = [...sec.matchAll(SKILL_LABEL)];
+      marks.forEach((m, i) => {
+        const kind = LABEL_KIND[m[1].toLowerCase()];
+        const end = i + 1 < marks.length ? /** @type {number} */ (marks[i + 1].index) : sec.length;
+        parts[kind] = (parts[kind] || "") + sec.slice(/** @type {number} */ (m.index) + m[0].length, end);
+      });
+      const bad = parts.bad || "",
+        good = parts.good || "";
+      const badCode = [...bad.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1]).join("\n") || bad.replace(/`/g, "");
+      const lines = badCode.split("\n").filter((l) => l.trim());
+      if (lines.length > BAD_MAX_LINES) add("warn", "bad_long", id, { n: lines.length, max: BAD_MAX_LINES });
+      bads.push({ id, text: badCode });
+      for (const m of good.matchAll(/```(\w*)\n([\s\S]*?)```/g)) goods.push({ id, lang: m[1].toLowerCase(), code: m[2] });
+    }
+    for (const g of goods) {
+      // a name it defines itself is known in it
+      const defined = new Set(
+        [...g.code.matchAll(/(?:function\s+|(?:const|let|var|class|def)\s+)([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*(?=[(:=,)][^\n]*=>)/g)].map(
+          (m) => m[1] || m[2],
+        ),
+      );
+      const code = g.code.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\/.*$|#.*$/gm, "");
+      const unknown = new Set();
+      if ((ctx.code || []).length)
+        for (const m of code.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+          const n = m[1];
+          if (n.length < 3 || known.has(n) || defined.has(n) || /^to[A-Z]/.test(n) || NOT_A_CALL.has(n)) continue;
+          unknown.add(n);
+        }
+      if (unknown.size) add("warn", "unknown_name", g.id, { x: [...unknown].join(", ") });
+      if (typeof ctx.check === "function") for (const f of ctx.check(g.code, g.lang) || []) add("error", "good_breaks", g.id, { x: f.check, n: f.line || "?" });
+    }
+    // ---- the script: labels are rule ids; each pattern catches its bad example and not a good one ----
+    if (script) {
+      const t = script.content;
+      if (/\bgrep\b/.test(t) && !/\bgrep\b[^\n|]*\s-[\w]*H/.test(t)) add("warn", "grep_no_h", "");
+      // the skill's own examples, when it has them (sessionlens adds the folder), are no code to check
+      if (files.some((f) => /^examples\//.test(f.path)) && !/--exclude-dir[= ]?["']?[^\n]*examples/.test(t)) add("warn", "no_exclude", "");
+      for (const m of t.matchAll(/^\s*check\s+"((?:\\.|[^"\\])*)"\s+"((?:\\.|[^"\\])*)"/gm)) {
+        const label = m[1],
+          id = (/\bP-\d{2,}\b/.exec(label) || [])[0];
+        if (!id) {
+          add("error", "check_no_id", "", { x: label.slice(0, 60) });
+          continue;
+        }
+        if (rules && !entries.has(id)) add("error", "check_unknown", id);
+        let rx;
+        try {
+          const src = m[2]
+            .replace(/\\(["\\$`])/g, "$1")
+            .replace(/\[\[:space:\]\]/g, "\\s")
+            .replace(/\[\[:digit:\]\]/g, "\\d")
+            .replace(/\[\[:alnum:\]\]/g, "[A-Za-z0-9]")
+            .replace(/\[\[:alpha:\]\]/g, "[A-Za-z]");
+          rx = new RegExp(src);
+        } catch {
+          add("warn", "check_regex", id);
+          continue;
+        }
+        const own2 = bads.filter((b) => b.id === id);
+        if (own2.length && !own2.some((b) => b.text.split("\n").some((l) => rx.test(l)))) add("warn", "check_misses", id);
+        const hit = goods.find((g) => g.code.split("\n").some((l) => rx.test(l)));
+        if (hit) add("error", "check_false", id, { x: hit.id });
+      }
+    }
+    return { stats, issues };
+  }
+  /* "Хорошо (`auth-08`, шаг 4–5): …" and "Хорошо — порядок: …" in the owner's skill: a short note in brackets or after a
+     dash may come before the colon */
+  const SKILL_LABEL = /^\s*(?:\*\*)?(Bad|Good|Why|Exception|Плохо|Хорошо|Зачем|Исключение)(?:\s*\([^)\n]*\)|\s+[—–-][^:\n]{0,60})?(?::\*\*|\*\*:|:)/gim;
+  const LABEL_KIND = /** @type {Record<string, string>} */ ({
+    bad: "bad",
+    плохо: "bad",
+    good: "good",
+    хорошо: "good",
+    why: "why",
+    зачем: "why",
+    exception: "exception",
+    исключение: "exception",
+  });
+  // words a snippet "calls" that are no function: keywords before a bracket
+  const NOT_A_CALL = new Set([
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "return",
+    "function",
+    "await",
+    "async",
+    "typeof",
+    "new",
+    "super",
+    "with",
+    "elif",
+    "not",
+    "and",
+    "lambda",
+    "print",
+  ]);
   /* A skill's examples/ folder: for each picked rule, up to perRule files the agent really wrote, at the step of a
      confirmed finding of that rule, one session first; secrets masked, cut at maxChars. confirmedOf(check) gives
      [{ s, f }]: the session and its confirmed finding. → { files: [README, …], rows, masked }.
@@ -292,6 +470,7 @@
     groupOf,
     skillExamples,
     skillInput,
+    checkSkill,
     ruleMarkdown,
     markNotes,
     sessionLabel,
