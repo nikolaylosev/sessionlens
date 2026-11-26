@@ -524,6 +524,12 @@ function run(session, cfg, settings) {
   every such test was "no assertions". The plugin matches the called method's own name, not its object's, so
   `expected()` and `expectation()` still count as actions. A method named `expect…` with no `expect()` inside is
   taken at its word.
+  Since 0.1.140 each file also gets `assertFunctionNames`: the functions of that file that assert
+  (`assertingFunctions`, `rulesFor`). A named function, an arrow function in a `const` or a method counts when its body
+  calls `expect()`, `expect.poll(…)` or `expect.soft(…)`, or another such function of the file. Comments, the text of
+  strings and regex literals are blanked first, so an `expect(` in them is no call. Only the same file: a function of
+  another file is not read (a page object's methods count by the `expect…` name above). In the owner's session a test
+  checked its timing through `measure(name, page, d, fn)`, with three `expect()` inside, and was "no assertions", high.
 - The message cap (`CAP = 3`) works **within one call of
   `run()`**, per `(check, seq)` pair, that is per file — if one file gives
   30 identical findings of one check in one analysis, the first 3 are shown

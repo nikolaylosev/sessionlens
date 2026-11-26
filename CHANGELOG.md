@@ -31,6 +31,10 @@
   Now a check is moved when the file has no fewer assertions, and another function gained a check of the same thing
   in that edit: one that shares a name or a text with the lost one and says the same, not the opposite. A session
   imported before shows **Import again**.
+- **A test that checks through a function of its own file has assertions.** A test often puts its checks into a
+  function of the same file, such as one that times an action and checks how long it took, and calls it. Only a call of
+  a function named `expect…` counted as an assertion, so in one of our sessions such a test was "a test with no
+  assertions", high. Now a function of the file that calls `expect()`, or another such function, counts too.
 
 ## 0.1.139
 

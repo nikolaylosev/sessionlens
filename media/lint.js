@@ -314,6 +314,158 @@
     return rules;
   }
 
+  /* The code with its comments and the text of its strings blanked, length for length: an expect( in a comment or a
+     string is no call, and a { in one opens no body. A template's ${…} goes with its text. */
+  function blankCode(code) {
+    let out = "",
+      q = "";
+    for (let i = 0; i < code.length; i++) {
+      const c = code[i],
+        n = code[i + 1];
+      if (q === "//") {
+        if (c === "\n") q = "";
+        out += c === "\n" ? c : " ";
+      } else if (q === "/*") {
+        if (c === "*" && n === "/") {
+          q = "";
+          out += "  ";
+          i++;
+        } else out += c === "\n" ? c : " ";
+      } else if (q) {
+        if (c === "\\" && n !== undefined) {
+          out += n === "\n" ? " \n" : "  ";
+          i++;
+        } else if (c === q) {
+          q = "";
+          out += c;
+        } else out += c === "\n" ? c : " ";
+      } else if (c === "/" && (n === "/" || n === "*")) {
+        q = "/" + n;
+        out += "  ";
+        i++;
+      } else if (c === "/" && /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\breturn|\btypeof)\s*$/.test(out.slice(-12))) {
+        // a regex literal, /\bF\("(…)"/g: its quotes and brackets are no code; a / inside […] does not end it
+        let j = i + 1,
+          cls = false;
+        for (; j < code.length && code[j] !== "\n"; j++) {
+          if (code[j] === "\\") j++;
+          else if (code[j] === "[") cls = true;
+          else if (code[j] === "]") cls = false;
+          else if (code[j] === "/" && !cls) break;
+        }
+        if (code[j] !== "/") out += c;
+        else {
+          out += "/" + " ".repeat(j - i - 1) + "/";
+          i = j;
+        }
+      } else {
+        if (c === "'" || c === '"' || c === "`") q = c;
+        out += c;
+      }
+    }
+    return out;
+  }
+  // where the bracket opened at `from` closes (its index), counting ( [ { ; -1 when it does not
+  function closing(s, from) {
+    let depth = 0;
+    for (let i = from; i < s.length; i++) {
+      if ("([{".includes(s[i])) depth++;
+      else if (")]}".includes(s[i]) && --depth === 0) return i;
+    }
+    return -1;
+  }
+  const NOT_A_FUNCTION = new Set(["if", "for", "while", "switch", "catch", "with", "return", "function", "await", "typeof", "new", "super", "do", "else"]);
+  const FUNCTION_HEADS = [
+    // function measure(…) {   async function* gen<T>(…) {
+    /(?<![\w$.])function\s*\*?\s*([A-Za-z_$][\w$]*)\s*(?:<[^>\n]*>)?\s*(?=\()/g,
+    // const measure = async (…) => …   const check = function (…) {
+    /(?<![\w$.])(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]+)?=\s*(?:async\s+)?(?:function\b\s*\*?\s*[\w$]*\s*)?(?=\()/g,
+    // a method of a class or an object: async expectTotal(…) {
+    /^[ \t]*(?:(?:public|private|protected|static|readonly|override|async|get|set)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^>\n]*>)?\s*(?=\()/gm,
+  ];
+  /* A function's body after its parameter list ends at `at`: { … } (a return type before it is skipped), or the
+     expression an arrow returns, up to a ; , ) ] } or a line break outside brackets. null when no body follows (a call). */
+  function bodyAfter(s, at) {
+    let i = at;
+    while (/\s/.test(s[i] || "")) i++;
+    if (s[i] === ":") {
+      // a return type: up to the { or => outside its brackets, <…> included (Promise<{ at: () => number }>)
+      let depth = 0;
+      for (i++; i < s.length; i++) {
+        const c = s[i];
+        if (c === "=" && s[i + 1] === ">") {
+          if (depth === 0) break;
+          i++;
+        } else if ("([{<".includes(c)) {
+          if (c === "{" && depth === 0) break;
+          depth++;
+        } else if (")]}>".includes(c)) depth--;
+        else if (c === ";" && depth === 0) return null;
+      }
+    }
+    while (/\s/.test(s[i] || "")) i++;
+    let arrow = false;
+    if (s[i] === "=" && s[i + 1] === ">") {
+      arrow = true;
+      i += 2;
+      while (/\s/.test(s[i] || "")) i++;
+    }
+    if (s[i] === "{") {
+      const end = closing(s, i);
+      return end < 0 ? s.slice(i) : s.slice(i, end + 1);
+    }
+    if (!arrow) return null;
+    let depth = 0,
+      j = i;
+    for (; j < s.length; j++) {
+      const c = s[j];
+      if ("([{".includes(c)) depth++;
+      else if (")]}".includes(c)) {
+        if (depth === 0) break;
+        depth--;
+      } else if (depth === 0 && (c === ";" || c === "," || c === "\n")) break;
+    }
+    return s.slice(i, j);
+  }
+  /* The functions of a file that assert (0.1.140): a named function, arrow function or method whose body calls
+     expect(), expect.poll(…), expect.soft(…), or another such function of the file. expect-expect counts a call of one
+     as an assertion, the way it counts expectTotal() of a page object (RULE_OPTIONS): in the owner's session a test
+     checked its timing through measure(), with three expect() in it, and read as "no assertions". */
+  function assertingFunctions(code) {
+    const s = blankCode(code);
+    const fns = new Map();
+    for (const rx of FUNCTION_HEADS)
+      for (const m of s.matchAll(rx)) {
+        const name = m[1];
+        if (NOT_A_FUNCTION.has(name)) continue;
+        const open = m.index + m[0].length;
+        const close = closing(s, open);
+        if (close < 0) continue;
+        const body = bodyAfter(s, close + 1);
+        if (body !== null) fns.set(name, (fns.get(name) || "") + "\n" + body);
+      }
+    const called = (body, name) => new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}\\s*\\(`).test(body);
+    const asserting = new Set();
+    for (const [name, body] of fns) if (/(?<![\w$.])expect\s*(?:\.\s*\w+\s*)*\(/.test(body)) asserting.add(name);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const [name, body] of fns)
+        if (!asserting.has(name) && [...asserting].some((a) => called(body, a))) {
+          asserting.add(name);
+          grew = true;
+        }
+    }
+    return [...asserting].sort();
+  }
+  // the rules for one block: expect-expect also knows the block's own asserting functions
+  function rulesFor(rules, code) {
+    const ee = rules["playwright/expect-expect"];
+    if (!Array.isArray(ee)) return rules;
+    const names = assertingFunctions(code);
+    if (!names.length) return rules;
+    return { ...rules, "playwright/expect-expect": [ee[0], { ...ee[1], assertFunctionNames: names }] };
+  }
+
   // one block per file — its last version; linting every intermediate edit would repeat the same findings
   // rules that a fragment of code in a message breaks by being a fragment (0.1.127)
   const FRAGMENT_SKIP = new Set(["playwright/no-standalone-expect"]);
@@ -370,7 +522,7 @@
     for (const b of blocks) {
       let r;
       try {
-        r = core.lint(b.code, { rules, filename: b.name });
+        r = core.lint(b.code, { rules: rulesFor(rules, b.code), filename: b.name });
       } catch (e) {
         const msg = String((e && e.message) || e);
         // Manifest V3 forbids new Function; the bundle avoids it, so this means an old vendor-eslint.js is cached
@@ -481,6 +633,7 @@
   return {
     run,
     merge,
+    assertingFunctions,
     covers,
     available,
     ensure,
