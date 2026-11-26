@@ -391,6 +391,7 @@
       rules_title: "# Proposed rules for {f}",
       rules_rule: "**Rule:**",
       rules_ev: "Evidence:",
+      rules_notes: "Reviewers' notes:",
       ev_summary: "Evidence",
       rules_copied: "Copied",
       rules_copy: "Copy rules.md",

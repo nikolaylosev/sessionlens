@@ -262,7 +262,8 @@ export function initCalibration() {
           .join("\n") +
         "\n"
       : "";
-    const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + body + exList;
+    // without the evidence's sessions and steps: a skill keeps no history (0.1.141)
+    const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body) + exList;
     btn.disabled = true;
     st.textContent = T("gen_skill_wait");
     try {

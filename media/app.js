@@ -480,7 +480,7 @@
       const exList = ex.rows.length ? "\n\n## Example files\n" + [...new Set(ex.rows.map((r) => r.k))].map(
         (k) => `- ${k}: ` + ex.rows.filter((r) => r.k === k).map((r) => r.path).join(", ")
       ).join("\n") + "\n" : "";
-      const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + body + exList;
+      const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body) + exList;
       btn.disabled = true;
       st.textContent = T("gen_skill_wait");
       try {
