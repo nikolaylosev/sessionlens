@@ -152,7 +152,7 @@ test("Start dev log: the setting, the status bar, the start line without keys, a
   const later = fakeWebviewView();
   h.registered.views.sessionlensView.resolveWebviewView(later.view);
   assert.match(later.webview.html, /<body [^>]*data-dev-log/);
-  assert.match(h.calls.info.at(-1), /the dev log is on\. .* go to .*\.sessionlens\/dev\/\d{4}-\d{2}-\d{2}-vscode\.jsonl, on this computer only/);
+  assert.match(h.calls.info.at(-1), /the dev log is on\. .* go to .*\.sessionlens[\\/]dev[\\/]\d{4}-\d{2}-\d{2}-vscode\.jsonl, on this computer only/);
   await h.wv.send("storage:get", { keys: ["settings"] }); // the migrations have run
   const start = (await h.read()).find((l) => l.kind === "start");
   assert.equal(start.why, "command");
