@@ -112,7 +112,7 @@ function storedBefore139(events) {
 }
 
 test("a Claude Code session imported before with steps from such copies asks to be imported again (IMPORT_GEN 15)", () => {
-  assert.equal(Lens.IMPORT_GEN, 15);
+  assert.ok(Lens.IMPORT_GEN >= 15);
   const { plain, withCopies } = session();
   const fresh = Lens.importAny(plain, cfg);
   const s = (events, extra = {}) => Object.assign({ profile: "qa-ts", agent: "claude-code", importGen: 14, events }, extra);

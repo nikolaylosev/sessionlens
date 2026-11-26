@@ -1034,7 +1034,17 @@
         for (const l of oa) left.includes(l) ? left.splice(left.indexOf(l), 1) : lost.push(l);
         const times = (src, l) => src.split("\n").filter((x) => x.trim() === l).length;
         const lines = lost.map((line) => ({ line, old: times(oldSrc, line), now: times(newSrc, line) }));
-        res.removed.push({ test: name, before: oa.length, after: na.length, lines });
+        /* the assertion lines the other blocks of the new text have and the old text had fewer times (0.1.140):
+           assert_weakened looks there for one it moved within the file and wrote anew */
+        const before = Object.values(om).flatMap(asserts);
+        const added = [];
+        for (const [other, body] of Object.entries(nm))
+          if (other !== name)
+            for (const l of asserts(body)) {
+              const k = before.indexOf(l);
+              k >= 0 ? before.splice(k, 1) : added.push(l);
+            }
+        res.removed.push({ test: name, before: oa.length, after: na.length, lines, added });
       }
       for (let i = 0; i < Math.min(oa.length, na.length); i++) {
         for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
@@ -2775,8 +2785,10 @@
         takes another's output (0.1.138).
      15: no steps from Claude Code's copies of a request (api-request-blob records), a Claude Code command's paths
         from the folder its shell was in (`dir`), and the files a command changed, from Claude Code's diff of them
-        (bashEditDiff; 0.1.139). */
-  const IMPORT_GEN = 15;
+        (bashEditDiff; 0.1.139).
+     16: a test or a function with fewer assertions keeps the assertions the file's other blocks gained in that edit
+        (`added`), so assert_weakened sees one moved within the file (0.1.140). */
+  const IMPORT_GEN = 16;
   /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
      at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
      cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
@@ -2911,6 +2923,8 @@
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
     if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+    // fewer assertions in an edit, without what the file's other blocks gained in it (0.1.140)
+    if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)
     if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
     // a Cursor session's write of Playwright's test agents with no file: its arguments were not read (0.1.130)
@@ -3492,9 +3506,51 @@
        the person's request, in the files the session knows at least as many times as it was before the edit. In the
        owner's session a review moved openResetpw's two checks into the step of the test that calls it, as the person's
        rule asks (a step checks what its title promises), and the helper read as "2 → 0". A test that now calls an
-       assertion helper (expectLoginForm(page)) is not weakened either (compareAsserts). */
+       assertion helper (expectLoginForm(page)) is not weakened either (compareAsserts).
+       Since 0.1.140 an assertion moved to another function of the same file and written anew there is not lost either:
+       the file has no fewer assertions than before the edit, and for each assertion the function lost (its count
+       before minus after) one of its lost lines shares a word with an assertion that another function of the new text
+       has and the old text did not (compareAsserts gives them as `added`; a session imported before has none until
+       Import again), with the same sign (both say that something is so, or both that it is not). The words are what the
+       assertion checks: names and the text of strings, without the words of the language and Playwright's own. A check
+       taken out of one test while another test asserts the opposite is still lost: in the owner's codingcat-mods
+       session `expect(report).not.toContain('$4.30+')` went from one test and `toContain('$4.30+')` came in another.
+       In the owner's session the agent rewrote helpers/login.ts by its approved plan:
+       expectDashboard's check of the Logout link (a[href="/logout"], a raw locator) went to logoutViaMenu as
+       expect(logout, 'в меню клиента есть Logout'), where the menu is open, and the file went from 8 assertions to 10;
+       it read as "expectDashboard: 3 → 2", high. */
     assert_weakened(ev) {
       const out = [];
+      /* the words of what an assertion checks: names and the text of strings, without a comment at its end, the words of
+         the language and Playwright's own (assert, and, page, locator, getByRole, first, exact…) */
+      const GENERIC =
+        /^(?:assert\w*|expect|await|poll|soft|not|and|for|the|none|self|true|false|null|undefined|return|page|locator|getby\w*|first|last|nth|filter|exact|name|has|hastext|hasnottext|this|frame\w*|role|link|button|textbox|heading|text|label)$/;
+      const words = (l) =>
+        new Set(
+          (
+            subjectOf(l.replace(/\s(?:#|\/\/).*$/, ""))
+              .toLowerCase()
+              .match(/[\p{L}\p{N}_]+/gu) || []
+          ).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !GENERIC.test(w)),
+        );
+      // an assertion that something is not so (.not., not, !=), outside its strings: a moved one keeps its sign
+      const negative = (l) => /\.not\.|(?<![\w.])not\s|!=/.test(l.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""'));
+      const movedInFile = (e, r) => {
+        const d = e.assert_delta;
+        if (!(d.new >= d.old) || !Array.isArray(r.lines) || !Array.isArray(r.added)) return false;
+        const others = r.added.map((l) => ({ w: words(l), neg: negative(l) }));
+        const used = new Set();
+        let paired = 0;
+        for (const { line } of r.lines) {
+          const w = words(line),
+            neg = negative(line);
+          const k = others.findIndex((o, i) => !used.has(i) && o.neg === neg && [...w].some((x) => o.w.has(x)));
+          if (k < 0) continue;
+          used.add(k);
+          paired++;
+        }
+        return paired >= r.before - r.after;
+      };
       const known = (f, before) => {
         const v = ev.filter((x) => x.file === f && x.seq < before && x.new_content && !x.fragment_only && ["write", "edit"].includes(x.kind));
         return v.length ? v[v.length - 1].new_content : null;
@@ -3522,7 +3578,8 @@
         if (!d) continue;
         for (const w of d.weakened) out.push(F("assert_weakened", "high", e.seq, T("weakened", { file: e.file, test: w.test, reason: w.reason })));
         for (const r of d.removed)
-          if (!moved(e, r)) out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
+          if (!moved(e, r) && !movedInFile(e, r))
+            out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
       }
       return out;
     },

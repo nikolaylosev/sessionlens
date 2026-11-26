@@ -384,3 +384,127 @@ test("not reported: assertions moved to the test that calls the helper, or into 
     [],
   );
 });
+
+/* 0.1.140: an assertion moved to another function of the same file and written anew there. In the owner's session the
+   agent rewrote helpers/login.ts by its approved plan: expectDashboard's check of the Logout link (a raw locator) went
+   to logoutViaMenu, where the menu is open, and the file went from 8 assertions to 10: "expectDashboard: 3 → 2", high. */
+test("not reported: an assertion moved within the file and written anew; reported when its sign changed or nothing came", () => {
+  const H = "helpers/login.ts";
+  const helper = (dash, logout) =>
+    "export async function expectDashboard(page: Page, cid: string): Promise<void> {\n" +
+    "  await expect(page).toHaveURL(/\\/dashboard$/);\n" +
+    dash +
+    "\n}\n\nexport async function logoutViaMenu(page: Page, cid: string): Promise<void> {\n" +
+    "  await customerMenu(page, cid).click();\n" +
+    "  const logout = page.getByRole('menu').getByRole('link', { name: 'Logout' });\n" +
+    logout +
+    "\n  await logout.click();\n}\n";
+  const OLD = helper(
+    "  await expect(page.locator('nav').getByText(cid, { exact: true })).toBeVisible();\n  await expect(page.locator('a[href=\"/logout\"]')).toHaveCount(1);",
+    "",
+  );
+  const dash = "  await expect(customerMenu(page, cid)).toBeVisible();";
+  const moved = helper(dash, "  await expect(logout, 'the menu has Logout').toBeVisible();");
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD],
+      ["write", H, moved],
+    ]),
+    [],
+    "moved to logoutViaMenu",
+  );
+  const lost = "high: helpers/login.ts: expectDashboard — fewer assertions (3 → 2)";
+  // the sign changed: the menu has no Logout now
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD],
+      ["write", H, helper(dash, "  await expect(logout).not.toBeVisible();")],
+    ]),
+    [lost],
+    "the opposite",
+  );
+  // nothing came in its place: fewer assertions in the file
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD],
+      ["write", H, helper(dash, "")],
+    ]),
+    [lost],
+    "gone",
+  );
+  // what came elsewhere checks something else
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD],
+      ["write", H, helper(dash, "  await expect(page.getByText('Bye')).toBeVisible();")],
+    ]),
+    [lost],
+    "another check",
+  );
+  // an assertion the other function already had is not one moved there
+  const had = "  await expect(logout, 'the menu has Logout').toBeVisible();";
+  const bye = "\n  await expect(page.getByText('Bye')).toBeVisible();";
+  const OLD_HAD = OLD.replace("  const logout = page.getByRole('menu').getByRole('link', { name: 'Logout' });\n", "$&" + had);
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD_HAD],
+      ["write", H, helper(dash, had + bye)],
+    ]),
+    [lost],
+    "already there (the file keeps its count with a new check of something else)",
+  );
+  // moved, but the file lost another assertion: fewer in the file
+  assert.deepEqual(
+    found("qa-ts", [
+      ["write", H, OLD.replace("\n  await logout.click();", bye + "\n  await logout.click();")],
+      ["write", H, moved],
+    ]),
+    [lost],
+    "fewer in the file",
+  );
+  // Python: a check moved to another fixture and written anew
+  const C = "tests/conftest.py";
+  const fix = (a, b) => `@pytest.fixture\ndef raw():\n${a}    return load(FIXTURE)\n\n\n@pytest.fixture\ndef client():\n${b}    yield TestClient(app)\n`;
+  assert.deepEqual(
+    found("qa-python", [
+      ["write", C, fix("", '    assert DEFAULT_PATH.is_file(), "run: make fixture"\n')],
+      ["write", C, fix('    assert FIXTURE.is_file(), "run: make fixture"\n', "")],
+    ]),
+    [],
+  );
+  assert.equal(
+    found("qa-python", [
+      ["write", C, fix("", "    assert len(rows) > 100\n")],
+      ["write", C, fix("    assert not any(rows)\n", "")],
+    ]).length,
+    1,
+    "the opposite",
+  );
+  assert.equal(
+    found("qa-python", [
+      ["write", C, fix("", '    assert DEFAULT_PATH.is_file(), "run: make fixture"\n')],
+      ["write", C, fix("    assert settings.ready\n", "")],
+    ]).length,
+    1,
+    "only the word assert in common",
+  );
+});
+
+test("a session imported before 0.1.140 with fewer assertions and no `added` asks to be imported again, and keeps its finding", () => {
+  const cfg = Lens.profile("qa-ts");
+  const ev = [
+    { seq: 0, kind: "user", text: "Review" },
+    {
+      seq: 1,
+      kind: "write",
+      file: "helpers/a.ts",
+      new_content: "export function f() {\n}\n",
+      assert_delta: { old: 1, new: 1, weakened: [], removed: [{ test: "f", before: 1, after: 0, lines: [{ line: "expect(a).toBe(1);", old: 1, now: 0 }] }] },
+    },
+  ];
+  assert.equal(Lens.runChecks(ev, cfg).filter((f) => f.check === "assert_weakened").length, 1);
+  assert.equal(Lens.IMPORT_GEN, 16);
+  assert.equal(Lens.needsReimport({ profile: "qa-ts", importGen: 15, events: ev }), true);
+  ev[1].assert_delta.removed[0].added = [];
+  assert.equal(Lens.needsReimport({ profile: "qa-ts", importGen: 15, events: ev }), false);
+});

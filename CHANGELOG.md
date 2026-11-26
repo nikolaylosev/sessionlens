@@ -24,6 +24,13 @@
   messages in full, each after the agent's message it answers, and the review and verification prompts say that a
   choice you made or approved is a decision, not a defect. This makes the prompt longer: in that session, from about
   52,000 to 83,000 characters. The built-in prompts on the Model rules tab show the new sentence.
+- **A check moved to another function of the same file is no longer "fewer assertions".** An agent rewriting a helper
+  file often moves a check to the function where it belongs and writes it anew there. In one of our sessions, a check
+  of the Logout link moved from the function that checks the dashboard to the one that opens the menu, as the plan you
+  approved said. The file went from 8 assertions to 10, and the review still reported "fewer assertions (3 → 2)", high.
+  Now a check is moved when the file has no fewer assertions, and another function gained a check of the same thing
+  in that edit: one that shares a name or a text with the lost one and says the same, not the opposite. A session
+  imported before shows **Import again**.
 
 ## 0.1.139
 
