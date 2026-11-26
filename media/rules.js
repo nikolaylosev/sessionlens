@@ -326,7 +326,11 @@
       const t = script.content;
       if (/\bgrep\b/.test(t) && !/\bgrep\b[^\n|]*\s-[\w]*H/.test(t)) add("warn", "grep_no_h", "");
       // the skill's own examples, when it has them (sessionlens adds the folder), are no code to check
-      if (files.some((f) => /^examples\//.test(f.path)) && !/--exclude-dir[= ]?["']?[^\n]*examples/.test(t)) add("warn", "no_exclude", "");
+      if (
+        files.some((f) => /^(?:examples|skill-history\/bad)\//.test(f.path)) &&
+        !/--exclude-dir[= ]?["']?[^\n]*(?:examples|skill-history|\.sessionlens)/.test(t)
+      )
+        add("warn", "no_exclude", "");
       for (const m of t.matchAll(/^\s*check\s+"((?:\\.|[^"\\])*)"\s+"((?:\\.|[^"\\])*)"/gm)) {
         const label = m[1],
           id = (/\bP-\d{2,}\b/.exec(label) || [])[0];
@@ -390,7 +394,56 @@
     "lambda",
     "print",
   ]);
-  /* A skill's examples/ folder: for each picked rule, up to perRule files the agent really wrote, at the step of a
+  /* The history of a skill (0.1.141): outside the skill, for people (the owner's requirements, 26.11: verdicts, dates,
+     steps and whole files of the sessions do not go into the skill, an agent reads none of them). The app saves the
+     files under skill-history/ in the project's .sessionlens/skill-history/<skill>/, and SKILL.md gets one line naming
+     that folder. skill-history/README.md says what is where; reviews.md lists, for each picked rule, its findings
+     confirmed, rejected as false and left for later, with the session, the step and the reviewer's note;
+     bad/ holds the files of the sessions at a confirmed finding's step (skillExamples). reviewedOf(check) →
+     [{ s, f, vd }] for every finding of that check with a verdict. */
+  const HISTORY_DIR = "skill-history/",
+    BAD_DIR = HISTORY_DIR + "bad/";
+  const historyPath = (/** @type {string} */ name) => `.sessionlens/skill-history/${name}/`;
+  function skillHistory(/** @type {string[]} */ keys, /** @type {(k: string) => any[]} */ reviewedOf, /** @type {any} */ opts) {
+    const name = opts.name,
+      at = String(opts.at || "").slice(0, 10);
+    const line = (/** @type {any} */ x) =>
+      `- ${sessionLabel(x.s)}, ${where(x.f)}: ${String(x.f.message || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 160)}${String((x.vd && x.vd.note) || "").trim() ? ` — «${String(x.vd.note).trim()}»` : ""}`;
+    const reviews = [T("sh_reviews_title", { name }), "", T("sh_reviews_body", { at }), ""];
+    for (const k of keys) {
+      const all = reviewedOf(k);
+      reviews.push(`## ${k}`, "");
+      for (const [v, title] of [
+        ["ok", "sh_confirmed"],
+        ["fp", "sh_false"],
+        ["later", "sh_later"],
+      ]) {
+        const l = all.filter((x) => x.vd && x.vd.v === v);
+        if (l.length) reviews.push(T(title, { n: l.length }), ...l.map(line), "");
+      }
+    }
+    const readme = [
+      T("sh_readme_title", { name }),
+      "",
+      T("sh_readme_body", { name, at, dir: historyPath(name) }),
+      "",
+      `- \`reviews.md\` — ${T("sh_readme_reviews")}`,
+      ...(opts.bad ? [`- \`bad/\` — ${T("sh_readme_bad")}`] : []),
+      "",
+      T("sh_readme_rules", { list: keys.map((k) => `\`${k}\``).join(", ") }),
+      "",
+    ];
+    return [
+      { path: HISTORY_DIR + "README.md", content: readme.join("\n") },
+      { path: HISTORY_DIR + "reviews.md", content: reviews.join("\n") },
+    ];
+  }
+  // the one line of SKILL.md that names its history: for people, an agent does not need to read it
+  const historyLine = (/** @type {string} */ name) => T("sh_skill_line", { dir: historyPath(name) });
+  /* A skill's bad examples, whole files (skill-history/bad/ since 0.1.141, examples/ in the skill before): for each
+     picked rule, up to perRule files the agent really wrote, at the step of a
      confirmed finding of that rule, one session first; secrets masked, cut at maxChars. confirmedOf(check) gives
      [{ s, f }]: the session and its confirmed finding. → { files: [README, …], rows, masked }.
      Since 0.1.139 one file at one step is one copy: a rule that needs a file another rule already took refers to that
@@ -423,7 +476,7 @@
         else {
           const base = ((e.file || "").split("/").pop() || `from-chat-seq${f.seq}.txt`).replace(/[^\w.\-]/g, "_");
           const red = L().redactSecrets(e.new_content.slice(0, opts.maxChars));
-          Object.assign(row, { path: `examples/${k}/${++named}-${base}`, masked: red.count, cut: e.new_content.length > opts.maxChars });
+          Object.assign(row, { path: `${BAD_DIR}${k}/${++named}-${base}`, masked: red.count, cut: e.new_content.length > opts.maxChars });
           files.push({ path: row.path, content: red.text });
           copies.set(id + "|" + f.seq, row);
         }
@@ -448,12 +501,11 @@
       T("ex_col"),
       "|---|---|---|---|---|",
       ...rows.map(
-        (r) =>
-          `| \`${r.path.replace("examples/", "")}\` | ${r.k} | ${cell(r.session)} | ${r.seq} | ${cell(r.message)}${notes(r) ? " (" + notes(r) + ")" : ""} |`,
+        (r) => `| \`${r.path.replace(BAD_DIR, "")}\` | ${r.k} | ${cell(r.session)} | ${r.seq} | ${cell(r.message)}${notes(r) ? " (" + notes(r) + ")" : ""} |`,
       ),
       "",
     ].join("\n");
-    return { files: [{ path: "examples/README.md", content: readme }, ...files], rows, masked: rows.reduce((a, r) => a + r.masked, 0) };
+    return { files: [{ path: BAD_DIR + "README.md", content: readme }, ...files], rows, masked: rows.reduce((a, r) => a + r.masked, 0) };
   }
   return {
     GROUPS,
@@ -470,6 +522,9 @@
     groupOf,
     skillExamples,
     skillInput,
+    skillHistory,
+    historyLine,
+    historyPath,
     checkSkill,
     ruleMarkdown,
     markNotes,

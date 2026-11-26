@@ -853,6 +853,12 @@ flowchart TD
   optional `scripts/check_<name>.sh` labelled by those numbers (`grep -rHn`, `--exclude-dir` for examples and
   `skill-history`, a header listing what it does not check). No history in the skill. The model gets the picked
   rules through `LensRules.skillInput`: the evidence without its sessions and steps, only the reviewers' notes.
+- **The skill's history** (`LensRules.skillHistory`, since 0.1.141): `skill-history/README.md`, `reviews.md` (each
+  picked rule's findings with a verdict, by verdict: confirmed, rejected, later; session, step, note) and `bad/` (the
+  sessions' whole files, `skillExamples`, `examples/` in the skill until then). The panel drops any `examples/` or
+  `skill-history/` file of the model, adds the line of `SKILL.md` that names the history (`historyLine`), and
+  `save:folder-files` writes `skill-history/…` to `<picked>/.sessionlens/skill-history/<name>/` and the rest to
+  `<picked>/skills/<name>/`. The model is not told the files' names.
 - **Check of the skill** (`LensRules.checkSkill(files, { code, check })`, since 0.1.141): no model. Sizes (`SKILL.md`
   8,000, `description` 400, `SKILL.md` + `references/rules.md` 30,000), numbering (every `P-NN` of `SKILL.md` has an
   entry, every entry a line, no entry twice, no `AP-…`), history outside code (`seq N`, dates), entries (Bad at most

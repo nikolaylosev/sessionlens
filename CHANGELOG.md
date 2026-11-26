@@ -13,6 +13,13 @@
   check the skill's own examples. The model gets the rules without their sessions and steps, only your notes, and is
   told not to invent helpers in its examples. The built-in prompt on the Model rules tab shows the new text.
 
+- **A generated skill's history is kept outside the skill.** The files of your sessions went into the skill as
+  `examples/`: whole intermediate versions, the same file copied for several rules, and a table with session names
+  and steps. An agent loaded them with the skill, and its check script reported them. Now they go into the skill's
+  history, saved next to it in `.sessionlens/skill-history/<skill>/` of the folder you pick: the files under `bad/`,
+  a `reviews.md` that lists each rule's findings confirmed, rejected as false and left for later, with your notes, and
+  a README. `SKILL.md` gets one line that names this folder. The model is no longer told the names of those files.
+
 ### Added
 - **A generated skill is checked before you save it.** A model can still break the rules it is given: in a skill we
   reviewed, examples called functions the project does not have, two good examples broke other rules of the same

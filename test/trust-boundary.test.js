@@ -150,6 +150,27 @@ test("save:folder-files: good files land under <picked>/skills/<name>/", async (
   );
 });
 
+test("save:folder-files: the skill's history lands outside it, under <picked>/.sessionlens/skill-history/<name>/ (0.1.141)", async () => {
+  const picked = { fsPath: path.join(os.tmpdir(), "proj"), toString: () => "" };
+  const { wv, calls } = await boot({ openDialogAnswer: [picked] });
+  const r = await wv.send("save:folder-files", {
+    skillName: "api-review",
+    files: [
+      { path: "SKILL.md", content: "a" },
+      { path: "skill-history/reviews.md", content: "b" },
+      { path: "skill-history/bad/fixed_sleep/1-x.ts", content: "c" },
+    ],
+  });
+  const base = path.join(picked.fsPath, "skills", "api-review");
+  const hist = path.join(picked.fsPath, ".sessionlens", "skill-history", "api-review");
+  assert.equal(r, base);
+  assert.deepEqual(
+    calls.writes.map((w) => w.path),
+    [path.join(base, "SKILL.md"), path.join(hist, "reviews.md"), path.join(hist, "bad", "fixed_sleep", "1-x.ts")],
+  );
+  assert.match(String(calls.info.at(-1)), /its history to .*skill-history/);
+});
+
 test("save:file: only the basename, in the workspace folder (or home)", async () => {
   const ws = { uri: { fsPath: path.join(os.tmpdir(), "ws"), toString: () => "" } };
   let b = await boot({ workspaceFolders: [ws] });

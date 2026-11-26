@@ -476,18 +476,19 @@
         if (choice === null) return;
         if (choice === "overwrite") overwriteId = prevList[0].id;
       }
-      const ex = $("#gen-skill-examples").checked ? await buildExamples(pickedRuleKeys()) : { files: [], rows: [], masked: 0 };
-      const exList = ex.rows.length ? "\n\n## Example files\n" + [...new Set(ex.rows.map((r) => r.k))].map(
-        (k) => `- ${k}: ` + ex.rows.filter((r) => r.k === k).map((r) => r.path).join(", ")
-      ).join("\n") + "\n" : "";
-      const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body) + exList;
+      const keys = pickedRuleKeys();
+      const full = await skillSessions(keys);
+      const ex = $("#gen-skill-examples").checked ? LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS }) : { files: [], rows: [], masked: 0 };
+      const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body);
       btn.disabled = true;
       st.textContent = T("gen_skill_wait");
       try {
         const r = await LensAI.generateSkill(md, state.settings, void 0, rulesTargetLabel());
-        r.files = r.files.filter((f) => !/^examples\//.test(f.path)).concat(ex.files);
+        const own = r.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path)).map((f) => f.path === "SKILL.md" ? { ...f, content: f.content.replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n") } : f);
+        const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at: (/* @__PURE__ */ new Date()).toISOString(), bad: ex.files.length > 0 });
+        r.files = own.concat(history, ex.files);
         try {
-          r.check = LensRules.checkSkill(r.files, await skillContext(pickedRuleKeys()));
+          r.check = LensRules.checkSkill(r.files, await skillContext(full));
         } catch (e) {
           r.check = null;
         }
@@ -788,25 +789,27 @@ ${en.raw}`).join("\n\n\n");
     }
     return out;
   }
-  async function buildExamples(keys) {
-    const full = {};
-    await fetchSessions(
-      metas().filter((m) => (m.confirmed || []).some((c) => keys.includes(c.check))).map((m) => m.id),
-      (s) => {
-        full[s.id] = s;
-      }
-    );
-    return LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS });
-  }
   var SNIPPET_CHECKS = /* @__PURE__ */ new Set(["sleep_or_skip_added", "focused_test", "debug_leftover", "weak_assert", "fragile_wait", "hardcoded_secret"]);
-  async function skillContext(keys) {
+  async function skillSessions(keys) {
     const full = {};
     await fetchSessions(
-      metas().filter((m) => (m.confirmed || []).some((c) => keys.includes(c.check))).map((m) => m.id),
+      metas().filter((m) => !isDemo(m) && (keys.some((k) => m.checkStats && m.checkStats[k]) || (m.confirmed || []).some((c) => keys.includes(c.check)))).map((m) => m.id),
       (s) => {
         full[s.id] = s;
       }
     );
+    return full;
+  }
+  function reviewedFor(k, full) {
+    const out = [];
+    for (const s of Object.values(full))
+      for (const f of [...s.findings || [], ...s.calibHidden || []]) {
+        const vd = s.verdicts && s.verdicts[fkey(f)];
+        if (f.check === k && vd) out.push({ s, f, vd });
+      }
+    return out;
+  }
+  async function skillContext(full) {
     const sessions = Object.values(full);
     const code = sessions.flatMap((s) => (s.events || []).map((e) => e.new_content).filter((t) => typeof t === "string"));
     const count = {};
