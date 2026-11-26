@@ -529,3 +529,47 @@ test("one rule on one line is one finding: no-conditional-in-test on an `if` wit
   // until 0.1.125 line 4 came twice (the `if` and the `&&`) and took a place of the three a file shows
   assert.deepEqual(found, [at(4), at(6), at(7) + " (+1 more of the same in this file)"]);
 });
+
+/* A function of the same file that asserts (0.1.140): its body calls expect(), expect.poll(…) or another such function.
+   In the owner's session a test checked its timing through measure(name, page, fn), three expect() inside, and was
+   "no assertions". Made-up content only. */
+test("no_assertion_after_action in Playwright: an assertion through a function of the same file (0.1.140)", async () => {
+  const file = (helpers, call) =>
+    PW + helpers + `test("pays", async ({ page }) => {\n  await page.getByRole("button", { name: "Pay" }).click();\n  ${call}\n});\n`;
+  const found = (helpers, call) => lintFound("qa-ts", "e2e/pay.spec.ts", file(helpers, call), "no_assertion_after_action");
+  const HELPERS = [
+    // a return type with braces and an arrow in it, a parameter typed as a function
+    "async function measure(name: string, fn: () => Promise<void>): Promise<{ ms: () => number }> {\n  const t0 = Date.now();\n  await fn();\n  expect(Date.now() - t0, name).toBeGreaterThan(0);\n  return { ms: () => 0 };\n}\n",
+    "const paid = async (page: Page) => {\n  await expect.poll(() => page.title()).toBe('Paid');\n};\n",
+    "const seen = (l: Locator) => expect(l).toBeVisible();\n",
+    // through another function of the file, declared after it
+    "async function done(page: Page) {\n  await paid(page);\n}\nconst paid = async (page: Page) => {\n  await expect.soft(page.getByText('Paid')).toBeVisible();\n};\n",
+    "class Pay {\n  constructor(private page: Page) {}\n  async verifyTotal(n: number) {\n    await expect(this.page.getByTestId('total')).toHaveText(String(n));\n  }\n}\n",
+  ];
+  const CALLS = [
+    "await measure('pay', async () => {});",
+    "await paid(page);",
+    "await seen(page.getByText('Paid'));",
+    "await done(page);",
+    "await new Pay(page).verifyTotal(4);",
+  ];
+  for (let i = 0; i < HELPERS.length; i++) assert.deepEqual(await found(HELPERS[i], CALLS[i]), [], CALLS[i]);
+  // still reported: the function asserts nothing (an expect( in a comment, a string or a regex), or the test calls none
+  const none = (line) => [`no_assertion_after_action/lint high: e2e/pay.spec.ts:${line} — Test has no assertions [playwright/expect-expect]`];
+  const at = (helpers) => 2 + helpers.split("\n").length - 1;
+  for (const helpers of [
+    "async function measure(fn: () => Promise<void>) {\n  // expect(fn).toBeTruthy();\n  await fn();\n}\n",
+    "function measure(fn) {\n  console.log('expect(1)', /expect\\(\"x/.test('y'));\n}\n",
+    "async function measure(fn) {\n  await fn();\n}\nasync function other(page: Page) {\n  await expect(page).toHaveTitle('Paid');\n}\n",
+  ])
+    assert.deepEqual(await found(helpers, "await measure(async () => {});"), none(at(helpers)), helpers);
+});
+
+test("assertingFunctions: the functions of a file that assert, a call nobody defines is none", () => {
+  assert.deepEqual(
+    LensLint.assertingFunctions(
+      "const r = x.replace(/\\(\"/g, '');\nfunction a() { expect(1).toBe(1); }\nfunction b() { a(); }\nfunction c() { b; d(); }\nif (a()) { expect(2).toBe(2); }\n",
+    ),
+    ["a", "b"],
+  );
+});
