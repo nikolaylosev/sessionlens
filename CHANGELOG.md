@@ -13,6 +13,17 @@
   check the skill's own examples. The model gets the rules without their sessions and steps, only your notes, and is
   told not to invent helpers in its examples. The built-in prompt on the Model rules tab shows the new text.
 
+### Added
+- **A generated skill is checked before you save it.** A model can still break the rules it is given: in a skill we
+  reviewed, examples called functions the project does not have, two good examples broke other rules of the same
+  skill, and a check of its script fired on correct code. Under each generated skill, **Check of the skill** now lists
+  what it finds, without a model: `SKILL.md`, its description and what an agent reads for one task over their limits;
+  a rule in `SKILL.md` with no entry, or the other way round, and a second numbering; dates and steps in the text; a
+  bad example longer than three lines; a good example that calls a name the code of your sessions does not have, or
+  that breaks one of SessionLens's checks (the lint engine and the checks that read code alone); and a pattern of the
+  check script that misses its rule's bad example or matches a good one, a check not labelled with a rule number, a
+  `grep` that does not print the file name. It reads a skill in English or in Russian.
+
 ## 0.1.140
 
 ### Fixed
