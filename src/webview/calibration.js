@@ -221,8 +221,11 @@ export function initCalibration() {
   // .mdc target it is the whole file, frontmatter included.
   skillStubPath = (skillName) => `skills/${skillName}/SKILL.md`;
   stubText = (refPath) => rulesFileText(`Refer to \`${refPath}\` for domain-specific automation rules and code style.\n`);
-  $("#gen-skill").addEventListener("click", async () => {
+  /* Generate skill, or update a skill that exists (0.1.141): the same rules; an update starts from the skill's folder,
+     keeps its files the model does not change, and writes what changed to its history */
+  const runSkill = async (update) => {
     const btn = $("#gen-skill"),
+      upd = $("#gen-skill-update"),
       st = $("#gen-skill-status");
     const body = pickedRulesMd();
     if (!body.trim()) {
@@ -236,9 +239,21 @@ export function initCalibration() {
         return;
       }
     }
+    let picked = null;
+    if (update) {
+      picked = await window.__slOpenSkillFolder();
+      if (!picked) return;
+      if (picked.error) {
+        st.textContent = picked.error;
+        return;
+      }
+    }
+    // the skill's own files: an old one's examples/ (before 0.1.141) is history, to delete from it
+    const before = picked ? picked.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path)) : [];
+    const stale = picked ? picked.files.filter((f) => /^examples\//.test(f.path)).map((f) => f.path) : [];
     const prevList = state.skillResults || [];
     let overwriteId = null;
-    if (prevList.length && prevList[0].body === body) {
+    if (!update && prevList.length && prevList[0].body === body) {
       const choice = await chooseDialog(T("gen_dup_msg"), [
         { label: T("gen_dup_overwrite"), value: "overwrite", primary: true },
         { label: T("gen_dup_new"), value: "new" },
@@ -254,49 +269,62 @@ export function initCalibration() {
       : { files: [], rows: [], masked: 0 };
     // without the evidence's sessions and steps: a skill keeps no history (0.1.141)
     const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body);
-    btn.disabled = true;
-    st.textContent = T("gen_skill_wait");
+    btn.disabled = upd.disabled = true;
+    st.textContent = T(update ? "gen_skill_update_wait" : "gen_skill_wait");
     try {
-      const r = await LensAI.generateSkill(md, state.settings, undefined, rulesTargetLabel());
-      // the skill as the model wrote it, its line that names the history, and the history (0.1.141)
-      const own = r.files
-        .filter((f) => !/^(?:examples|skill-history)\//.test(f.path))
-        .map((f) => (f.path === "SKILL.md" ? { ...f, content: f.content.replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n") } : f));
-      const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at: new Date().toISOString(), bad: ex.files.length > 0 });
+      const r = await LensAI.generateSkill(md, state.settings, undefined, rulesTargetLabel(), update ? before : undefined);
+      if (update) r.skill_name = picked.name; // the skill keeps its name and its folder
+      const at = new Date().toISOString();
+      // the skill as the model wrote it (an update: over the files as they were), its line that names the history
+      const wrote = r.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path));
+      const remove = [...new Set([...(r.remove || []), ...stale])];
+      const own = (update ? LensRules.mergeSkill(before, wrote, remove) : wrote).map((f) =>
+        f.path === "SKILL.md"
+          ? {
+              ...f,
+              content: f.content
+                .replace(/\n*History of the reviews behind this skill[^\n]*\n?/g, "\n")
+                .replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n"),
+            }
+          : f,
+      );
+      const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at, bad: ex.files.length > 0 });
+      const changed = new Set(wrote.map((f) => f.path));
+      const kept = before.map((f) => f.path).filter((p) => !changed.has(p) && !remove.includes(p));
+      if (update) history.push(LensRules.skillChanges({ name: r.skill_name, at, changes: r.changes || [], remove, kept }));
       r.files = own.concat(history, ex.files);
       // checked without a model: sizes, numbering, history, the examples' names and rules, the script (0.1.141)
       try {
-        r.check = LensRules.checkSkill(r.files, await skillContext(full));
+        r.check = LensRules.checkSkill(r.files, Object.assign(await skillContext(full), update ? { before } : {}));
       } catch (e) {
         r.check = null;
       }
+      const entry = { at, skill_name: r.skill_name, files: r.files, body, check: r.check, ...(update ? { updated: true } : {}) };
       if (overwriteId) {
-        state.skillResults = state.skillResults.map((x) =>
-          x.id === overwriteId ? { id: overwriteId, at: new Date().toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check } : x,
-        );
+        state.skillResults = state.skillResults.map((x) => (x.id === overwriteId ? { id: overwriteId, ...entry } : x));
         await save();
         renderSkillResults(overwriteId);
       } else {
         const id = genId();
-        state.skillResults = [
-          { id, at: new Date().toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check },
-          ...(state.skillResults || []),
-        ];
+        state.skillResults = [{ id, ...entry }, ...(state.skillResults || [])];
         await save();
         renderSkillResults(id);
       }
       await logCal("skill", r.raw);
-      st.textContent = $("#gen-skill-examples").checked
+      const exNote = $("#gen-skill-examples").checked
         ? ex.rows.length
           ? T("gen_examples_added", { n: ex.files.length - 1, r: ex.masked }) // the files, without the README (0.1.139: a file may serve two rules)
           : T("gen_examples_none")
         : "";
+      st.textContent = update ? [T("gen_skill_updated", { name: r.skill_name, n: wrote.length, k: kept.length }), exNote].filter(Boolean).join(" ") : exNote;
     } catch (e) {
       st.textContent = T("error") + e.message;
       if (e.raw) await logCal("skill", e.raw, e.message);
     }
-    btn.disabled = false;
-  });
+    btn.disabled = upd.disabled = false;
+  };
+  $("#gen-skill").addEventListener("click", () => runSkill(false));
+  $("#gen-skill-update").addEventListener("click", () => runSkill(true));
   $("#export-verdicts").addEventListener("click", () => exportVerdicts());
   $("#import-file").addEventListener("change", (ev) => {
     const f = ev.target.files[0];

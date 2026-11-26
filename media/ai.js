@@ -885,17 +885,34 @@ an Agent Skill package, written in {LANG}, in this exact shape — study it befo
 Reply ONLY with a JSON object: {"skill_name": "...", "files": [{"path": "...", "content": "..."}, ...]}. No
 prose outside the JSON, no code fences around the JSON itself. Each file's "content" is the complete file text
 with real newline characters.`;
-  const GENERATE_SKILL_SYSTEM = (target) =>
+  /* Updating a skill that exists (0.1.141): the owner's requirements (26.11) keep a rule's number for good (§1.4) and
+     rewrite a rule in place (§2.5); a change goes to the history, not into the skill. Appended to the generation
+     prompt: the input then ends with the skill as it is, and the reply lists only the files it changes, what changed
+     ("changes") and the files to delete ("remove"); the app keeps every other file as it was. */
+  const UPDATE_SKILL_TPL = `This time a skill already exists: the input ends with "## The skill as it is now", every file of it
+in full. Update that skill with the rules above instead of writing a new one:
+- Keep its skill_name.
+- Keep every rule's number and what it means. A rule above that is the same as one of the skill updates that rule's
+  entry in place: rewrite the entry whole, never an addendum under it. A new rule gets the next free number. Never
+  renumber, merge or drop a rule of the skill unless a reviewer's note above asks for it.
+- If the skill has a second numbering (AP-xx…) or separate patterns and antipatterns files, merge them into
+  references/rules.md under the P-NN numbers, keep each P-NN as it was, and list the merge in "changes" (old id → new id).
+- Keep every other file as it is unless the rules above need it changed (a procedure, a template, the script).
+- Reply with only the files you change or add, each in full, plus "changes": [{"id": "P-NN" or a file path,
+  "what": "one sentence"}] for every change, and "remove": [paths of the skill's files that should no longer exist].`;
+  const GENERATE_SKILL_SYSTEM = (target, update) =>
     guard(
       pick("generate_skill", GENERATE_SKILL_TPL)
         .replace("{LANG}", LANG_NAME())
-        .replace("{TARGET}", target || "CLAUDE.md"),
+        .replace("{TARGET}", target || "CLAUDE.md") + (update ? "\n\n" + pick("update_skill", UPDATE_SKILL_TPL) : ""),
     );
   const GENERATE_SKILL_SCHEMA = {
     type: "OBJECT",
     properties: {
       skill_name: { type: "STRING" },
       files: { type: "ARRAY", items: { type: "OBJECT", properties: { path: { type: "STRING" }, content: { type: "STRING" } }, required: ["path", "content"] } },
+      changes: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, what: { type: "STRING" } }, required: ["id", "what"] } },
+      remove: { type: "ARRAY", items: { type: "STRING" } },
     },
     required: ["skill_name", "files"],
   };
@@ -910,16 +927,26 @@ with real newline characters.`;
     const skill_name = (obj.skill_name && String(obj.skill_name).trim()) || "generated-skill";
     const files = obj.files.filter((f) => f && typeof f.path === "string" && typeof f.content === "string" && f.path.trim());
     if (!files.length) throw new Error(T("err_not_array"));
-    return { skill_name, files };
+    const changes = (Array.isArray(obj.changes) ? obj.changes : [])
+      .filter((c) => c && typeof c.what === "string")
+      .map((c) => ({ id: String(c.id || ""), what: c.what }));
+    const remove = (Array.isArray(obj.remove) ? obj.remove : []).filter((x) => typeof x === "string" && x.trim());
+    return { skill_name, files, changes, remove };
   }
 
-  async function generateSkill(md, settings, fetchImpl, target) {
+  /* existing: the files of a skill to update ([{ path, content }], 0.1.141) or nothing for a new one. An update says
+     what it keeps in the prompt and gets the skill's text after the rules, and twice the room for its reply. */
+  const skillAsItIs = (files) =>
+    "\n\n## The skill as it is now\n" + files.map((f) => `\n### ${f.path}\n\n\`\`\`\`\n${f.content.replace(/\n?$/, "\n")}\`\`\`\`\n`).join("");
+  async function generateSkill(md, settings, fetchImpl, target, existing) {
     settings = settingsFor(settings, "skill");
-    const system = GENERATE_SKILL_SYSTEM(target);
+    const update = Array.isArray(existing) && existing.length > 0;
+    const system = GENERATE_SKILL_SYSTEM(target, update);
+    if (update) md += skillAsItIs(existing);
     const reqText = `${T("req_generate_skill", used(settings))}\n--- system ---\n${system}\n\n--- user ---\n${md}`;
     let text;
     try {
-      text = await callModel(settings, { system, user: maskSecrets(md), maxTokens: 8000, schema: GENERATE_SKILL_SCHEMA }, fetchImpl);
+      text = await callModel(settings, { system, user: maskSecrets(md), maxTokens: update ? 16000 : 8000, schema: GENERATE_SKILL_SCHEMA }, fetchImpl);
     } catch (e) {
       e.raw = reqText + "\n\n" + T("resp") + "\n" + T("call_error", { msg: e.message });
       throw e;
@@ -932,7 +959,7 @@ with real newline characters.`;
       e.raw = raw;
       throw e;
     }
-    return { skill_name: parsed.skill_name, files: parsed.files, raw };
+    return { skill_name: parsed.skill_name, files: parsed.files, changes: parsed.changes, remove: parsed.remove, raw };
   }
 
   const norm = (s) =>
@@ -1113,7 +1140,14 @@ with real newline characters.`;
     callCursorCli,
     setPrompts,
     MATERIAL_IS_DATA,
-    DEFAULTS: { review: SYSTEM_TPL, verify: VERIFY_TPL, review_local: LOCAL_FILE_SYSTEM, compress: COMPRESS_TPL, generate_skill: GENERATE_SKILL_TPL },
+    DEFAULTS: {
+      review: SYSTEM_TPL,
+      verify: VERIFY_TPL,
+      review_local: LOCAL_FILE_SYSTEM,
+      compress: COMPRESS_TPL,
+      generate_skill: GENERATE_SKILL_TPL,
+      update_skill: UPDATE_SKILL_TPL,
+    },
     buildPrompt,
     parseFindings,
     AI_CATEGORIES,

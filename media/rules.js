@@ -264,6 +264,25 @@
     if (stats.skill > SKILL_MAX) add("warn", "skill_long", "", { n: stats.skill, max: SKILL_MAX });
     if (stats.description > DESC_MAX) add("warn", "desc_long", "", { n: stats.description, max: DESC_MAX });
     if (stats.read > READ_MAX) add("warn", "read_long", "", { n: stats.read, max: READ_MAX });
+    // ---- an update keeps every rule's number and name (ctx.before: the skill's files before it) ----
+    if (Array.isArray(ctx.before) && ctx.before.length) {
+      const names = (/** @type {{path: string, content: string}[]} */ fs) => {
+        const m = new Map();
+        for (const f of fs.filter((x) => /^(?:SKILL\.md|references\/.*\.md)$/.test(x.path)))
+          for (const h of f.content.matchAll(/^##\s+(P-\d{2,})\b[.:)\s-]*(.*)$/gm)) if (!m.has(h[1])) m.set(h[1], h[2].trim());
+        return m;
+      };
+      const was = names(ctx.before),
+        now = names(own);
+      const norm = (/** @type {string} */ x) =>
+        x
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
+      for (const [id, name] of was)
+        if (!now.has(id)) add("error", "rule_dropped", id, { x: name });
+        else if (name && now.get(id) && norm(name) !== norm(/** @type {string} */ (now.get(id)))) add("warn", "rule_renamed", id, { x: name, y: now.get(id) });
+    }
     // ---- one numbering ----
     const ids = (/** @type {string} */ t) => [...t.matchAll(/\bP-(\d{2,})\b/g)].map((m) => "P-" + m[1]);
     const inSkill = new Set(ids((skill && skill.content) || ""));
@@ -440,6 +459,28 @@
       { path: HISTORY_DIR + "reviews.md", content: reviews.join("\n") },
     ];
   }
+  /* An updated skill (0.1.141): the files the model returned over the skill's files as they were; every other file of
+     the skill stays, and those it says to remove go. → files, with the old ones in their place */
+  function mergeSkill(
+    /** @type {{path: string, content: string}[]} */ before,
+    /** @type {{path: string, content: string}[]} */ changed,
+    /** @type {string[]} */ remove,
+  ) {
+    const gone = new Set(remove || []);
+    const out = new Map(before.filter((f) => !gone.has(f.path)).map((f) => [f.path, f]));
+    for (const f of changed) out.set(f.path, f);
+    return [...out.values()];
+  }
+  /* The history of an update: skill-history/changes-<date>.md, what the model says it changed, the files it removed
+     (to delete by hand: saving writes files, it deletes none) and the files it kept as they were. */
+  function skillChanges(/** @type {any} */ o) {
+    const day = String(o.at || "").slice(0, 10);
+    const lines = [T("sh_changes_title", { name: o.name, at: day }), ""];
+    lines.push(...(o.changes.length ? o.changes.map((/** @type {any} */ c) => `- ${c.id ? `${c.id}: ` : ""}${c.what}`) : [T("sh_changes_none")]), "");
+    if (o.remove.length) lines.push(T("sh_changes_remove"), ...o.remove.map((/** @type {string} */ p) => `- \`${p}\``), "");
+    if (o.kept.length) lines.push(T("sh_changes_kept"), ...o.kept.map((/** @type {string} */ p) => `- \`${p}\``), "");
+    return { path: `${HISTORY_DIR}changes-${day}.md`, content: lines.join("\n") };
+  }
   // the one line of SKILL.md that names its history: for people, an agent does not need to read it
   const historyLine = (/** @type {string} */ name) => T("sh_skill_line", { dir: historyPath(name) });
   /* A skill's bad examples, whole files (skill-history/bad/ since 0.1.141, examples/ in the skill before): for each
@@ -523,6 +564,8 @@
     skillExamples,
     skillInput,
     skillHistory,
+    mergeSkill,
+    skillChanges,
     historyLine,
     historyPath,
     checkSkill,
