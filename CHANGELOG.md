@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.140
+
+### Fixed
+- **A test file the agent wrote for itself and deleted no longer gives findings.** Agents often write a short test to
+  try something out, such as whether a helper waits for a response, run it, and delete it. Since 0.1.127 such a file's
+  deletion was no "test deleted" finding, but every other check still read it as part of the result: a "test with no
+  assertions", a "file not in the plan", a branch in a test. In one of our sessions three such files gave eight
+  findings, three of them high, although none of the files was left at the end. A test file the agent created, ran
+  green and deleted while working on one request is now a temporary file, and these findings are left out. A fix of it
+  right after a failure is still reported, as low, with the file's deletion named, and a secret written into it is
+  still reported. A file deleted after a failing run, deleted later for another request, or written again is no
+  temporary file.
+
 ## 0.1.139
 
 ### Fixed

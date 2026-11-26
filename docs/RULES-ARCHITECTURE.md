@@ -128,8 +128,9 @@ function analyze(s, { settings, calibStats, overrides }) {
     const lr = LensLint.run(s, cfg, settings);                  // 5. ESLint/tree-sitter/custom-parser engines
     if (lr.ran) base = LensLint.merge(formal, lr.findings, cfg.language); // only what that engine finds itself (§6.3)
   }
-  const cal = Lens.calibrate([...base, ...gherkin, ...sc.findings, ...ai],     // calibration per check and source
-                             calibStats, overrides);                           // (since v0.1.112, §5.2)
+  const kept = Lens.temporaryFindings([...base, ...gherkin, ...sc.findings, ...ai], // a temporary test file's findings
+                                      s.events, cfg);                         // left out (since v0.1.140, §21)
+  const cal = Lens.calibrate(kept, calibStats, overrides);   // calibration per check and source (since v0.1.112, §5.2)
   s.findings = Lens.sortFindings(LensRules.apply(cal.findings, overrides));
   s.suppressed = cal.suppressed; s.calibHidden = cal.hidden;
 }
@@ -140,6 +141,8 @@ The key properties of this function that matter for review:
 - **`Lens.calibrate()` runs once, after the merge and before `apply()`** (since
   v0.1.112): a regex finding an engine supersedes is gone before calibration sees it,
   so an engine check that calibration switched off never brings the regex one back.
+- **A temporary test file's findings are left out before calibration** (since v0.1.140, §21): what is not in the
+  session's result is neither shown nor counted for a check's precision.
 - **`LensRules.apply()` is called EXACTLY ONCE**, on the already
   merged array, before `carryVerdicts`. It does not and must not know where a finding came from —
   overrides are applied the same way to all five tracks.
@@ -1580,6 +1583,21 @@ not be parsed is skipped), `TEST_FILE_RX` (a test file by its name) and
 | `product_code_edited` | process | a write or an edit of a file in the profile's `src_dirs` (anywhere in the path: Claude Code started in a parent folder writes `shop/src/…`) | test-side code inside `src`, a runner config, a file named in the approved plan |
 | `snapshot_overwritten` | process | a test run with an update flag after the runner (`jest -u`, `--update-snapshots`, `--snapshot-update`, `UPDATE_SNAPSHOTS=1`); a snapshot or baseline file written by hand | `-u` of another command (`env -u`, `git push -u`), a runner named in a heredoc or a string |
 | `config_weakened` | process | a runner config with its previous text: more retries, a longer timeout (each in source order), a new line excluding tests, a new line ignoring failures or skipping the tests (since 0.1.114: `testFailureIgnore`, `skipTests`, `ignoreFailures`) | a shorter timeout, an unrelated change; a config seen for the first time counts only for its retries; in a `pom.xml` anything outside the surefire and failsafe plugins and `<properties>`, in a Gradle script anything outside the blocks of test tasks |
+
+**Temporary test files (since 0.1.140).** `Lens.temporaryFiles(ev, cfg)` gives the test files (`isTestFile`) the session
+itself created (the first version is a write with no `prev_content`), deleted (`rm`, `git rm`, `unlink`, `del`,
+`Remove-Item`, a glob, or a `delete` event) after a green run that ran them (the file named in the run's command, or
+no test file named; the command's own run when it runs the tests before its `rm`), with no message of the person
+between the first version and the deletion, and never written again. These are the same files `test_deleted` has not
+reported since 0.1.127. `Lens.temporaryFindings(findings, ev, cfg)`, called by `analyze()` before calibration, leaves
+out what the checks found on a step that changed such a file: every lint finding, every check of the group `code`
+(the test smells, `test_deleted` of one of its tests, `hardcoded_base_url`), `scope_creep`, `edit_churn`, and the spec
+checks `test_without_requirement` and `out_of_scope_tested`. `fix_after_fail_without_triage` stays, low, with
+"— a temporary file the agent deleted (seq N)" added to its text; `hardcoded_secret` stays as it is (the token was on
+disk and in the transcript). In the owner's sessions this took out 11 findings, 9 of them in DD-011 (three files with
+the comment "TEMPORARY file … delete after the run", one of them asked for by the task), and made 2 low. A file
+deleted after a red run, deleted for a later request (a feature taken out: one of the owner's sessions removed a test
+file 4,000 steps after writing it), or written again, is no temporary file.
 
 What the import keeps for them:
 
