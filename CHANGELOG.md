@@ -58,6 +58,13 @@
   "right after a failing run" became medium, as a green run came between; three "tests never run" and "claims tests
   pass" findings went away; and 30 fixes right after a failure, and 10 deleted test files that the last run did not
   run, are now seen. A session imported before shows **Import again**.
+- **A verdict for a finding you want to look at again: Later.** A finding had two buttons, Confirm and False, and
+  some reviewers pressed Confirm with a comment like "to check" on a finding they were not sure of. A confirmed finding
+  counts for calibration and becomes evidence for a proposed rule and a skill, so these rules were built on findings
+  nobody had decided. In one of our sessions every such finding was marked this way. The new **Later** button keeps
+  the comment and leaves the finding undecided: it counts for nothing, the "no verdict" filter shows it, and the PR
+  report lists it under "No verdict" with the comment. A proposed rule's evidence now quotes a finding of the model
+  instead of saying "seq -1", since such a finding has no step.
 
 ## 0.1.139
 

@@ -415,6 +415,12 @@ Walk-through:
 - **In the CLI** (`--verdicts`, `cli/lib/verdicts.js`, since 0.1.135) the same `calibrate()` runs on counts made from
   exported `verdicts.json` files: per check and source, one count per finding (check, source, session, step, the start
   of its text), as `Lens.sessionSummary` counts them in the panel. Without the flag the counts are empty.
+- **Only True and False count** (`Lens.decided`, since 0.1.140). A verdict **Later** (`v: "later"`) is a reviewer's
+  note to look again: `sessionSummary` counts it as open and in no check's `ok`/`fp`, it is no confirmed finding, so
+  no rule, skill or example is built from it, the review's "no verdict" filter and `highWithoutVerdict` treat it as no
+  verdict, and the PR report lists it under "No verdict" with its note. An exported `verdicts.json` keeps it; an
+  import and the CLI's `--verdicts` read it as no verdict. A rule's evidence names a finding's step, or quotes a
+  finding that has none (the model's, `seq -1`: `LensRules.where`).
 - **What the UI shows** (since v0.1.112): the Calibration table has one row per check and source, with the
   status `calibrate()` really applies (`Lens.isCalibrated(check, source)`; "not calibrated" with the reason
   as a tooltip for the model, the facts of the spec, imported findings and a `calibrate: false` check; "on by hand" for an off pair the

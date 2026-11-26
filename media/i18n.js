@@ -274,6 +274,9 @@
         "A new check: its findings are shown as low until it has 10 verdicts. Mark them True or False: with 10, it gets its own severity, or calibration demotes it or switches it off.",
       btn_ok: "Confirm",
       btn_fp: "False",
+      btn_later: "Later",
+      btn_later_hint:
+        'Not decided yet: to look at again. It counts for nothing: not for calibration, rules or a skill, and the finding stays under "no verdict".',
       ph_note: "comment",
       empty_filter: "Nothing matches the filter.",
       empty_findings: "Formal checks found nothing. That doesn't mean the session is good — skim the timeline.",
@@ -326,6 +329,7 @@
       md_confirmed: "### Confirmed findings",
       md_false: "### Rejected as false",
       md_undecided: "### No verdict (medium/low)",
+      md_later: "to review later",
       md_hidden: "### Hidden by calibration (low precision)",
       md_hidden_why: "precision {p}% over {n} {n|verdict|verdicts}",
       md_hidden_rest: "- and {n} medium or low {n|finding|findings}",

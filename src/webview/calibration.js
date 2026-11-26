@@ -68,7 +68,9 @@ export function initCalibration() {
       ...r.findings.filter((f) => f.verdict && f.verdict.v === "fp").map((f) => `- ~~${f.message}~~${f.verdict.note ? ` — ${f.verdict.note}` : ""}`),
       ``,
       T("md_undecided"),
-      ...r.findings.filter((f) => !f.verdict).map((f) => `- ${sev[f.severity]} ${f.message}`),
+      ...r.findings
+        .filter((f) => !Lens.decided(f.verdict))
+        .map((f) => `- ${sev[f.severity]} ${f.message}${f.verdict ? ` _(${T("md_later")}${f.verdict.note ? `: ${f.verdict.note}` : ""})_` : ""}`),
       ``,
       ...hiddenMd(r.hiddenByCalibration, sev),
       `_sessionlens · ${new Date().toISOString().slice(0, 10)}_`,
@@ -324,7 +326,7 @@ export function reportObj(s) {
 }
 
 export function highWithoutVerdict(s) {
-  return s.findings.filter((f) => f.severity === "high" && !s.verdicts[fkey(f)]);
+  return s.findings.filter((f) => f.severity === "high" && !Lens.decided(s.verdicts[fkey(f)]));
 }
 
 // nameSet (phase 6): a name given here is what the session is called from now on (Lens.displayName), also in the
@@ -408,7 +410,7 @@ export function renderCalib() {
           .slice(0, 5)
           .map(
             (x) =>
-              `${esc(LensRules.sessionLabel(x.s))}, seq ${esc(x.f.seq)}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`,
+              `${esc(LensRules.sessionLabel(x.s))}, ${esc(LensRules.where(x.f))}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`,
           )
           .join("<br>")}</div></details>
         <div class="row actions rule-actions">${ap ? `<span class="applied">${esc(T("applied", { f: rulesTargetLabel() }))}</span><input type="date" class="applied-at" value="${esc(String(ap).slice(0, 10))}" title="${esc(T("applied_at_title", { f: rulesTargetLabel() }))}"><button class="btn tiny ghost unmark-applied">${T("unmark_applied")}</button>` : `<button class="btn tiny ghost mark-applied">${esc(T("mark_applied", { f: rulesTargetLabel() }))}</button>`}<button class="btn tiny ghost danger del-rule">${T("delete")}</button></div>

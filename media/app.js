@@ -316,7 +316,7 @@
         ...r.findings.filter((f) => f.verdict && f.verdict.v === "fp").map((f) => `- ~~${f.message}~~${f.verdict.note ? ` — ${f.verdict.note}` : ""}`),
         ``,
         T("md_undecided"),
-        ...r.findings.filter((f) => !f.verdict).map((f) => `- ${sev[f.severity]} ${f.message}`),
+        ...r.findings.filter((f) => !Lens.decided(f.verdict)).map((f) => `- ${sev[f.severity]} ${f.message}${f.verdict ? ` _(${T("md_later")}${f.verdict.note ? `: ${f.verdict.note}` : ""})_` : ""}`),
         ``,
         ...hiddenMd(r.hiddenByCalibration, sev),
         `_sessionlens · ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}_`
@@ -530,7 +530,7 @@
     return LensReport.json(s);
   }
   function highWithoutVerdict(s) {
-    return s.findings.filter((f) => f.severity === "high" && !s.verdicts[fkey(f)]);
+    return s.findings.filter((f) => f.severity === "high" && !Lens.decided(s.verdicts[fkey(f)]));
   }
   async function renameCurrent(name) {
     const s = curS();
@@ -586,7 +586,7 @@
         <div class="rule-top"><input type="checkbox" class="rule-pick" checked><b>${esc(T("rule_hdr", { k, n: l.length, s: new Set(l.map((x) => x.s.id)).size }))}</b></div>
         ${esc(LensRules.ruleText(k, state.ruleOverrides))}
         <details class="sec-d ev-d" data-check="${esc(k)}" ${evOpen ? "open" : ""}><summary class="h2">${T("ev_summary")}</summary><div class="ev">${l.slice(0, 5).map(
-        (x) => `${esc(LensRules.sessionLabel(x.s))}, seq ${esc(x.f.seq)}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`
+        (x) => `${esc(LensRules.sessionLabel(x.s))}, ${esc(LensRules.where(x.f))}: ${esc(String(x.f.message || "").slice(0, 90))}${x.vd.note ? ` — «${esc(x.vd.note)}»` : ""}`
       ).join("<br>")}</div></details>
         <div class="row actions rule-actions">${ap ? `<span class="applied">${esc(T("applied", { f: rulesTargetLabel() }))}</span><input type="date" class="applied-at" value="${esc(String(ap).slice(0, 10))}" title="${esc(T("applied_at_title", { f: rulesTargetLabel() }))}"><button class="btn tiny ghost unmark-applied">${T("unmark_applied")}</button>` : `<button class="btn tiny ghost mark-applied">${esc(T("mark_applied", { f: rulesTargetLabel() }))}</button>`}<button class="btn tiny ghost danger del-rule">${T("delete")}</button></div>
         ${ap ? `<div class="effect">${eff}</div>` : ""}</div>`;
@@ -1986,7 +1986,7 @@ ${en.raw}`).join("\n\n\n");
     $("#suppressed").textContent = s.suppressed && s.suppressed.length ? T("suppressed", { list: s.suppressed.map((x) => `${x.check} (${srcLabel(x.source)}, ${Math.round(x.precision * 100)}% / ${x.n})`).join(", ") }) : "";
     const F = state.filter;
     const srcOf = (f) => f.source === "ai" ? "ai" : f.source === "spec" ? "spec" : f.source === "lint" ? "lint" : "formal";
-    const visible = s.findings.filter((f) => F.src[srcOf(f)] !== false && F.sev[f.severity] && (!F.undecided || !s.verdicts[fkey(f)]));
+    const visible = s.findings.filter((f) => F.src[srcOf(f)] !== false && F.sev[f.severity] && (!F.undecided || !Lens.decided(s.verdicts[fkey(f)])));
     $("#f-count").textContent = visible.length === s.findings.length ? `(${s.findings.length})` : T("f_of", { v: visible.length, n: s.findings.length });
     const cnt = { all: s.findings.length };
     for (const k of ["formal", "lint", "spec", "ai"]) cnt[k] = s.findings.filter((f) => srcOf(f) === k).length;
@@ -2032,13 +2032,14 @@ ${en.raw}`).join("\n\n\n");
     fl.innerHTML = visible.length ? visible.map((f) => {
       const k = fkey(f), vd = s.verdicts[k] || {};
       const ai = f.source === "ai", sp = f.source === "spec", src = f.source || "formal";
-      return `<div class="f ${esc(f.severity)} ${vd.v ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}${f.trial ? ` <span class="demoted" title="${esc(T("trial_hint"))}">${T("trial")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
-        <div class="vb"><button class="btn tiny ghost v-ok ${vd.v === "ok" ? "on" : ""}">${T("btn_ok")}</button><button class="btn tiny ghost v-fp ${vd.v === "fp" ? "on fp" : ""}">${T("btn_fp")}</button><input class="note" placeholder="${T("ph_note")}" value="${esc(vd.note || "")}"></div></div>`;
+      return `<div class="f ${esc(f.severity)} ${Lens.decided(vd) ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}${f.trial ? ` <span class="demoted" title="${esc(T("trial_hint"))}">${T("trial")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
+        <div class="vb"><button class="btn tiny ghost v-ok ${vd.v === "ok" ? "on" : ""}">${T("btn_ok")}</button><button class="btn tiny ghost v-fp ${vd.v === "fp" ? "on fp" : ""}">${T("btn_fp")}</button><button class="btn tiny ghost v-later ${vd.v === "later" ? "on later" : ""}" title="${esc(T("btn_later_hint"))}">${T("btn_later")}</button><input class="note" placeholder="${T("ph_note")}" value="${esc(vd.note || "")}"></div></div>`;
     }).join("") : `<div class="empty">${s.findings.length ? T("empty_filter") : T("empty_findings")}</div>`;
     fl.querySelectorAll(".f").forEach((d) => {
       const k = d.dataset.k;
       d.querySelector(".v-ok").addEventListener("click", () => setVerdict(k, "ok", d.querySelector(".note").value));
       d.querySelector(".v-fp").addEventListener("click", () => setVerdict(k, "fp", d.querySelector(".note").value));
+      d.querySelector(".v-later").addEventListener("click", () => setVerdict(k, "later", d.querySelector(".note").value));
       d.querySelector(".note").addEventListener("change", (e) => {
         if (s.verdicts[k]) setVerdict(k, s.verdicts[k].v, e.target.value);
       });

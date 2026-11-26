@@ -5197,6 +5197,11 @@
     if (k <= n / 2) k = n - 1;
     return t.slice(0, k).replace(/[\s,;:.·/—–([{=-]+$/, "") + "…";
   }
+  /* A verdict that decides (0.1.140): True or False. "later" is a reviewer's note to look again: in the owner's sessions
+     every finding to check again was marked True with the note "проверить", and the rules and the skill were built from
+     them as from confirmed ones. It counts for nothing (calibration, rules, a skill, the report's lists) and leaves the
+     finding under "no verdict". */
+  const decided = (vd) => !!vd && (vd.v === "ok" || vd.v === "fp");
   function sessionSummary(s) {
     const findings = Array.isArray(s.findings) ? s.findings : [],
       verdicts = s.verdicts && typeof s.verdicts === "object" ? s.verdicts : {};
@@ -5216,7 +5221,7 @@
       const k = fkey(f),
         vd = verdicts[k];
       count(f, vd);
-      if (!vd) open++;
+      if (!decided(vd)) open++;
       if (vd && vd.v === "ok")
         confirmed.push({ key: k, check: f.check, seq: f.seq, message: clip(f.message, 90), snippet: snippet(f), note: String(vd.note || "") });
     }
@@ -5413,6 +5418,7 @@
     displayName,
     otherName,
     sessionSummary,
+    decided,
     profileInfo,
     isValidated,
     VALIDATED_PROFILES,

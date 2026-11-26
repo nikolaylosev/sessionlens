@@ -148,6 +148,15 @@
       m = norm(f.message);
     return !!sn && !m.startsWith(sn.slice(0, 60)) && !sn.startsWith(m.slice(0, 60));
   };
+  /* Where a finding is, in a rule's evidence: its step, or for a finding with no step (the model's, seq -1) a quote of
+     what it found (0.1.140: the evidence read "seq -1"). */
+  const where = (/** @type {any} */ f) => {
+    if (f.seq >= 0) return `seq ${f.seq}`;
+    const q = String(f.snippet || f.message || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return `«${q.length > 80 ? q.slice(0, 79) + "…" : q}»`;
+  };
   /* A proposed rule as Markdown, for CLAUDE.md / AGENTS.md and as the input of a skill. list: the rule's confirmed
      findings [{ s: session summary, f: { check, seq, message, snippet }, vd: { note } }]; marks: markNotes() of all.
      Since 0.1.139 the model's categories (ai_*) have no rule text of their own: the rule is the reviewers' notes. */
@@ -169,7 +178,7 @@
       good ? `${T("md_good")}\n\n\`\`\`\n${good}\n\`\`\`` : "",
       "",
       T("rules_ev"),
-      ...list.slice(0, 5).map((x) => `- ${sessionLabel(x.s)}, seq ${x.f.seq}${note(x) ? ` — «${note(x)}»` : ""}`),
+      ...list.slice(0, 5).map((x) => `- ${sessionLabel(x.s)}, ${where(x.f)}${note(x) ? ` — «${note(x)}»` : ""}`),
       "",
     ].join("\n");
   }
@@ -255,5 +264,6 @@
     ruleMarkdown,
     markNotes,
     sessionLabel,
+    where,
   };
 });
