@@ -2085,7 +2085,15 @@ var require_lens = __commonJS({
             for (const l of oa) left.includes(l) ? left.splice(left.indexOf(l), 1) : lost.push(l);
             const times = (src, l) => src.split("\n").filter((x) => x.trim() === l).length;
             const lines = lost.map((line) => ({ line, old: times(oldSrc, line), now: times(newSrc, line) }));
-            res.removed.push({ test: name, before: oa.length, after: na.length, lines });
+            const before = Object.values(om).flatMap(asserts);
+            const added = [];
+            for (const [other, body] of Object.entries(nm))
+              if (other !== name)
+                for (const l of asserts(body)) {
+                  const k = before.indexOf(l);
+                  k >= 0 ? before.splice(k, 1) : added.push(l);
+                }
+            res.removed.push({ test: name, before: oa.length, after: na.length, lines, added });
           }
           for (let i = 0; i < Math.min(oa.length, na.length); i++) {
             for (const [strong, weak, opt] of cfg.weaken_pairs || []) {
@@ -3400,7 +3408,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 15;
+      const IMPORT_GEN = 16;
       const SHELL_EDIT = /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
       function shellEditsBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
@@ -3475,6 +3483,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
         if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+        if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;
         if ((s.importGen || 0) < 13 && s.events.some((e) => (e.kind === "write" || e.kind === "edit") && /\.cjs$/.test(e.file || "") && !e.new_content))
@@ -3881,9 +3890,41 @@ var require_lens = __commonJS({
            the person's request, in the files the session knows at least as many times as it was before the edit. In the
            owner's session a review moved openResetpw's two checks into the step of the test that calls it, as the person's
            rule asks (a step checks what its title promises), and the helper read as "2 → 0". A test that now calls an
-           assertion helper (expectLoginForm(page)) is not weakened either (compareAsserts). */
+           assertion helper (expectLoginForm(page)) is not weakened either (compareAsserts).
+           Since 0.1.140 an assertion moved to another function of the same file and written anew there is not lost either:
+           the file has no fewer assertions than before the edit, and for each assertion the function lost (its count
+           before minus after) one of its lost lines shares a word with an assertion that another function of the new text
+           has and the old text did not (compareAsserts gives them as `added`; a session imported before has none until
+           Import again), with the same sign (both say that something is so, or both that it is not). The words are what the
+           assertion checks: names and the text of strings, without the words of the language and Playwright's own. A check
+           taken out of one test while another test asserts the opposite is still lost: in the owner's codingcat-mods
+           session `expect(report).not.toContain('$4.30+')` went from one test and `toContain('$4.30+')` came in another.
+           In the owner's session the agent rewrote helpers/login.ts by its approved plan:
+           expectDashboard's check of the Logout link (a[href="/logout"], a raw locator) went to logoutViaMenu as
+           expect(logout, 'в меню клиента есть Logout'), where the menu is open, and the file went from 8 assertions to 10;
+           it read as "expectDashboard: 3 → 2", high. */
         assert_weakened(ev) {
           const out = [];
+          const GENERIC = /^(?:assert\w*|expect|await|poll|soft|not|and|for|the|none|self|true|false|null|undefined|return|page|locator|getby\w*|first|last|nth|filter|exact|name|has|hastext|hasnottext|this|frame\w*|role|link|button|textbox|heading|text|label)$/;
+          const words = (l) => new Set(
+            (subjectOf(l.replace(/\s(?:#|\/\/).*$/, "")).toLowerCase().match(/[\p{L}\p{N}_]+/gu) || []).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !GENERIC.test(w))
+          );
+          const negative = (l) => /\.not\.|(?<![\w.])not\s|!=/.test(l.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""'));
+          const movedInFile = (e, r) => {
+            const d = e.assert_delta;
+            if (!(d.new >= d.old) || !Array.isArray(r.lines) || !Array.isArray(r.added)) return false;
+            const others = r.added.map((l) => ({ w: words(l), neg: negative(l) }));
+            const used = /* @__PURE__ */ new Set();
+            let paired = 0;
+            for (const { line } of r.lines) {
+              const w = words(line), neg = negative(line);
+              const k = others.findIndex((o, i) => !used.has(i) && o.neg === neg && [...w].some((x) => o.w.has(x)));
+              if (k < 0) continue;
+              used.add(k);
+              paired++;
+            }
+            return paired >= r.before - r.after;
+          };
           const known = (f, before) => {
             const v = ev.filter((x) => x.file === f && x.seq < before && x.new_content && !x.fragment_only && ["write", "edit"].includes(x.kind));
             return v.length ? v[v.length - 1].new_content : null;
@@ -3905,7 +3946,8 @@ var require_lens = __commonJS({
             if (!d) continue;
             for (const w of d.weakened) out.push(F("assert_weakened", "high", e.seq, T("weakened", { file: e.file, test: w.test, reason: w.reason })));
             for (const r of d.removed)
-              if (!moved(e, r)) out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
+              if (!moved(e, r) && !movedInFile(e, r))
+                out.push(F("assert_weakened", "high", e.seq, T("removed", { file: e.file, test: r.test, before: r.before, after: r.after })));
           }
           return out;
         },
