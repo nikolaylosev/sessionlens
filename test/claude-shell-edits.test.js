@@ -250,3 +250,65 @@ test("a Claude Code session imported before whose commands changed files asks to
   assert.equal(Lens.needsReimport(s(Object.assign(step("sed -i '' 's/a/b/' x.ts"), { importGen: Lens.IMPORT_GEN }))), false);
   assert.equal(Lens.needsReimport(s(Object.assign(step("sed -i '' 's/a/b/' x.ts"), { agent: "codex" }))), false, "another agent");
 });
+
+/* A file the command changed before it ran its tests (0.1.140): `perl -0pi -e … $f && npx playwright test`. The diff
+   comes with the result, so the edit was a step after the run, and after a red run a fix right after the failure,
+   though the run had tested the edited file (the owner's session, #269/#270). It goes before the run now, with the
+   reasoning before the command. A file named only after the run, or not at all, stays after it. */
+test("a file the command changed before its tests ran is an edit before the run", () => {
+  const RED = "  1) [chromium] › e2e/cart.spec.ts:1:1 › total\n\n  1 failed\n";
+  const sed = diffOf([SPEC, [hunk(2, 3, 2, 3, ["   await page.goto('/cart');", "-  expect(total).toBe(3);", "+  expect(total).toBe(4);", " });"])]]);
+  const thinking = rec("assistant", [{ type: "thinking", thinking: "the total is 4 now because of the new tax" }]);
+  const order = (ev) =>
+    ev
+      .filter((e) => e.seq > 1)
+      .map((e) => `${e.seq} ${e.kind}${e.thought ? " (thought)" : ""}`)
+      .join(", ");
+  const before = importOf(
+    write(SPEC, V1),
+    thinking,
+    bash(`f=${SPEC} && perl -0pi -e 's/toBe\\(3\\)/toBe(4)/' $f && npx playwright test`, sed, RED),
+    say("Done."),
+  );
+  assert.equal(order(before), "2 edit (thought), 3 run_tests, 4 message");
+  assert.deepEqual(
+    before.map((e) => e.seq),
+    before.map((_, i) => i),
+  );
+  assert.ok(!checks(before).includes("fix_after_fail_without_triage high"));
+  // the run first, the change after it; a change the command does not name
+  for (const cmd of [`npx playwright test; sed -i '' 's/toBe(3)/toBe(4)/' ${SPEC}`, "npx prettier --write e2e && npx playwright test"]) {
+    const after = importOf(write(SPEC, V1), thinking, bash(cmd, sed, RED), say("Done."));
+    assert.equal(order(after), "2 run_tests (thought), 3 edit, 4 message", cmd);
+  }
+  // no test run: the edit stays after the command
+  assert.equal(order(importOf(write(SPEC, V1), bash(`sed -i '' 's/toBe(3)/toBe(4)/' ${SPEC} && ls`, sed))), "2 run_other, 3 edit");
+  // a call made along with it (a Read in the same message) is between them: the steps keep their order
+  const both = [
+    rec("assistant", [
+      { type: "tool_use", id: "p1", name: "Bash", input: { command: `sed -i '' 's/toBe(3)/toBe(4)/' ${SPEC} && npx playwright test` } },
+      { type: "tool_use", id: "p2", name: "Read", input: { file_path: `${ROOT}/README.md` } },
+    ]),
+    rec("user", [{ type: "tool_result", tool_use_id: "p1", content: RED }], { toolUseResult: { stdout: RED, bashEditDiff: sed } }),
+    rec("user", [{ type: "tool_result", tool_use_id: "p2", content: "# Shop" }]),
+  ];
+  assert.equal(order(importOf(write(SPEC, V1), both)), "2 run_tests, 3 read, 4 edit");
+});
+
+test("a session imported before 0.1.140 with such an edit after its run asks to be imported again", () => {
+  const ev = [
+    { seq: 0, kind: "user", text: "Fix the total" },
+    {
+      seq: 1,
+      kind: "run_tests",
+      tool: "Bash",
+      cmd: `sed -i '' 's/3/4/' ${SPEC} && npx playwright test`,
+      tests: { passed: 0, failed: 1, errors: 0, failed_names: [] },
+    },
+    { seq: 2, kind: "edit", tool: "Bash", file: SPEC, cmd: "" },
+  ];
+  assert.ok(Lens.IMPORT_GEN >= 17);
+  assert.equal(Lens.needsReimport({ profile: "qa-ts", importGen: 16, events: ev }), true);
+  ev[1].cmd = `npx playwright test && sed -i '' 's/3/4/' ${SPEC}`;
+  assert.equal(Lens.needsReimport({ profile: "qa-ts", importGen: 16, events: ev }), false);
+});
