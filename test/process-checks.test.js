@@ -267,6 +267,34 @@ test("scope_creep, not reported: a helper path, a bare file name, a file the tas
   assert.deepEqual(found([TASK, bare, APPROVED, edit("helpers/stand.ts")], check), [], "no test or source path in the plan");
 });
 
+/* 0.1.140: a change is held to the plan of its request. In the owner's session the second task's plan named the new
+   unit test qa-ts/tests/unit/service-log.spec.ts, the person said yes, and the file was "not in the plan": only the
+   session's first plan counted. A report at the end of a request is no plan for the next one (pm-mvp-kit: 40 reports
+   said "marked in PLAN.md"), and a plan the agent went on from without an answer approves nothing. */
+test("scope_creep: a change is held to the answered plan of its request, not the session's first plan", () => {
+  const check = "scope_creep";
+  const unit = "tests/unit/log.spec.ts";
+  const WRITE_UNIT = ["write", unit, "test('log', () => {\n  expect(parse('x')).toEqual([]);\n});\n"];
+  const task2 = ["user", "Now cover the log parser"];
+  const plan2 = ["say", `PLAN\n- ${unit}: a unit test of the parser\nWaiting for approval.`];
+  assert.deepEqual(found([TASK, PLAN, APPROVED, WRITE, task2, plan2, ["user", "yes"], WRITE_UNIT], check), [], "the second plan names it");
+  assert.deepEqual(
+    found([TASK, PLAN, APPROVED, WRITE, task2, plan2, WRITE_UNIT, ["user", "yes"]], check),
+    [`medium: Edited ${unit}, which is not in the plan`],
+    "answered after it",
+  );
+  const report = ["say", `Done, all green. PLAN.md updated; next ${unit} is still to do.`];
+  assert.deepEqual(
+    found([TASK, PLAN, APPROVED, WRITE, report, task2, WRITE_UNIT], check),
+    [`medium: Edited ${unit}, which is not in the plan`],
+    "a report after the work of its request is no plan",
+  );
+  // a later plan that names no test or source file: the check does not look at its request, as for a first plan
+  assert.deepEqual(found([TASK, PLAN, APPROVED, WRITE, task2, ["say", "PLAN: cover the parser"], ["user", "ok"], WRITE_UNIT], check), []);
+  // a change before the session's first answered plan is held to the first plan, as before
+  assert.deepEqual(found([TASK, PLAN, WRITE_UNIT, APPROVED], check), [`medium: Edited ${unit}, which is not in the plan`]);
+});
+
 test("stop_markers_missing: code with no plan, or a plan with no stop for approval", () => {
   assert.deepEqual(found([TASK, WRITE], "stop_markers_missing"), ["medium: Code written without a plan"]);
   assert.deepEqual(

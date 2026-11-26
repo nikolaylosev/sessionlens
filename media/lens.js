@@ -2983,15 +2983,41 @@
   // ---------- timeline helpers ----------
   /* A plan is marked by a requirement table ("| Requirement") or by PLAN / ПЛАН as a word: since 0.1.119 "EXPLANATION"
      and "PLANNED" are not plans. */
-  const planSeq = (ev, cfg) => {
+  // every plan of the session, in order (0.1.140): the steps of the messages with a plan marker
+  const planSeqs = (ev, cfg) => {
     const marks = cfg.plan_markers.map((m) => (/^\p{L}+$/u.test(m) ? new RegExp("(?<!\\p{L})" + m + "(?!\\p{L})", "u") : m));
-    const e = ev.find((x) => x.kind === "message" && marks.some((m) => (typeof m === "string" ? x.text.includes(m) : m.test(x.text))));
-    return e ? e.seq : null;
+    return ev.filter((x) => x.kind === "message" && marks.some((m) => (typeof m === "string" ? x.text.includes(m) : m.test(x.text)))).map((x) => x.seq);
+  };
+  // the session's first plan
+  const planSeq = (ev, cfg) => {
+    const all = planSeqs(ev, cfg);
+    return all.length ? all[0] : null;
   };
   const approvalSeq = (ev, p) => {
     if (p == null) return null;
     const e = ev.find((x) => x.seq > p && x.kind === "user");
     return e ? e.seq : null;
+  };
+  /* The plan a change at step `seq` is held to (0.1.140): the last plan before it that the person answered before it,
+     and that came before the work of its request: no file was changed between the person's message before it and the
+     plan. A session often has several requests, each with its own plan: in the owner's session the second task's plan
+     named the new unit test qa-ts/tests/unit/service-log.spec.ts, and the person said yes, but the file was "not in the
+     plan" because only the session's first plan counted. A report at the end of a request is no plan for the next one,
+     though it may have the word: in the owner's pm-mvp-kit session 40 reports said "marked in PLAN.md". A change
+     before any such plan is held to the session's first plan, as before; a plan the agent went on from without an
+     answer approves nothing. plans: planSeqs(). */
+  const planFor = (ev, plans, seq) => {
+    const before = (p) => {
+      const asked = ev.filter((x) => x.kind === "user" && x.seq < p).pop();
+      return !ev.some((x) => (x.kind === "write" || x.kind === "edit") && x.seq < p && x.seq > (asked ? asked.seq : -1));
+    };
+    let held = null;
+    for (const p of plans) {
+      if (p >= seq) break;
+      const a = approvalSeq(ev, p);
+      if (a != null && a < seq && before(p)) held = p;
+    }
+    return held ?? (plans.length ? plans[0] : null);
   };
   /* The files the plan names: a path with a folder and an extension, one of whose folders is a test or source folder
      (the usual ones and the profile's, so e2e/ and cypress/ too since 0.1.119). Since 0.1.139 any path with an
@@ -3609,12 +3635,21 @@
       }
       return out;
     },
+    /* Since 0.1.140 a change is held to the plan of its request (planFor), and the check looks at it only when that plan
+       names a file in a test or source folder (planNamesCode). */
     scope_creep(ev, cfg) {
-      const p = planSeq(ev, cfg);
-      if (!planNamesCode(ev, p, cfg)) return [];
-      const pl = plannedFiles(ev, p);
+      const plans = planSeqs(ev, cfg);
+      const named = new Map(); // a plan → the files it and the person name, or null when it names no code file
+      const filesOf = (p) => {
+        if (!named.has(p)) named.set(p, planNamesCode(ev, p, cfg) ? plannedFiles(ev, p) : null);
+        return named.get(p);
+      };
       return ev
-        .filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !DOC_FILE.test(e.file))
+        .filter((e) => ["edit", "write"].includes(e.kind) && e.file && !DOC_FILE.test(e.file))
+        .filter((e) => {
+          const pl = filesOf(planFor(ev, plans, e.seq));
+          return !!pl && !inPlan(e.file, pl);
+        })
         .map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
     },
     /* Since 0.1.125 per request: the edits of a file between two messages of the person, so a file the person asks to

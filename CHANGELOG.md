@@ -12,6 +12,11 @@
   right after a failure is still reported, as low, with the file's deletion named, and a secret written into it is
   still reported. A file deleted after a failing run, deleted later for another request, or written again is no
   temporary file.
+- **A file named in a later plan is in the plan.** A session often has several requests, each with its own plan that
+  you approve. SessionLens compared every change with the session's first plan, so a file that only a later plan named
+  was reported as "not in the plan". In one of our sessions this was a new unit test that the second plan named and
+  you approved. Now each change is compared with the last plan you answered before it. A report at the end of a request
+  is not taken for a plan, even when it mentions one, such as "marked in PLAN.md".
 
 ## 0.1.139
 

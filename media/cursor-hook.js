@@ -3518,15 +3518,31 @@ var require_lens = __commonJS({
         }
         return best;
       }
-      const planSeq = (ev, cfg) => {
+      const planSeqs = (ev, cfg) => {
         const marks = cfg.plan_markers.map((m) => /^\p{L}+$/u.test(m) ? new RegExp("(?<!\\p{L})" + m + "(?!\\p{L})", "u") : m);
-        const e = ev.find((x) => x.kind === "message" && marks.some((m) => typeof m === "string" ? x.text.includes(m) : m.test(x.text)));
-        return e ? e.seq : null;
+        return ev.filter((x) => x.kind === "message" && marks.some((m) => typeof m === "string" ? x.text.includes(m) : m.test(x.text))).map((x) => x.seq);
+      };
+      const planSeq = (ev, cfg) => {
+        const all = planSeqs(ev, cfg);
+        return all.length ? all[0] : null;
       };
       const approvalSeq = (ev, p) => {
         if (p == null) return null;
         const e = ev.find((x) => x.seq > p && x.kind === "user");
         return e ? e.seq : null;
+      };
+      const planFor = (ev, plans, seq) => {
+        const before = (p) => {
+          const asked = ev.filter((x) => x.kind === "user" && x.seq < p).pop();
+          return !ev.some((x) => (x.kind === "write" || x.kind === "edit") && x.seq < p && x.seq > (asked ? asked.seq : -1));
+        };
+        let held = null;
+        for (const p of plans) {
+          if (p >= seq) break;
+          const a = approvalSeq(ev, p);
+          if (a != null && a < seq && before(p)) held = p;
+        }
+        return held ?? (plans.length ? plans[0] : null);
       };
       const NAMED_FILE = /(?<![\w./@-])[\w-]+(?:\.[\w-]+)*\.(?:[cm]?[jt]sx?|py|java|kt|cs|go|rb|php|json|ya?ml|toml|feature|robot|sql|sh|md)(?![\w/-])/g;
       const planNamesCode = (ev, p, cfg) => {
@@ -3982,11 +3998,19 @@ var require_lens = __commonJS({
           }
           return out;
         },
+        /* Since 0.1.140 a change is held to the plan of its request (planFor), and the check looks at it only when that plan
+           names a file in a test or source folder (planNamesCode). */
         scope_creep(ev, cfg) {
-          const p = planSeq(ev, cfg);
-          if (!planNamesCode(ev, p, cfg)) return [];
-          const pl = plannedFiles(ev, p);
-          return ev.filter((e) => ["edit", "write"].includes(e.kind) && e.file && !inPlan(e.file, pl) && !DOC_FILE.test(e.file)).map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
+          const plans = planSeqs(ev, cfg);
+          const named = /* @__PURE__ */ new Map();
+          const filesOf = (p) => {
+            if (!named.has(p)) named.set(p, planNamesCode(ev, p, cfg) ? plannedFiles(ev, p) : null);
+            return named.get(p);
+          };
+          return ev.filter((e) => ["edit", "write"].includes(e.kind) && e.file && !DOC_FILE.test(e.file)).filter((e) => {
+            const pl = filesOf(planFor(ev, plans, e.seq));
+            return !!pl && !inPlan(e.file, pl);
+          }).map((e) => F("scope_creep", "medium", e.seq, T("scope", { file: e.file })));
         },
         /* Since 0.1.125 per request: the edits of a file between two messages of the person, so a file the person asks to
            change again starts from zero (the owner's README.md: 3 edits while rewriting the search tests, 2 more while
