@@ -238,6 +238,7 @@ function fakeVscode(opts = {}) {
         calls.commands.push(a);
       },
     },
+    FileType: { File: 1, Directory: 2 },
     workspace: {
       workspaceFolders: opts.workspaceFolders,
       fs: {
@@ -248,6 +249,8 @@ function fakeVscode(opts = {}) {
           calls.writes.push({ path: u.fsPath, content: Buffer.from(buf).toString("utf8") });
         },
         readFile: async (u) => fs.readFileSync(u.fsPath), // a transcript picked in open:transcript
+        // a skill's folder picked in open:skill-folder (0.1.141): the real folder, as [name, FileType]
+        readDirectory: async (u) => fs.readdirSync(u.fsPath, { withFileTypes: true }).map((d) => [d.name, d.isDirectory() ? 2 : 1]),
       },
       // settings: { global: {key: value}, workspace: {key: value} }; get() follows VS Code: a machine-scoped
       // setting ignores workspace values (the fake applies that to every key in `machineScoped`)

@@ -219,6 +219,7 @@ const VALIDATORS = {
     return typeof p.content === "string" && bytes(p.content) <= MAX_FILE ? null : "content must be a string up to 10 MB";
   },
   "save:folder-files": (p) => checkSkillFiles(p.skillName, p.files),
+  "open:skill-folder": none,
   "open:transcript": (p) =>
     p.source == null || p.source === "claude" || p.source === "codex" || p.source === "cursor" || p.source === "" ? null : "unknown source",
   "claude:run": checkCliRun,

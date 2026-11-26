@@ -21,6 +21,13 @@
   a README. `SKILL.md` gets one line that names this folder. The model is no longer told the names of those files.
 
 ### Added
+- **Update a skill you already have.** Generate skill always wrote a new skill, so every run numbered the rules
+  anew, and a skill you had edited by hand had to be merged by hand. **Update a skill…** takes the folder of a skill
+  (with `SKILL.md`) and the rules you picked. The model keeps each rule's number and what it means, rewrites a rule in
+  place instead of adding to it, gives a new rule the next free number, and returns only the files it changes. Every
+  other file stays as it was. What changed goes to the skill's history (`changes-<date>.md`), with the files to delete
+  by hand, such as an old `examples/` folder. The check under the result says when a rule of the skill is gone or has
+  another name. The skill's files are sent to the model along with the rules.
 - **A generated skill is checked before you save it.** A model can still break the rules it is given: in a skill we
   reviewed, examples called functions the project does not have, two good examples broke other rules of the same
   skill, and a check of its script fired on correct code. Under each generated skill, **Check of the skill** now lists

@@ -171,6 +171,33 @@ test("save:folder-files: the skill's history lands outside it, under <picked>/.s
   assert.match(String(calls.info.at(-1)), /its history to .*skill-history/);
 });
 
+test("open:skill-folder: the picked skill's text files, not node_modules, .git or other files; no SKILL.md, an error (0.1.141)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sl-skill-"));
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  };
+  put("SKILL.md", "---\nname: s\n---\n");
+  put("references/rules.md", "## P-01: a\n");
+  put("scripts/check.sh", "#!/bin/sh\n");
+  put("node_modules/x/README.md", "no");
+  put(".git/config", "no");
+  put("logo.png", "no");
+  let b = await boot({ openDialogAnswer: [{ fsPath: dir, toString: () => "" }] });
+  const r = await b.wv.send("open:skill-folder", {});
+  assert.equal(r.name, path.basename(dir));
+  assert.deepEqual(
+    r.files.map((f) => f.path),
+    ["references/rules.md", "scripts/check.sh", "SKILL.md"],
+  );
+  assert.equal(r.files.find((f) => f.path === "SKILL.md").content, "---\nname: s\n---\n");
+  fs.rmSync(path.join(dir, "SKILL.md"));
+  b = await boot({ openDialogAnswer: [{ fsPath: dir, toString: () => "" }] });
+  assert.match((await b.wv.send("open:skill-folder", {})).error, /no SKILL\.md/);
+  b = await boot();
+  assert.equal(await b.wv.send("open:skill-folder", {}), null, "the dialog closed");
+});
+
 test("save:file: only the basename, in the workspace folder (or home)", async () => {
   const ws = { uri: { fsPath: path.join(os.tmpdir(), "ws"), toString: () => "" } };
   let b = await boot({ workspaceFolders: [ws] });

@@ -70,7 +70,7 @@
   const MARGIN_MS = 10000;
   const CLOUD_TIMEOUT_MS = 10 * 60 * 1000; // = providers.js CLOUD_TIMEOUT_MS (a test checks)
   const CLI_DEFAULT_MS = 300000; // = cli.js DEFAULT_TIMEOUT (a test checks)
-  const NO_LIMIT = new Set(["open:transcript", "save:file", "save:folder-files", "baseurl:set"]);
+  const NO_LIMIT = new Set(["open:transcript", "save:file", "save:folder-files", "open:skill-folder", "baseurl:set"]);
   const WAITS_FOR_HOST = /^(?:storage:get|session:|secret:)/;
   function timeoutFor(type, payload) {
     if (NO_LIMIT.has(type)) return 0;
@@ -128,6 +128,7 @@
 
   window.__slSaveFile = (name, content) => call("save:file", { name, content });
   window.__slSaveFolder = (skillName, files) => call("save:folder-files", { skillName, files });
+  window.__slOpenSkillFolder = () => call("open:skill-folder", {});
   window.__slClipboardWrite = (text) => call("clipboard:write", { text });
   // Claude Code CLI (a Claude subscription instead of an API key): only the VS Code host can start the process.
   window.__slClaudeRun = (payload) => call("claude:run", payload);

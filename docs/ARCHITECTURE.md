@@ -859,6 +859,13 @@ flowchart TD
   `skill-history/` file of the model, adds the line of `SKILL.md` that names the history (`historyLine`), and
   `save:folder-files` writes `skill-history/…` to `<picked>/.sessionlens/skill-history/<name>/` and the rest to
   `<picked>/skills/<name>/`. The model is not told the files' names.
+- **Update a skill** (since 0.1.141): `open:skill-folder` reads the picked folder's text files (at most 80 and 1.5 MB,
+  no `node_modules` or `.git`; an error without `SKILL.md`). `generateSkill(md, …, existing)` appends `UPDATE_SKILL_TPL`
+  (on the Model rules tab as "Update a skill") before the data paragraph, sends the skill after the rules ("## The
+  skill as it is now") and allows 16,000 tokens; the reply may add `changes` and `remove`. `LensRules.mergeSkill` puts
+  the returned files over the old ones and drops the removed; the skill keeps its folder's name; an old `examples/`
+  is listed for removal; `skillChanges` writes `skill-history/changes-<date>.md`; `checkSkill(…, { before })` reports
+  a rule of the old skill (`SKILL.md`, `references/*.md` headings) that is gone or renamed.
 - **Check of the skill** (`LensRules.checkSkill(files, { code, check })`, since 0.1.141): no model. Sizes (`SKILL.md`
   8,000, `description` 400, `SKILL.md` + `references/rules.md` 30,000), numbering (every `P-NN` of `SKILL.md` has an
   entry, every entry a line, no entry twice, no `AP-…`), history outside code (`seq N`, dates), entries (Bad at most

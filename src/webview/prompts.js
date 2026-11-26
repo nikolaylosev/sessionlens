@@ -34,6 +34,7 @@ export function renderPrompts() {
     verify: T("p_verify"),
     compress: T("p_compress"),
     generate_skill: T("p_gen_skill"),
+    update_skill: T("p_update_skill"),
   };
   const sub = {
     segment: T("p_segment_sub"),
@@ -43,6 +44,7 @@ export function renderPrompts() {
     verify: T("p_verify_sub"),
     compress: T("p_compress_sub", { f: rulesTargetLabel() }),
     generate_skill: T("p_gen_skill_sub"),
+    update_skill: T("p_update_skill_sub"),
   };
   const openMap = state.settings.promptsOpen || {};
   $("#prompts-list").innerHTML = Object.keys(def)

@@ -452,8 +452,8 @@
     skillStubPath = (skillName) => `skills/${skillName}/SKILL.md`;
     stubText = (refPath) => rulesFileText(`Refer to \`${refPath}\` for domain-specific automation rules and code style.
 `);
-    $("#gen-skill").addEventListener("click", async () => {
-      const btn = $("#gen-skill"), st = $("#gen-skill-status");
+    const runSkill = async (update) => {
+      const btn = $("#gen-skill"), upd = $("#gen-skill-update"), st = $("#gen-skill-status");
       const body = pickedRulesMd();
       if (!body.trim()) {
         st.textContent = T("compress_none");
@@ -466,9 +466,20 @@
           return;
         }
       }
+      let picked = null;
+      if (update) {
+        picked = await window.__slOpenSkillFolder();
+        if (!picked) return;
+        if (picked.error) {
+          st.textContent = picked.error;
+          return;
+        }
+      }
+      const before = picked ? picked.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path)) : [];
+      const stale = picked ? picked.files.filter((f) => /^examples\//.test(f.path)).map((f) => f.path) : [];
       const prevList = state.skillResults || [];
       let overwriteId = null;
-      if (prevList.length && prevList[0].body === body) {
+      if (!update && prevList.length && prevList[0].body === body) {
         const choice = await chooseDialog(T("gen_dup_msg"), [
           { label: T("gen_dup_overwrite"), value: "overwrite", primary: true },
           { label: T("gen_dup_new"), value: "new" }
@@ -480,41 +491,52 @@
       const full = await skillSessions(keys);
       const ex = $("#gen-skill-examples").checked ? LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS }) : { files: [], rows: [], masked: 0 };
       const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body);
-      btn.disabled = true;
-      st.textContent = T("gen_skill_wait");
+      btn.disabled = upd.disabled = true;
+      st.textContent = T(update ? "gen_skill_update_wait" : "gen_skill_wait");
       try {
-        const r = await LensAI.generateSkill(md, state.settings, void 0, rulesTargetLabel());
-        const own = r.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path)).map((f) => f.path === "SKILL.md" ? { ...f, content: f.content.replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n") } : f);
-        const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at: (/* @__PURE__ */ new Date()).toISOString(), bad: ex.files.length > 0 });
+        const r = await LensAI.generateSkill(md, state.settings, void 0, rulesTargetLabel(), update ? before : void 0);
+        if (update) r.skill_name = picked.name;
+        const at = (/* @__PURE__ */ new Date()).toISOString();
+        const wrote = r.files.filter((f) => !/^(?:examples|skill-history)\//.test(f.path));
+        const remove = [.../* @__PURE__ */ new Set([...r.remove || [], ...stale])];
+        const own = (update ? LensRules.mergeSkill(before, wrote, remove) : wrote).map(
+          (f) => f.path === "SKILL.md" ? {
+            ...f,
+            content: f.content.replace(/\n*History of the reviews behind this skill[^\n]*\n?/g, "\n").replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n")
+          } : f
+        );
+        const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at, bad: ex.files.length > 0 });
+        const changed = new Set(wrote.map((f) => f.path));
+        const kept = before.map((f) => f.path).filter((p) => !changed.has(p) && !remove.includes(p));
+        if (update) history.push(LensRules.skillChanges({ name: r.skill_name, at, changes: r.changes || [], remove, kept }));
         r.files = own.concat(history, ex.files);
         try {
-          r.check = LensRules.checkSkill(r.files, await skillContext(full));
+          r.check = LensRules.checkSkill(r.files, Object.assign(await skillContext(full), update ? { before } : {}));
         } catch (e) {
           r.check = null;
         }
+        const entry = { at, skill_name: r.skill_name, files: r.files, body, check: r.check, ...update ? { updated: true } : {} };
         if (overwriteId) {
-          state.skillResults = state.skillResults.map(
-            (x) => x.id === overwriteId ? { id: overwriteId, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check } : x
-          );
+          state.skillResults = state.skillResults.map((x) => x.id === overwriteId ? { id: overwriteId, ...entry } : x);
           await save();
           renderSkillResults(overwriteId);
         } else {
           const id = genId();
-          state.skillResults = [
-            { id, at: (/* @__PURE__ */ new Date()).toISOString(), skill_name: r.skill_name, files: r.files, body, check: r.check },
-            ...state.skillResults || []
-          ];
+          state.skillResults = [{ id, ...entry }, ...state.skillResults || []];
           await save();
           renderSkillResults(id);
         }
         await logCal("skill", r.raw);
-        st.textContent = $("#gen-skill-examples").checked ? ex.rows.length ? T("gen_examples_added", { n: ex.files.length - 1, r: ex.masked }) : T("gen_examples_none") : "";
+        const exNote = $("#gen-skill-examples").checked ? ex.rows.length ? T("gen_examples_added", { n: ex.files.length - 1, r: ex.masked }) : T("gen_examples_none") : "";
+        st.textContent = update ? [T("gen_skill_updated", { name: r.skill_name, n: wrote.length, k: kept.length }), exNote].filter(Boolean).join(" ") : exNote;
       } catch (e) {
         st.textContent = T("error") + e.message;
         if (e.raw) await logCal("skill", e.raw, e.message);
       }
-      btn.disabled = false;
-    });
+      btn.disabled = upd.disabled = false;
+    };
+    $("#gen-skill").addEventListener("click", () => runSkill(false));
+    $("#gen-skill-update").addEventListener("click", () => runSkill(true));
     $("#export-verdicts").addEventListener("click", () => exportVerdicts());
     $("#import-file").addEventListener("change", (ev) => {
       const f = ev.target.files[0];
@@ -1013,7 +1035,8 @@ ${en.raw}`).join("\n\n\n");
       review_local: T("p_review_local"),
       verify: T("p_verify"),
       compress: T("p_compress"),
-      generate_skill: T("p_gen_skill")
+      generate_skill: T("p_gen_skill"),
+      update_skill: T("p_update_skill")
     };
     const sub = {
       segment: T("p_segment_sub"),
@@ -1022,7 +1045,8 @@ ${en.raw}`).join("\n\n\n");
       review_local: T("p_review_local_sub"),
       verify: T("p_verify_sub"),
       compress: T("p_compress_sub", { f: rulesTargetLabel() }),
-      generate_skill: T("p_gen_skill_sub")
+      generate_skill: T("p_gen_skill_sub"),
+      update_skill: T("p_update_skill_sub")
     };
     const openMap = state.settings.promptsOpen || {};
     $("#prompts-list").innerHTML = Object.keys(def).map(

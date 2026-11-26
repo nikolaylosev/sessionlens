@@ -113,6 +113,10 @@ function buildHtml(webview, extensionUri, initialSessionId) {
    translation of the host was removed; half a Russian window around an English panel read worse than English).
    t() fills {0}, {1}… as vscode.l10n.t did, so the calls stay as they are. */
 const fmt = (message, args) => String(message).replace(/\{(\d+)\}/g, (m, i) => (args[i] !== undefined ? String(args[i]) : m));
+// an existing skill read to be updated (open:skill-folder): its text files only, and not too much of them
+const SKILL_READ_FILES = 80,
+  SKILL_READ_BYTES = 1500000,
+  SKILL_TEXT_RX = /\.(?:md|markdown|txt|sh|bash|mjs|cjs|js|ts|py|json|ya?ml)$/i;
 function t(message, ...args) {
   return fmt(message, args);
 }
@@ -788,6 +792,41 @@ function wireMessages(
           kept ? t("SessionLens: skill saved to {0}, its history to {1}", root.fsPath, history.fsPath) : t("SessionLens: skill saved to {0}", root.fsPath),
         );
         reply(root.fsPath);
+      } else if (msg.type === "open:skill-folder") {
+        /* an existing skill to update (0.1.141): its folder (the one with SKILL.md), read as text. Only the skill's own
+           text files, at most SKILL_READ_FILES of them and SKILL_READ_BYTES in all; no node_modules or .git */
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFolders: true,
+          canSelectFiles: false,
+          canSelectMany: false,
+          openLabel: t("Update this skill"),
+        });
+        if (!picked || !picked.length) {
+          reply(null);
+          return;
+        }
+        const root = picked[0];
+        const files = [];
+        let bytes = 0;
+        const walk = async (dir, rel) => {
+          for (const [name, type] of await vscode.workspace.fs.readDirectory(dir)) {
+            if (files.length >= SKILL_READ_FILES) return;
+            const path2 = rel ? rel + "/" + name : name;
+            if (type === vscode.FileType.Directory) {
+              if (!/^(?:node_modules|\.git)$/.test(name)) await walk(vscode.Uri.joinPath(dir, name), path2);
+            } else if (type === vscode.FileType.File && SKILL_TEXT_RX.test(name)) {
+              const buf = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
+              if ((bytes += buf.length) > SKILL_READ_BYTES) return;
+              files.push({ path: path2, content: Buffer.from(buf).toString("utf8") });
+            }
+          }
+        };
+        await walk(root, "");
+        if (!files.some((f) => f.path === "SKILL.md")) {
+          reply({ error: t("SessionLens: no SKILL.md in {0}", root.fsPath) });
+          return;
+        }
+        reply({ name: path.basename(root.fsPath), files: files.sort((a, b) => a.path.localeCompare(b.path)) });
       } else if (msg.type === "open:transcript") {
         const picked = await vscode.window.showOpenDialog({
           canSelectFiles: true,
