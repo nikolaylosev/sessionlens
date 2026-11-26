@@ -141,3 +141,17 @@ export function saveKeys(keys) {
   for (const k of keys) o[k] = state[k];
   return store.set(o);
 }
+
+/* 0.1.141: one event for the developer's log (the host's devlog.js), only while it is on; in a page with no host
+   (tests of the panel alone) nothing happens. Never an error: a log line is not worth one. */
+export function devLog(kind, data) {
+  try {
+    if (window.SL_DEV_LOG && typeof window.__slDevLog === "function") window.__slDevLog(kind, data);
+  } catch (e) {
+    /* nothing */
+  }
+}
+// a finding as the log names it
+export function devFinding(f) {
+  return f ? { check: f.check, severity: f.severity, source: f.source || "formal", seq: f.seq, message: String(f.message || "").slice(0, 500) } : null;
+}

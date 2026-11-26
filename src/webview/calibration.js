@@ -1,7 +1,7 @@
 // @ts-check
 /* SessionLens panel — export of verdicts and the Calibration tab. Part of the panel's source (src/webview); `npm run build` bundles it into
    media/app.js. Split out of the single app.js in phase 7 (7B.4) without changing behaviour. */
-import { $, SEV, T, VLABEL, esc, fkey, genId, rulesFileText, rulesTargetLabel, save, srcLabel, state } from "./common.js";
+import { $, SEV, T, VLABEL, devLog, esc, fkey, genId, rulesFileText, rulesTargetLabel, save, srcLabel, state } from "./common.js";
 import { calibStatsBySource, curS, fetchSessions, isDemo, metas, needEngine, onGenChanged, sessionStore, updateSession } from "./store.js";
 import { readFile, renderList, show } from "./sessions.js";
 import { compact, renderReview, sessionCost, sessionLimits } from "./review.js";
@@ -202,9 +202,11 @@ export function initCalibration() {
       }
       st.textContent = "";
       await logCal("compress", r.raw);
+      devLog("compress", { target: rulesTargetLabel(), chars: md.length, result: String(r.markdown || "").length, overwrite: !!overwriteId });
     } catch (e) {
       st.textContent = T("error") + e.message;
       if (e.raw) await logCal("compress", e.raw, e.message);
+      devLog("compress", { target: rulesTargetLabel(), chars: md.length, error: String(e.message || e) });
     }
     btn.disabled = false;
   });
@@ -317,9 +319,23 @@ export function initCalibration() {
           : T("gen_examples_none")
         : "";
       st.textContent = update ? [T("gen_skill_updated", { name: r.skill_name, n: wrote.length, k: kept.length }), exNote].filter(Boolean).join(" ") : exNote;
+      // what came out, and what the check found (0.1.141); the model's request and answer are the host's lines
+      devLog("skill", {
+        update,
+        name: r.skill_name,
+        rules: keys,
+        sessions: Object.keys(full).length,
+        files: r.files.map((f) => ({ path: f.path, chars: f.content.length })),
+        wrote: wrote.map((f) => f.path),
+        changes: r.changes || [],
+        remove,
+        kept,
+        check: r.check,
+      });
     } catch (e) {
       st.textContent = T("error") + e.message;
       if (e.raw) await logCal("skill", e.raw, e.message);
+      devLog("skill", { update, rules: keys, error: String(e.message || e) });
     }
     btn.disabled = upd.disabled = false;
   };
@@ -904,6 +920,7 @@ export async function importVerdicts(text) {
   onGenChanged();
   renderCalib();
   $("#import-status").textContent = T("imp_done", { m: merged, e: ext }) + (dup ? T("imp_dup", { n: dup }) : "");
+  devLog("import-verdicts", { rows: rows.length, merged, external: ext, duplicates: dup, sessions: Object.keys(ops).length });
 }
 
 export function download(name, text) {

@@ -1,7 +1,7 @@
 // @ts-check
 /* SessionLens panel — a session's tab: review, specification, model segmentation. Part of the panel's source (src/webview); `npm run build` bundles it into
    media/app.js. Split out of the single app.js in phase 7 (7B.4) without changing behaviour. */
-import { $, LABEL, SEV, T, VCOL, VLABEL, esc, fkey, srcLabel, state } from "./common.js";
+import { $, LABEL, SEV, T, VCOL, VLABEL, devFinding, devLog, esc, fkey, srcLabel, state } from "./common.js";
 import { curS, needEngine, profileVerdicts, updateSession } from "./store.js";
 import { analyze, analyzeNow } from "./analysis.js";
 import { keptEdits, keptOutputs, pickTranscript, piDeps, profileSummary, readFile, transcriptSource } from "./sessions.js";
@@ -283,6 +283,7 @@ export async function reimport() {
   const kept = new Set([...(trial.findings || []), ...(trial.calibHidden || [])].map((f) => trial.verdicts[fkey(f)]).filter(Boolean));
   const lost = [...keys(s)].filter((k) => !kept.has(s.verdicts[k])).length;
   if (lost && !(await confirmDialog(T("reimport_lost", { n: lost })))) return;
+  const was = { events: s.events.length, findings: s.findings.length, importGen: s.importGen || 0 };
   await updateSession(sid, (x) => {
     x.events = events;
     x.seg = null;
@@ -307,6 +308,17 @@ export async function reimport() {
     Object.assign(x, Lens.transcriptOrigin(text, { cursorProject })); // a session imported before 0.1.124 has neither
     x.importGen = Lens.IMPORT_GEN;
     analyze(x, "import");
+  });
+  const now = curS();
+  devLog("reimport", {
+    session: sid,
+    name: now && now.name,
+    fromFile: !!fromFile || !s.source_text,
+    fromHookLog: fromLog,
+    match: Math.round(match * 100) / 100,
+    lost,
+    before: was,
+    after: now ? { events: now.events.length, findings: now.findings.length, importGen: now.importGen } : null,
   });
   if (state.current === sid) renderReview();
 }
@@ -664,9 +676,16 @@ export function renderCoverage(s) {
 
 export async function setVerdict(k, v, note) {
   const vd = { v, note: note || "", at: new Date().toISOString() };
+  let before = null,
+    f = null;
   await updateSession(state.current, (s) => {
+    before = s.verdicts[k] || null;
+    f = [...(s.findings || []), ...(s.calibHidden || [])].find((x) => fkey(x) === k) || null;
     s.verdicts[k] = vd;
   });
+  // the finding, what it had and what it has now (0.1.141)
+  const s = curS();
+  devLog("verdict", { session: state.current, name: s && s.name, fkey: k, finding: devFinding(f), before, after: vd });
   renderReview();
 }
 

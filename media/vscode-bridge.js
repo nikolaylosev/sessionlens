@@ -34,6 +34,8 @@
       if (d.treeSitterCSharpWasm) window.SL_WASM_URIS_CSHARP = { core: d.treeSitterWasm, csharp: d.treeSitterCSharpWasm };
       if (d.treeSitterPythonWasm) window.SL_WASM_URIS_PYTHON = { core: d.treeSitterWasm, python: d.treeSitterPythonWasm, ruff: d.ruffWasm };
     }
+    // the developer's log is on (0.1.141): the page tells it what it does; the host says when that changes
+    window.SL_DEV_LOG = "devLog" in d;
   }
 
   let seq = 0;
@@ -60,6 +62,7 @@
     if (msg && msg.__slCommand && COMMANDS.includes(msg.name) && typeof window.SL_COMMAND === "function") {
       window.SL_COMMAND(msg.name, typeof msg.value === "string" ? msg.value.slice(0, 500) : undefined);
     }
+    if (msg && msg.__slDev) window.SL_DEV_LOG = msg.on === true;
   });
 
   /* Phase 7 (7B.7): a reply that never comes (the host crashed, a message was lost) must not leave the page waiting
@@ -164,6 +167,23 @@
   // line for the host's Output channel (numbers and names only, see validate.js).
   window.__slPageReady = () => call("page:ready", {});
   window.__slLogTiming = (event, profile, ms, events) => call("log:timing", { event, profile, ms, events });
+  /* 0.1.141: one event for the developer's log (kinds: validate.js DEV_KINDS); nothing is sent while it is off. The
+     page's own errors go there too, so a failure that showed nothing is in the log. */
+  window.__slDevLog = (kind, data) => (window.SL_DEV_LOG ? call("dev:event", { kind, data: data || {} }) : Promise.resolve(false));
+  const devError = (data) => {
+    try {
+      if (window.SL_DEV_LOG) window.__slDevLog("error", data);
+    } catch (e) {
+      /* never an error about an error */
+    }
+  };
+  window.addEventListener("error", (e) =>
+    devError({ message: String(e.message || ""), source: String(e.filename || ""), line: e.lineno || 0, stack: String((e.error && e.error.stack) || "") }),
+  );
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = /** @type {any} */ (e).reason;
+    devError({ message: String((r && r.message) || r || ""), stack: String((r && r.stack) || ""), rejection: true });
+  });
 
   // Prefer the browser clipboard API when the webview allows it; fall back to the
   // host (vscode.env.clipboard), which always works regardless of focus/permissions.

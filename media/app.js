@@ -119,6 +119,15 @@
     for (const k of keys) o[k] = state[k];
     return store.set(o);
   }
+  function devLog(kind, data) {
+    try {
+      if (window.SL_DEV_LOG && typeof window.__slDevLog === "function") window.__slDevLog(kind, data);
+    } catch (e) {
+    }
+  }
+  function devFinding(f) {
+    return f ? { check: f.check, severity: f.severity, source: f.source || "formal", seq: f.seq, message: String(f.message || "").slice(0, 500) } : null;
+  }
 
   // src/webview/analysis.js
   function initAnalysis() {
@@ -126,10 +135,32 @@
   function analyze(s, event) {
     const t0 = Date.now();
     analyzeNow(s);
+    const ms = Math.max(0, Date.now() - t0);
     try {
-      window.__slLogTiming(event || "reanalyze", String(s.profile || ""), Math.max(0, Date.now() - t0), Array.isArray(s.events) ? s.events.length : 0);
+      window.__slLogTiming(event || "reanalyze", String(s.profile || ""), ms, Array.isArray(s.events) ? s.events.length : 0);
     } catch (e) {
     }
+    if (window.SL_DEV_LOG) devLog("analyze", analyzeSummary(s, event || "reanalyze", ms));
+  }
+  function analyzeSummary(s, event, ms) {
+    const by = (list, key) => {
+      const out = {};
+      for (const f of list || []) out[f[key]] = (out[f[key]] || 0) + 1;
+      return out;
+    };
+    return {
+      session: s.id,
+      name: s.name,
+      event,
+      profile: s.profile,
+      ms,
+      events: Array.isArray(s.events) ? s.events.length : 0,
+      findings: (s.findings || []).length,
+      severity: by(s.findings, "severity"),
+      checks: by(s.findings, "check"),
+      hidden: by(s.calibHidden, "check"),
+      lintPending: !!s.lintPending
+    };
   }
   function analyzeNow(s) {
     LensAnalyze.analyze(s, { settings: state.settings, calibStats: calibStatsBySource(), overrides: state.ruleOverrides });
@@ -441,9 +472,11 @@
         }
         st.textContent = "";
         await logCal("compress", r.raw);
+        devLog("compress", { target: rulesTargetLabel(), chars: md.length, result: String(r.markdown || "").length, overwrite: !!overwriteId });
       } catch (e) {
         st.textContent = T("error") + e.message;
         if (e.raw) await logCal("compress", e.raw, e.message);
+        devLog("compress", { target: rulesTargetLabel(), chars: md.length, error: String(e.message || e) });
       }
       btn.disabled = false;
     });
@@ -529,9 +562,22 @@
         await logCal("skill", r.raw);
         const exNote = $("#gen-skill-examples").checked ? ex.rows.length ? T("gen_examples_added", { n: ex.files.length - 1, r: ex.masked }) : T("gen_examples_none") : "";
         st.textContent = update ? [T("gen_skill_updated", { name: r.skill_name, n: wrote.length, k: kept.length }), exNote].filter(Boolean).join(" ") : exNote;
+        devLog("skill", {
+          update,
+          name: r.skill_name,
+          rules: keys,
+          sessions: Object.keys(full).length,
+          files: r.files.map((f) => ({ path: f.path, chars: f.content.length })),
+          wrote: wrote.map((f) => f.path),
+          changes: r.changes || [],
+          remove,
+          kept,
+          check: r.check
+        });
       } catch (e) {
         st.textContent = T("error") + e.message;
         if (e.raw) await logCal("skill", e.raw, e.message);
+        devLog("skill", { update, rules: keys, error: String(e.message || e) });
       }
       btn.disabled = upd.disabled = false;
     };
@@ -1004,6 +1050,7 @@ ${en.raw}`).join("\n\n\n");
     onGenChanged();
     renderCalib();
     $("#import-status").textContent = T("imp_done", { m: merged, e: ext }) + (dup ? T("imp_dup", { n: dup }) : "");
+    devLog("import-verdicts", { rows: rows.length, merged, external: ext, duplicates: dup, sessions: Object.keys(ops).length });
   }
   function download(name, text) {
     window.__slSaveFile(name, text);
@@ -1525,6 +1572,7 @@ ${en.raw}`).join("\n\n\n");
     if (v === "calib") renderCalib();
     if (v === "settings") renderSettings();
     if (!window.SL_OPEN_SESSION) window.__slSetActiveTab(v);
+    if (!window.SL_OPEN_SESSION) devLog("view", { tab: v });
   }
   var SOURCES = ["claude", "codex", "cursor", "other"];
   function transcriptSource() {
@@ -1596,6 +1644,7 @@ ${en.raw}`).join("\n\n\n");
       if (sel.length) convs.splice(0, convs.length, ...sel);
     }
     let last = null;
+    const made = [];
     await needEngine(cfg.profile);
     const origin = Lens.transcriptOrigin(text, from);
     for (const c of convs) {
@@ -1628,7 +1677,18 @@ ${en.raw}`).join("\n\n\n");
       analyze(s, "import");
       await putNew(s);
       last = id;
+      made.push({ session: id, name: s.name, events: s.events.length, findings: s.findings.length });
     }
+    devLog("import", {
+      file: name,
+      chars: text.length,
+      profile: cfg.profile,
+      agent: origin.agent,
+      conversations: convs.length,
+      kept: text.length < 4e5,
+      cursor: { outputs: (from.cursorOutputs || []).length, edits: (from.cursorEdits || []).length, usage: !!from.cursorUsage },
+      sessions: made
+    });
     state.current = last;
     if (convs.length > 1) {
       show("sessions");
@@ -1946,6 +2006,7 @@ ${en.raw}`).join("\n\n\n");
     const kept = new Set([...trial.findings || [], ...trial.calibHidden || []].map((f) => trial.verdicts[fkey(f)]).filter(Boolean));
     const lost = [...keys(s)].filter((k) => !kept.has(s.verdicts[k])).length;
     if (lost && !await confirmDialog(T("reimport_lost", { n: lost }))) return;
+    const was = { events: s.events.length, findings: s.findings.length, importGen: s.importGen || 0 };
     await updateSession(sid, (x) => {
       x.events = events;
       x.seg = null;
@@ -1968,6 +2029,17 @@ ${en.raw}`).join("\n\n\n");
       Object.assign(x, Lens.transcriptOrigin(text, { cursorProject }));
       x.importGen = Lens.IMPORT_GEN;
       analyze(x, "import");
+    });
+    const now = curS();
+    devLog("reimport", {
+      session: sid,
+      name: now && now.name,
+      fromFile: !!fromFile || !s.source_text,
+      fromHookLog: fromLog,
+      match: Math.round(match * 100) / 100,
+      lost,
+      before: was,
+      after: now ? { events: now.events.length, findings: now.findings.length, importGen: now.importGen } : null
     });
     if (state.current === sid) renderReview();
   }
@@ -2213,9 +2285,14 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
   }
   async function setVerdict(k, v, note) {
     const vd = { v, note: note || "", at: (/* @__PURE__ */ new Date()).toISOString() };
-    await updateSession(state.current, (s) => {
-      s.verdicts[k] = vd;
+    let before = null, f = null;
+    await updateSession(state.current, (s2) => {
+      before = s2.verdicts[k] || null;
+      f = [...s2.findings || [], ...s2.calibHidden || []].find((x) => fkey(x) === k) || null;
+      s2.verdicts[k] = vd;
     });
+    const s = curS();
+    devLog("verdict", { session: state.current, name: s && s.name, fkey: k, finding: devFinding(f), before, after: vd });
     renderReview();
   }
   function segStatus(s) {
@@ -2242,9 +2319,11 @@ ${s.seg_raw}` : s.seg && s.seg.raw;
       if (window.SL_OPEN_SESSION) {
         renderReview();
         show("review");
+        const s = curS();
+        devLog("view", { tab: "review", session: window.SL_OPEN_SESSION, name: s && s.name });
         setTimeout(() => {
-          const s = curS();
-          if (s) needEngine(s.profile);
+          const s2 = curS();
+          if (s2) needEngine(s2.profile);
         }, 0);
       }
     });

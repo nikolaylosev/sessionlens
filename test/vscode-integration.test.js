@@ -120,9 +120,11 @@ test("package.json: activation, views, commands and menus", async () => {
     .filter((m) => m.when === "false")
     .map((m) => m.command)
     .sort();
+  // the dev log's menu is the status bar item's (0.1.141); its four commands are in the palette
   assert.deepEqual(hidden, [
     "sessionlens.deleteGroup",
     "sessionlens.deleteSession",
+    "sessionlens.devLogMenu",
     "sessionlens.moveToGroup",
     "sessionlens.openSessionFromTree",
     "sessionlens.renameGroup",

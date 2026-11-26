@@ -47,5 +47,11 @@
   "config.tokenPrices.output": "Price per million output tokens.",
   "config.tokenPrices.cacheRead": "Price per million input tokens read from the cache (the input price when not set).",
   "config.tokenPrices.cacheWrite": "Price per million input tokens written to the cache (the input price when not set).",
-  "config.tokenPrices.label": "What these prices are, shown next to the cost: on a subscription, \"API equivalent\" says the cost is what the session would have cost through the API, not what you paid."
+  "config.tokenPrices.label": "What these prices are, shown next to the cost: on a subscription, \"API equivalent\" says the cost is what the session would have cost through the API, not what you paid.",
+  "cmd.devLogStart": "Start dev log",
+  "cmd.devLogStop": "Stop dev log",
+  "cmd.devLogOpenFolder": "Open dev log folder",
+  "cmd.devLogNote": "Note for review…",
+  "cmd.devLogMenu": "Dev log…",
+  "config.devLog": "Developer's log: while on, what you do in SessionLens (imports, analyses, verdicts, skills, errors) and every model or CLI request with its answer go to `~/.sessionlens/dev/<day>-<editor>.jsonl`, one JSON object per line, with secrets masked. **Note for review…** adds a line of your own. On this computer only: nothing is sent anywhere. Files are kept 14 days, at most 50 MB a day. The status bar shows it while it is on. **Start dev log** and **Stop dev log** in the palette set it too."
 }

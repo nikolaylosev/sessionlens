@@ -37,6 +37,17 @@
   that breaks one of SessionLens's checks (the lint engine and the checks that read code alone); and a pattern of the
   check script that misses its rule's bad example or matches a good one, a check not labelled with a rule number, a
   `grep` that does not print the file name. It reads a skill in English or in Russian.
+- **A developer's log, to hand a run over without retelling it.** **SessionLens: Start dev log** turns on the setting
+  `sessionlens.devLog`. While it is on, what you do in SessionLens and what it does in reply go to a file on this
+  computer, `~/.sessionlens/dev/<day>-<editor>.jsonl`, one JSON object per line: each import and Import again, each
+  analysis with its counts by check, each verdict with the finding and the verdict before it, each Generate skill,
+  Update a skill and Compress with what came of them and the check of the skill, every request to a model or a CLI with
+  its answer and how long it took, the Output channel's lines, changed settings, and the panel's own errors.
+  **Note for review…** adds a line of your own, with the session that is in front and your last verdict. The status
+  bar shows **SessionLens dev log** while it is on; a click offers a note, today's log, its folder, or Stop. Secrets
+  are masked as in a model request and API keys are never written. Nothing is sent anywhere. A day's file stops at
+  50 MB, and files older than 14 days are removed. It is off unless you turn it on, and a project's settings cannot
+  turn it on.
 
 ## 0.1.140
 
