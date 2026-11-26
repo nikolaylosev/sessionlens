@@ -250,8 +250,8 @@ Checks are grouped as the tab shows them. "Default" is the built-in severity.
 | `assertion_roulette` | Low | Several assertions with no messages, so a failure does not say which one |
 | `conditional_logic` | Low | An `if` or loop inside a test |
 | `duplicate_assert` | Low | The same assertion repeated |
-| `raw_locator` | Low | A raw CSS selector instead of a role, label or text locator |
-| `positional_locator` | Low | Selection by position, such as `.first()` or `.nth()` |
+| `raw_locator` | Low | A raw CSS selector instead of a role, label or text locator (not when a `locator-exception:` comment with a reason is on its line or right above it, or when you quoted the selector in a message) |
+| `positional_locator` | Low | Selection by position, such as `.first()` or `.nth()` (not when a `locator-exception:` comment with a reason is on its line or right above it) |
 | `icon_glyph_locator` | Low | A locator by an icon font's character, such as `getByRole('link', { name: '\uE9CC' })`: it says nothing about the element and changes with the font |
 | `no_assertion_after_action` | High | A test has no assertion at all (Playwright, via ESLint `expect-expect`; a call to a Page Object method named `expect…`, such as `searchPage.expectSearchOpen()`, or to a function of the same file that calls `expect()` counts as one; the other languages in their sections below) |
 | `lint_valid_title` | Low | A Playwright test or `describe` title is empty, not a string, or starts or ends with a space (ESLint `valid-title`) |

@@ -500,6 +500,39 @@
           : "pi_eng_eslint",
     );
 
+  /* A locator the session explains (0.1.140): the code says why, or the person named it. Testing rules allow a CSS or
+     positional locator where an element has no role with a name, with the reason in a comment; in the owner's session
+     the agent wrote "// locator-exception: the tour window has no role, there are two Close buttons" above
+     page.locator('#step-0'), and the task listed both such locators under "do not touch". Each was still a finding.
+     A finding of these checks is left out when the comment on its line, or the comments right above it, say
+     "locator-exception" (or "locator exception") with a reason of a few words; or, for a raw locator, when a message of
+     the person before it quotes the line's selector (`following::input[1]` for 'xpath=following::input[1]': a string
+     with a CSS or XPath sign, as a whole). An eslint-disable comment the engine honours itself. */
+  const LOCATOR_CHECKS = new Set(["raw_locator", "positional_locator"]);
+  const EXCEPTION = /locator[- ]exception\b/i;
+  const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
+  function noteAt(lines, n) {
+    const own = lines[n - 1] || "";
+    const parts = [/\/\/(.*)$/.test(own) ? own.replace(/^.*?\/\//, "") : ""];
+    for (let i = n - 2; i >= 0 && COMMENT_LINE.test(lines[i]); i--) parts.push(lines[i]);
+    return parts.join("\n");
+  }
+  // a string that reads as a selector: a CSS or XPath sign in it ('label' or 'row' of a getByRole is a name, not one)
+  const SELECTOR = /[#.[\]:=>/@*]/;
+  const SELECTOR_MIN = 4;
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function explainedLocator(lines, n, check, said) {
+    const note = noteAt(lines, n);
+    if (EXCEPTION.test(note) && (note.replace(EXCEPTION, " ").match(/\p{L}{2,}/gu) || []).length >= 3) return true;
+    if (check !== "raw_locator" || !said) return false;
+    for (const m of (lines[n - 1] || "").matchAll(/(['"`])((?:\\.|(?!\1).)*)\1/g)) {
+      const sel = m[2].replace(/^(?:xpath|css)=/, "");
+      // the whole selector, not a part of a longer word: "label" in whitelabel_config is none
+      if (sel.length >= SELECTOR_MIN && SELECTOR.test(sel) && new RegExp(`(?<![\\w-])${esc(sel)}(?![\\w-])`).test(said)) return true;
+    }
+    return false;
+  }
+
   /* Lint every code block of the session. Returns { findings, note, ran } and, while the engine is still loading in
      this page, pending: true (note lint_loading) — the result is then not final. */
   function run(session, cfg, settings) {
@@ -515,6 +548,12 @@
     // a tree-sitter engine whose file is here but whose boot() has not finished
     if (typeof core.isReady === "function" && !core.isReady() && !(typeof core.bootError === "function" && core.bootError()) && mayLoad(lang)) return loading();
     const rules = rulesConfig(engine.map, (settings && settings.lintExtraRules) || []);
+    // what the person wrote before a step: a selector they quote is one they chose
+    const asked = (seq) =>
+      session.events
+        .filter((e) => e.kind === "user" && e.seq < seq)
+        .map((e) => e.text || "")
+        .join("\n");
     const findings = [];
     let errors = 0,
       parsed = 0;
@@ -559,6 +598,7 @@
         if (same.has(key)) continue;
         same.add(key);
         const [check, severity] = engine.map[m.ruleId] || ["lint_" + String(m.ruleId).split("/").pop(), "medium"];
+        if (LOCATOR_CHECKS.has(check) && m.line && explainedLocator(lines, m.line, check, asked(b.seq))) continue;
         findings.push({
           check,
           severity,
