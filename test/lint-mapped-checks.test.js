@@ -573,3 +573,41 @@ test("assertingFunctions: the functions of a file that assert, a call nobody def
     ["a", "b"],
   );
 });
+
+/* A locator the session explains (0.1.140): a "locator-exception" comment with a reason on its line or right above it,
+   or, for a raw locator, a selector the person quoted before. In the owner's session both such locators were agreed in
+   the task ("do not touch") and each had its reason above it. Made-up content only. */
+test("raw_locator and positional_locator: an explained locator, or a selector the person quoted, is no finding", async () => {
+  await loadEngines();
+  const cfg = Lens.profile("qa-ts");
+  const found = (lines, said) => {
+    const code = PW + `test("tour", async ({ page }) => {\n${lines}\n  await expect(page.getByText("Hi")).toBeVisible();\n});\n`;
+    const events = [...(said ? [{ seq: 0, kind: "user", text: said }] : []), { seq: 1, kind: "write", file: "e2e/tour.spec.ts", new_content: code }];
+    return LensLint.run({ events }, cfg, {})
+      .findings.filter((f) => f.check === "raw_locator" || f.check === "positional_locator")
+      .map((f) => `${f.check}:${f.line}`);
+  };
+  const RAW = "  await page.locator('#step-0 .close').click();";
+  const NTH = "  await page.getByRole('row').first().click();";
+  // explained: the comment above (a block of comments too), on the line itself, or the selector quoted by the person
+  for (const [lines, said] of [
+    ["  // locator-exception: the tour window has no role, and there are two Close buttons\n" + RAW],
+    ["  /*\n   * Locator exception — the tour has no role.\n   * The generated locator is the first step.\n   */\n" + RAW],
+    ["  // locator-exception: rows have no name yet, the first is the newest\n" + NTH],
+    [RAW + " // locator-exception: the tour window has no role at all"],
+    [RAW, "Keep the tour locator `#step-0 .close`, it is agreed."],
+    ["  await page.locator('xpath=following::input[1]').fill('a');", "the exceptions in security-questions.ts (following::input[1]) stay"],
+  ])
+    assert.deepEqual(found(lines, said), [], lines);
+  // still found: the marker with no reason, a comment further up, a quote that is a part of a word or no selector, and
+  // a quote for a positional locator (it has no selector to quote)
+  for (const [lines, said, want] of [
+    ["  // locator-exception\n" + RAW, "", ["raw_locator:4"]],
+    ["  // locator-exception: the tour window has no role, two Close buttons\n  await page.goto('/');\n" + RAW, "", ["raw_locator:5"]],
+    [RAW, "the tour is #step-0 .closed now", ["raw_locator:3"]],
+    ["  await page.locator('label').click();", "set whitelabel_config and the label", ["raw_locator:3"]],
+    ["  await page.getByTestId('cart.row').first().click();", "click the first `cart.row`", ["positional_locator:3"]],
+    [RAW, "", ["raw_locator:3"]],
+  ])
+    assert.deepEqual(found(lines, said), want, `${lines} | ${said}`);
+});

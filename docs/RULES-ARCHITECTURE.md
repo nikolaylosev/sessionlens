@@ -530,6 +530,14 @@ function run(session, cfg, settings) {
   strings and regex literals are blanked first, so an `expect(` in them is no call. Only the same file: a function of
   another file is not read (a page object's methods count by the `expect…` name above). In the owner's session a test
   checked its timing through `measure(name, page, d, fn)`, with three `expect()` inside, and was "no assertions", high.
+- **An explained locator** (`explainedLocator`, since 0.1.140). A `raw_locator` or `positional_locator` finding is
+  left out when the comment on its line, or the block of comment lines right above it, says `locator-exception` (or
+  "locator exception") with a reason of at least three words. A `raw_locator` is also left out when a message of the
+  person before the block quotes the line's selector: a string with a CSS or XPath sign (`# . [ ] : = > / @ *`), at
+  least 4 characters, `xpath=`/`css=` taken off, matched as a whole (`label` in `whitelabel_config` is none). A
+  positional locator has no selector to quote. An `eslint-disable` comment needs nothing here: the engine honours it.
+  In the owner's session both locators (`#step-0`, `following::input[1]`) had their reason above them and were listed
+  in the task as "do not touch".
 - The message cap (`CAP = 3`) works **within one call of
   `run()`**, per `(check, seq)` pair, that is per file — if one file gives
   30 identical findings of one check in one analysis, the first 3 are shown

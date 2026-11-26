@@ -35,6 +35,12 @@
   function of the same file, such as one that times an action and checks how long it took, and calls it. Only a call of
   a function named `expect…` counted as an assertion, so in one of our sessions such a test was "a test with no
   assertions", high. Now a function of the file that calls `expect()`, or another such function, counts too.
+- **A locator you agreed to, with its reason in the code, is no finding.** Testing rules often allow a CSS selector
+  or a pick by position where an element has no role with a name, as long as a comment says why. In one of our
+  sessions both such locators had a `locator-exception:` comment with the reason, and your task listed them as
+  agreed, yet each was a "raw locator" finding. Now a raw or positional locator is not reported when the comment on
+  its line, or right above it, says `locator-exception` with a reason, and a raw locator is not reported when you
+  quoted its selector in a message.
 
 ## 0.1.139
 
