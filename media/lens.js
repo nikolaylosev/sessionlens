@@ -1316,18 +1316,21 @@
      playwright test`, `python3 - <<EOF … Path("src/api.test.ts") … EOF` and then `pnpm test`. Claude Code's diff of the
      files comes with the command's result, so each such edit was a step after the run: when the run was red, a fix right
      after a failure, though the run had tested the edited file (the owner's session, #269/#270). The file's name comes
-     before the first part of the command that runs tests. A file the command does not name (a glob, `ruff format .`),
-     or names only after the run, stays after it. */
+     before the first part of the command that runs tests; or the command does not name the file, and a folder of it
+     comes before the run (`npx prettier --write src tests; npx vitest run`, `ruff format .`), not as the folder of a
+     `cd`. A file named only after the run, or whose folder comes only after it, stays after it. */
   function changedBeforeRun(cmd, file, cfg) {
     const text = String(cmd || "");
     const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
     if (!run) return false;
-    const name = String(file || "")
-      .split("/")
-      .pop();
+    const path = String(file || "");
+    const name = path.split("/").pop();
     if (!name) return false;
     const at = text.search(new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`));
-    return at >= 0 && at < run.index;
+    if (at >= 0) return at < run.index;
+    const head = text.slice(0, run.index).replace(/(?:^|[;&|\n(])\s*cd\s+\S+/g, " ");
+    const words = (head.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).map((w) => w.replace(/^\.\//, "").replace(/\/+$/, ""));
+    return words.some((w) => w === "." || (/^[\w.-]+(?:\/[\w.-]+)*$/.test(w) && !w.startsWith("-") && ("/" + path).includes("/" + w + "/")));
   }
 
   /* Claude Code keeps a subagent's steps (the Agent tool: Playwright's planner, generator and healer, Explore…) in

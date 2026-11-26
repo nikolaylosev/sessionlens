@@ -2283,10 +2283,14 @@ var require_lens = __commonJS({
         const text = String(cmd || "");
         const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
         if (!run) return false;
-        const name = String(file || "").split("/").pop();
+        const path2 = String(file || "");
+        const name = path2.split("/").pop();
         if (!name) return false;
         const at = text.search(new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`));
-        return at >= 0 && at < run.index;
+        if (at >= 0) return at < run.index;
+        const head2 = text.slice(0, run.index).replace(/(?:^|[;&|\n(])\s*cd\s+\S+/g, " ");
+        const words = (head2.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).map((w) => w.replace(/^\.\//, "").replace(/\/+$/, ""));
+        return words.some((w) => w === "." || /^[\w.-]+(?:\/[\w.-]+)*$/.test(w) && !w.startsWith("-") && ("/" + path2).includes("/" + w + "/"));
       }
       const SUBAGENT_LINE = "sessionlens-subagent";
       function joinSubagents(text, subs) {

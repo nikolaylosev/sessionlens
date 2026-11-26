@@ -271,13 +271,22 @@ test("a file the command changed before its tests ran is an edit before the run"
     say("Done."),
   );
   assert.equal(order(before), "2 edit (thought), 3 run_tests, 4 message");
+  // not named, but a folder of it comes before the run: a formatter
+  for (const cmd of ["npx prettier --write src e2e/ && npx playwright test", "npx prettier --write . && npx playwright test"])
+    assert.equal(order(importOf(write(SPEC, V1), thinking, bash(cmd, sed, RED), say("Done."))), "2 edit (thought), 3 run_tests, 4 message", cmd);
   assert.deepEqual(
     before.map((e) => e.seq),
     before.map((_, i) => i),
   );
   assert.ok(!checks(before).includes("fix_after_fail_without_triage high"));
   // the run first, the change after it; a change the command does not name
-  for (const cmd of [`npx playwright test; sed -i '' 's/toBe(3)/toBe(4)/' ${SPEC}`, "npx prettier --write e2e && npx playwright test"]) {
+  // the run first and the file or its folder after it; a folder the command only goes to with cd; nothing named
+  for (const cmd of [
+    `npx playwright test; sed -i '' 's/toBe(3)/toBe(4)/' ${SPEC}`,
+    "npx playwright test; npx prettier --write e2e",
+    "cd e2e && npx playwright test",
+    "npx tsc --noEmit -p tsconfig.json && npx playwright test",
+  ]) {
     const after = importOf(write(SPEC, V1), thinking, bash(cmd, sed, RED), say("Done."));
     assert.equal(order(after), "2 run_tests (thought), 3 edit, 4 message", cmd);
   }

@@ -45,9 +45,10 @@
   the tests in one command, such as `sed -i … a.spec.ts && npx playwright test`. Claude Code reports the changed file
   with the command's result, so SessionLens put the change after the run. When the run failed, the change read as a
   fix right after a failure with no triage, though the run had already tested it; when the agent then said the tests
-  pass, the change read as made after the last run. Now a change to a file the command names before its test run is a
-  step before the run. In our sessions this took out 265 findings and added 195, most of them the same check moved to
-  the right change: a fix after the failure that came before it. A session imported before shows **Import again**.
+  pass, the change read as made after the last run. Now a change to a file the command names before its test run, or
+  to a file in a folder it names there (a formatter), is a step before the run. In our sessions this took out 279
+  findings and added 207. Most of the added ones are the same check on the right change: a fix after the failure that
+  came before the command. A session imported before shows **Import again**.
 
 ## 0.1.139
 
