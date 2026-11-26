@@ -1,7 +1,7 @@
 // @ts-check
 /* SessionLens panel — start-up and refresh. Part of the panel's source (src/webview); `npm run build` bundles it into
    media/app.js. Split out of the single app.js in phase 7 (7B.4) without changing behaviour. */
-import { $, save, saveKeys, state, store } from "./common.js";
+import { $, devLog, save, saveKeys, state, store } from "./common.js";
 import {
   BG_PAUSE_MS,
   IS_TAB,
@@ -45,6 +45,9 @@ export function initMain() {
     if (window.SL_OPEN_SESSION) {
       renderReview();
       show("review");
+      // the session in front, for a note for review (0.1.141)
+      const s = curS();
+      devLog("view", { tab: "review", session: window.SL_OPEN_SESSION, name: s && s.name });
       // the engine this session's next analysis will need, loaded while the user reads (phase 5)
       setTimeout(() => {
         const s = curS();

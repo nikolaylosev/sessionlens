@@ -30,6 +30,9 @@ const ARRAY_KEYS = new Set(["external", "calibLog", "compressResults", "skillRes
 const TABS = ["sessions", "review", "calib", "rules", "prompts", "settings"];
 // log:timing (phase 6): where app.js ran analyze()
 const TIMING_EVENTS = ["import", "reanalyze", "background"];
+// dev:event (0.1.141): what a page tells the developer's log (devlog.js); kept only while the log is on
+const DEV_KINDS = ["view", "import", "reimport", "analyze", "verdict", "import-verdicts", "skill", "compress", "error"];
+const MAX_DEV_EVENT = 2 * 1024 * 1024;
 const PROFILE_RX = /^[a-z][a-z0-9#-]{0,30}$/;
 
 const MB = 1024 * 1024;
@@ -241,6 +244,13 @@ const VALIDATORS = {
   "tab:active": (p) => (TABS.includes(p.tab) ? null : "unknown tab"),
   // phase 6: the page finished starting (the host waits for it before sending a palette command to the sidebar)
   "page:ready": none,
+  /* 0.1.141: one event for the developer's log, a local file only the person reads. Its data may hold a session's text
+     (a finding's message, a file name): it is written as JSON, masked and cut by devlog.js, never run or shown. */
+  "dev:event": (p) => {
+    if (!DEV_KINDS.includes(p.kind)) return "unknown dev log event";
+    if (!isObj(p.data)) return "data must be an object";
+    return payloadSize(p.data) <= MAX_DEV_EVENT ? null : "dev log event is larger than 2 MB";
+  },
   // phase 6: one line for the Output channel. Numbers and names from closed lists only, so a page cannot put
   // transcript text (or anything else) into the log.
   "log:timing": (p, ctx) => {
@@ -262,4 +272,4 @@ function validate(type, payload, ctx) {
   return VALIDATORS[type](p, ctx || {});
 }
 
-module.exports = { validate, VALIDATORS, STORAGE_KEYS, TABS, TIMING_EVENTS, checkSkillFiles, isInside, safeBasename, MAX_PAYLOAD, MAX_SESSION };
+module.exports = { validate, VALIDATORS, STORAGE_KEYS, TABS, TIMING_EVENTS, DEV_KINDS, checkSkillFiles, isInside, safeBasename, MAX_PAYLOAD, MAX_SESSION };

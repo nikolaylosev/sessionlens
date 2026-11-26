@@ -24,6 +24,8 @@ function fakeVscode(opts = {}) {
     quickPick: [],
     inputBox: [],
     quickPicks: [],
+    statusItems: [], // createStatusBarItem (0.1.141: the dev log)
+    openExternal: [],
   };
   const config = { global: Object.assign({}, (opts.config || {}).global), workspace: Object.assign({}, (opts.config || {}).workspace) };
   // machine and application scope: a workspace value is ignored (phase 6: the five panel settings are "application")
@@ -121,7 +123,12 @@ function fakeVscode(opts = {}) {
           calls.clipboard.push(t);
         },
       },
+      openExternal: async (u) => {
+        calls.openExternal.push(u.fsPath);
+        return true;
+      },
     },
+    StatusBarAlignment: { Left: 1, Right: 2 },
     ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
     window: {
       registerWebviewViewProvider: (id, p) => {
@@ -161,6 +168,18 @@ function fakeVscode(opts = {}) {
         dispose() {},
       }),
       withProgress: async (o, task) => task({ report() {} }),
+      // an item of the status bar: visible after show(), until hide()
+      createStatusBarItem: (alignment, priority) => {
+        const item = { alignment, priority, text: "", tooltip: "", command: "", visible: false, show() {}, hide() {}, dispose() {} };
+        item.show = () => {
+          item.visible = true;
+        };
+        item.hide = () => {
+          item.visible = false;
+        };
+        calls.statusItems.push(item);
+        return item;
+      },
       // opts.warningAnswer: what the person clicks in a modal (undefined = cancel)
       showWarningMessage: async (...a) => {
         calls.warning.push(a);

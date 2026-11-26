@@ -146,6 +146,31 @@
         "command": "sessionlens.stopRecordingCursorRuns",
         "title": "%cmd.stopRecordingCursorRuns%",
         "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.devLogStart",
+        "title": "%cmd.devLogStart%",
+        "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.devLogStop",
+        "title": "%cmd.devLogStop%",
+        "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.devLogOpenFolder",
+        "title": "%cmd.devLogOpenFolder%",
+        "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.devLogNote",
+        "title": "%cmd.devLogNote%",
+        "category": "SessionLens"
+      },
+      {
+        "command": "sessionlens.devLogMenu",
+        "title": "%cmd.devLogMenu%",
+        "category": "SessionLens"
       }
     ],
     "configuration": {
@@ -286,6 +311,13 @@
             },
             "additionalProperties": false
           }
+        },
+        "sessionlens.devLog": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.devLog%",
+          "order": 13
         }
       }
     },
@@ -332,6 +364,10 @@
         {
           "command": "sessionlens.stopRecordingCursorRuns",
           "when": "sessionlens.inCursor"
+        },
+        {
+          "command": "sessionlens.devLogMenu",
+          "when": "false"
         }
       ],
       "view/item/context": [

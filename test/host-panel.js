@@ -37,12 +37,14 @@ function loadExtensionFrom(root, vscode) {
   }
 }
 
-/* → { ext, context, registered, calls, vscode, root, config, setConfig }. opts: { root, globalState, storageDir, vscode: fakeVscode opts } */
+/* → { ext, context, registered, calls, vscode, root, config, setConfig }. opts: { root, globalState, storageDir, vscode: fakeVscode opts,
+   beforeActivate(ext) } */
 function bootHost(opts = {}) {
   const root = opts.root || path.join(__dirname, "..");
   const { vscode, registered, calls, config, setConfig } = fakeVscode(opts.vscode || {});
   const ext = loadExtensionFrom(root, vscode);
   const context = fakeContext({ globalState: opts.globalState || {}, storageDir: opts.storageDir });
+  if (opts.beforeActivate) opts.beforeActivate(ext); // e.g. ext._test.setDevHome() for a log that is on at the start
   ext.activate(context);
   return { ext, context, registered, calls, vscode, root, config, setConfig };
 }

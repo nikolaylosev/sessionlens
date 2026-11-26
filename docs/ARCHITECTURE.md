@@ -108,6 +108,7 @@ Who owns what:
 | Program paths and provider base URLs | the host's own configuration | never taken from a webview message (§7) |
 | Command output of a picked Cursor transcript | the host, in `cursor-db.js` | read-only from Cursor's `store.db` or `state.vscdb`; a webview has no file system (§7) |
 | The Cursor hook (Record Cursor agent runs) | the host, in `cursor-hooks.js`; the hook is `media/cursor-hook.js` | only after the person's yes in a modal; only `~/.cursor/hooks.json` (never a project's) and `~/.cursor/sessionlens/`; a `hooks.json` that is not JSON is left as it is |
+| The developer's log (0.1.141) | the host, in `devlog.js`; a page sends `dev:event` (kinds from `validate.js` `DEV_KINDS`) only while `SL_DEV_LOG` is set | the setting `sessionlens.devLog` (application scope: a workspace cannot turn it on); only `~/.sessionlens/dev/`; masked with `Lens.redactSecrets`, settings through `Secrets.stripSecrets`; nothing sent anywhere |
 
 ---
 
@@ -124,6 +125,10 @@ cursor-db.js          host: the command output of a Cursor Agent chat, read-only
 cursor-hooks.js       host: Record / Stop recording Cursor agent runs: the hook in ~/.cursor/hooks.json and
                       ~/.cursor/sessionlens/ (0.1.130), the person's own hooks kept, logs removed after 30 days;
                       readLog: a chat's log as the import's command output and file versions
+devlog.js             host: the developer's log (0.1.141), ~/.sessionlens/dev/<day>-<editor>.jsonl while the setting
+                      sessionlens.devLog is on: one JSON line per event, strings masked and cut, key fields dropped,
+                      50 MB a day, 14 days kept. extension.js writes the host's events (start/stop, model and CLI
+                      requests with their answers, Output lines, storage changes, notes) and the pages' dev:event
 package.json          manifest: views, commands, settings (package.nls.json holds the strings)
 
 media/                everything the webview loads (also required by Node tests)
@@ -215,7 +220,7 @@ flowchart TB
   subgraph HostSide["Extension host"]
     EXTJS[extension.js] --> LENS
     EXTJS --> AI
-    EXTJS --> STOREJS[store.js] & VALJS[validate.js] & SECJS[secrets.js] & PROVJS[providers.js] & CLIJS[cli.js] & CDBJS[cursor-db.js]
+    EXTJS --> STOREJS[store.js] & VALJS[validate.js] & SECJS[secrets.js] & PROVJS[providers.js] & CLIJS[cli.js] & CDBJS[cursor-db.js] & DEVJS[devlog.js]
   end
   BRIDGE <-->|messages| EXTJS
 ```

@@ -1,7 +1,7 @@
 // @ts-check
 /* SessionLens panel — the Sessions tab: navigation, import, profile details. Part of the panel's source (src/webview); `npm run build` bundles it into
    media/app.js. Split out of the single app.js in phase 7 (7B.4) without changing behaviour. */
-import { $, T, esc, save, state } from "./common.js";
+import { $, T, devLog, esc, save, state } from "./common.js";
 import { needEngine, profileVerdicts, putNew } from "./store.js";
 import { analyze } from "./analysis.js";
 import { renderReview } from "./review.js";
@@ -112,6 +112,8 @@ export function show(v) {
   // session tab, which has no tabs of its own) so it can show the native Sessions tree only
   // while the Sessions tab is the one actually in view.
   if (!window.SL_OPEN_SESSION) window.__slSetActiveTab(v);
+  // the tab in front, for a note for review (0.1.141; a session's own tab is the host's to say)
+  if (!window.SL_OPEN_SESSION) devLog("view", { tab: v });
 }
 
 /* The Source list (0.1.138; until then a question at every Choose file). The stored choice, or where a new install most
@@ -211,6 +213,7 @@ export async function importText(text, name, from = {}) {
     if (sel.length) convs.splice(0, convs.length, ...sel);
   }
   let last = null;
+  const made = [];
   await needEngine(cfg.profile);
   // the agent and its folder, from the whole text: a long transcript is not kept (source_text) (0.1.124)
   const origin = Lens.transcriptOrigin(text, from);
@@ -244,7 +247,19 @@ export async function importText(text, name, from = {}) {
     analyze(s, "import");
     await putNew(s);
     last = id;
+    made.push({ session: id, name: s.name, events: s.events.length, findings: s.findings.length });
   }
+  // the file and what came of it (0.1.141); the analysis of each session is a line of its own
+  devLog("import", {
+    file: name,
+    chars: text.length,
+    profile: cfg.profile,
+    agent: origin.agent,
+    conversations: convs.length,
+    kept: text.length < 400000,
+    cursor: { outputs: (from.cursorOutputs || []).length, edits: (from.cursorEdits || []).length, usage: !!from.cursorUsage },
+    sessions: made,
+  });
   state.current = last;
   // Review only ever appears as its own editor tab now — the sidebar has no Review tab of
   // its own. With one imported session, open its tab directly (as clicking it would); with

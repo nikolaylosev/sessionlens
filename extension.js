@@ -14,6 +14,7 @@ const Secrets = require("./secrets.js");
 const { createProviderCall, validUrl } = require("./providers.js");
 const V = require("./validate.js");
 const { createStore } = require("./store.js");
+const DevLog = require("./devlog.js");
 
 // The page's own scripts (after vscode-bridge.js, inserted separately below).
 const SCRIPT_FILES = [
@@ -76,7 +77,8 @@ function buildHtml(webview, extensionUri, initialSessionId) {
   const wasmAttrs =
     WASM_ASSETS.map((f) => `data-${f.replace(/\.wasm$/, "").replace(/[^a-z0-9]+/gi, "-")}-wasm="${asUri(f)}"`).join(" ") +
     ` data-engines="${attr(JSON.stringify(engineUris))}"` +
-    (inCursor() ? " data-in-cursor" : ""); // the Source list starts at Cursor Agent there
+    (inCursor() ? " data-in-cursor" : "") + // the Source list starts at Cursor Agent there
+    (dev.log ? " data-dev-log" : ""); // the page sends what it does to the developer's log (0.1.141)
   if (initialSessionId) {
     const idAttr = String(initialSessionId).replace(/"/g, "&quot;");
     html = html.replace("<body>", `<body class="sl-session" data-open-session="${idAttr}" ${wasmAttrs}>`);
@@ -561,7 +563,7 @@ async function logCli(kind, what, fn) {
 function wireMessages(
   context,
   webview,
-  { onOpenSession, onClose, onReady } = /** @type {{ onOpenSession?: Function, onClose?: Function, onReady?: Function }} */ ({}),
+  { onOpenSession, onClose, onReady, where = "" } = /** @type {{ onOpenSession?: Function, onClose?: Function, onReady?: Function, where?: string }} */ ({}),
 ) {
   const inflight = new Set(); // AbortControllers of this webview's pending ai:call requests
   let gone = false; // the view or tab is closed: an ai:call that was still waiting for host.ready never starts (0.1.124)
@@ -618,6 +620,7 @@ function wireMessages(
       } else if (msg.type === "storage:set") {
         await host.ready;
         const values = Object.assign({}, msg.payload.values);
+        if (dev.log) devStorage(context, where, values);
         if (values.settings) values.settings = stripHostOwned(values.settings); // CLI paths and addresses: never from a webview
         if (values.settings && typeof values.settings === "object") {
           values.settings = Object.assign({}, values.settings);
@@ -736,7 +739,10 @@ function wireMessages(
         const ctl = new AbortController();
         inflight.add(ctl);
         try {
-          reply(await host.call(Object.assign({}, msg.payload), ctl.signal));
+          const t0 = Date.now();
+          const r = await host.call(Object.assign({}, msg.payload), ctl.signal);
+          reply(r);
+          devModel("model", where, msg.payload, r, t0);
         } finally {
           inflight.delete(ctl);
         }
@@ -865,17 +871,18 @@ function wireMessages(
           if (subs.length) host.log(`claude: ${subs.length} subagent transcript(s) added to ${path.basename(uri.fsPath)}`);
           reply({ name: path.basename(uri.fsPath), text: subs.length ? Lens.joinSubagents(text, subs) : text });
         }
-      } else if (msg.type === "claude:run") {
-        // the user's own Claude Code CLI, see cli.js; the path is the machine setting, never the payload's
-        reply(await logCli("claude", "run", () => runClaude(Object.assign({}, msg.payload, { cliPath: cliPathFor("claude") }))));
+      } else if (/^(?:claude|codex|cursor):run$/.test(msg.type)) {
+        // the user's own CLI (Claude Code, Codex, Cursor Agent), see cli.js; the path is the machine setting, never the payload's
+        const kind = msg.type.slice(0, msg.type.indexOf(":")),
+          run = { claude: runClaude, codex: runCodex, cursor: runCursor }[kind];
+        const t0 = Date.now();
+        const r = await logCli(kind, "run", () => run(Object.assign({}, msg.payload, { cliPath: cliPathFor(kind) })));
+        reply(r);
+        devModel("cli", where, Object.assign({ cli: kind }, msg.payload), r, t0);
       } else if (msg.type === "claude:check") {
         reply(await logCli("claude", "check", () => checkClaude({ cliPath: cliPathFor("claude") })));
-      } else if (msg.type === "codex:run") {
-        reply(await logCli("codex", "run", () => runCodex(Object.assign({}, msg.payload, { cliPath: cliPathFor("codex") })))); // the user's own Codex CLI
       } else if (msg.type === "codex:check") {
         reply(await logCli("codex", "check", () => checkCodex({ cliPath: cliPathFor("codex") })));
-      } else if (msg.type === "cursor:run") {
-        reply(await logCli("cursor", "run", () => runCursor(Object.assign({}, msg.payload, { cliPath: cliPathFor("cursor") })))); // the user's own Cursor Agent CLI
       } else if (msg.type === "cursor:check") {
         reply(await logCli("cursor", "check", () => checkCursor({ cliPath: cliPathFor("cursor") })));
       } else if (msg.type === "cursor:log") {
@@ -905,6 +912,9 @@ function wireMessages(
       } else if (msg.type === "tab:active") {
         reply(true);
         setActiveTab((msg.payload && msg.payload.tab) || "");
+      } else if (msg.type === "dev:event") {
+        reply(true);
+        devEvent(where, msg.payload.kind, msg.payload.data);
       } else {
         reply({ error: "SessionLens: unknown message" }); // not reachable: validate.js refuses unknown types
       }
@@ -987,12 +997,16 @@ function setupSessionPanel(context, panel, id) {
   const wired = wireMessages(context, webview, {
     onOpenSession: (otherId) => openSessionPanel(context, otherId),
     onClose: () => panel.dispose(),
+    where: "tab",
   });
   activeWebviews.add(webview);
   // Refresh from storage whenever the tab regains focus, so edits made in another
   // tab (or the sidebar) while this one was hidden aren't shown stale.
   panel.onDidChangeViewState((e) => {
-    if (e.webviewPanel.visible) refreshOnFocus(webview);
+    if (!e.webviewPanel.visible) return;
+    refreshOnFocus(webview);
+    // the session a note for review is about, when this tab is the one in front (0.1.141)
+    devEvent("tab", "view", { tab: "review", session: id, name: sessionTitle(context, id) });
   });
   sessionPanels.set(id, panel);
   panel.onDidDispose(() => {
@@ -1062,6 +1076,7 @@ class SessionLensViewProvider {
     const wired = wireMessages(this.context, webviewView.webview, {
       onOpenSession: (id) => openSessionPanel(this.context, id),
       onReady: () => this.markReady(),
+      where: "sidebar",
     });
     // kept here: a view that is gone throws "Webview is disposed" on .webview, also inside its own onDidDispose
     const webview = webviewView.webview;
@@ -1865,6 +1880,199 @@ function withHookLog(db, id) {
   return out;
 }
 
+/* 0.1.141: the developer's log (devlog.js). While the setting sessionlens.devLog is on, what the person does in the
+   panel (dev:event from the page: imports, analyses, verdicts, skills, errors) and what the host does in reply (each
+   model or CLI request and its answer, the Output channel's lines, changed settings) go to
+   ~/.sessionlens/dev/<day>-<editor>.jsonl, so a run can be read afterwards as it was. A note for review (a command)
+   adds what the person saw, with the session that was in front. The status bar says that it is on. Local only. */
+let devHome = () => os.homedir(); // tests set it (_test.setDevHome)
+const DEV_WIN = Math.random().toString(36).slice(2, 8); // this window, in each line
+/** @typedef {{ log: ReturnType<typeof DevLog.createDevLog> | null, item: any, picked: boolean | null }} DevState */
+/** @type {DevState & { lastView: object | null, lastVerdict: object | null, context: any }} */
+const dev = { log: null, item: null, picked: null, lastView: null, lastVerdict: null, context: null };
+const devDir = () => path.join(devHome(), ".sessionlens", "dev");
+// the last Start or Stop in this window wins until the setting changes (a .vsix installed into an open window cannot write it)
+function devLogSetting() {
+  if (dev.picked !== null) return dev.picked;
+  try {
+    const i = vscode.workspace.getConfiguration(CONFIG).inspect("devLog");
+    return !!(i && i.globalValue === true);
+  } catch {
+    return false;
+  }
+}
+function devWrite(kind, data) {
+  if (dev.log) dev.log.write(kind, data);
+}
+// a page's own event: its kind is from validate.js's list, its data an object
+function devEvent(where, kind, data) {
+  if (!dev.log) return;
+  const d = Object.assign({ page: where }, data);
+  if (kind === "view") dev.lastView = d;
+  if (kind === "verdict") dev.lastVerdict = d;
+  devWrite(kind, d);
+}
+// a model or CLI request and its answer; payload: what the page sent (no key: the host adds it, the page never has it)
+function devModel(kind, where, payload, r, t0) {
+  if (!dev.log) return;
+  const p = Object.assign({}, payload);
+  delete p.baseUrl; // the host's, not the page's
+  if (p.schema) p.schema = true;
+  devWrite(kind, Object.assign({ page: where, ms: Date.now() - t0 }, p, r && r.error ? { error: r.error } : { text: r && r.text, costUsd: r && r.costUsd }));
+}
+// storage:set: the settings that changed (without keys) and the other keys written; the rules' switches with their values
+function devStorage(context, where, values) {
+  const out = { page: where, keys: Object.keys(values) };
+  if (values.settings && typeof values.settings === "object") {
+    const before = Object.assign({}, Secrets.stripSecrets(context.globalState.get("settings") || {}), configuredSettings(false));
+    const after = Secrets.stripSecrets(values.settings);
+    const changed = {};
+    for (const k of new Set([...Object.keys(before), ...Object.keys(after)]))
+      if (JSON.stringify(before[k]) !== JSON.stringify(after[k]) && k !== "tokenPrices") changed[k] = after[k] === undefined ? null : after[k];
+    if (!Object.keys(changed).length && out.keys.length === 1) return; // a save that changed nothing
+    out.settings = changed;
+  }
+  if (values.ruleOverrides) out.ruleOverrides = values.ruleOverrides;
+  devWrite("storage", out);
+}
+function devStartInfo(context, why, removed) {
+  return {
+    why,
+    file: dev.log.file(),
+    version: context.extension && context.extension.packageJSON ? context.extension.packageJSON.version : "",
+    editor: (vscode.env && vscode.env.appName) || "",
+    editorVersion: vscode.version || "",
+    remote: vscode.env.remoteName || "",
+    platform: process.platform,
+    sessions: host.storeOpen ? host.store.list().length : null,
+    settings: Object.assign({}, Secrets.stripSecrets(context.globalState.get("settings") || {}), configuredSettings(false)),
+    removedOld: removed,
+  };
+}
+// starts or stops the log as the setting (or this window's last pick) says; why: what made it change
+function applyDevLog(why) {
+  const context = dev.context;
+  const on = devLogSetting();
+  if (on && !dev.log) {
+    let failed = false;
+    dev.log = DevLog.createDevLog({
+      dir: devDir(),
+      editor: inCursor() ? "cursor" : "vscode",
+      win: DEV_WIN,
+      redact: (text) => Lens.redactSecrets(text).text,
+      onError: (e) => {
+        if (failed) return; // once: host.log writes to this log too
+        failed = true;
+        host.log("dev log: could not write: " + String((e && e.message) || e));
+      },
+    });
+    const removed = dev.log.clean();
+    dev.log.write("start", devStartInfo(context, why, removed));
+    host.log(`dev log: on, ${dev.log.file()}`);
+  } else if (!on && dev.log) {
+    host.log("dev log: off");
+    dev.log.write("stop", { why });
+    dev.log = null;
+    dev.lastView = dev.lastVerdict = null;
+  } else return;
+  showDevItem(!!dev.log);
+  // the pages start or stop sending their events
+  for (const w of activeWebviews) {
+    try {
+      w.postMessage({ __slDev: true, on: !!dev.log });
+    } catch {
+      activeWebviews.delete(w);
+    }
+  }
+}
+function showDevItem(on) {
+  if (!dev.item) {
+    if (!on || !vscode.window.createStatusBarItem) return;
+    dev.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment ? vscode.StatusBarAlignment.Left : 1, -100);
+    dev.item.name = "SessionLens dev log";
+    dev.item.text = "$(record) SessionLens dev log";
+    dev.item.command = "sessionlens.devLogMenu";
+    if (dev.context) dev.context.subscriptions.push(dev.item);
+  }
+  dev.item.tooltip = t("SessionLens is writing a developer's log to {0}. Click for a note for review, the log, or Stop.", devDir());
+  if (on) dev.item.show();
+  else dev.item.hide();
+}
+async function setDevLog(on) {
+  dev.picked = on;
+  applyDevLog("command");
+  try {
+    await vscode.workspace.getConfiguration(CONFIG).update("devLog", on, vscode.ConfigurationTarget.Global);
+  } catch (e) {
+    host.log("could not write the setting sessionlens.devLog: " + String((e && e.message) || e) + "; this window keeps the choice");
+  }
+}
+async function startDevLog() {
+  if (dev.log) {
+    vscode.window.showInformationMessage(t("SessionLens: the dev log is already on: {0}", dev.log.file()));
+    return;
+  }
+  await setDevLog(true);
+  vscode.window.showInformationMessage(
+    t(
+      "SessionLens: the dev log is on. What you do in SessionLens and every model request go to {0}, on this computer only.",
+      dev.log ? dev.log.file() : devDir(),
+    ),
+  );
+}
+async function stopDevLog() {
+  if (!dev.log) {
+    vscode.window.showInformationMessage(t("SessionLens: the dev log is off."));
+    return;
+  }
+  await setDevLog(false);
+  vscode.window.showInformationMessage(t("SessionLens: the dev log is off. Its files stay in {0} for {1} days.", devDir(), DevLog.KEEP_DAYS));
+}
+async function openDevFolder() {
+  try {
+    fs.mkdirSync(devDir(), { recursive: true });
+  } catch {
+    /* openExternal says so */
+  }
+  await vscode.env.openExternal(vscode.Uri.file(devDir()));
+}
+async function openDevFile() {
+  if (!dev.log) return openDevFolder();
+  await dev.log.flush();
+  await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(dev.log.file()));
+}
+// a line for whoever reads the log: what happened, what was expected; the session in front and the last verdict with it
+async function devNote() {
+  if (!dev.log) {
+    const start = t("Start dev log");
+    const pick = await vscode.window.showInformationMessage(t("SessionLens: the dev log is off. A note goes into it."), start);
+    if (pick !== start) return;
+    await setDevLog(true);
+    if (!dev.log) return;
+  }
+  const view = dev.lastView;
+  const text = await vscode.window.showInputBox({
+    title: t("SessionLens: note for review"),
+    prompt: view && view.session ? t("About {0}: what happened, and what you expected", view.name || view.session) : t("What happened, and what you expected"),
+    validateInput: (v) => (String(v).length > 5000 ? t("The note is too long (5000 characters at most).") : null),
+  });
+  if (!text || !text.trim()) return;
+  devWrite("note", { text: text.trim(), view, lastVerdict: dev.lastVerdict });
+  vscode.window.showInformationMessage(t("SessionLens: noted in {0}", dev.log.file()));
+}
+// the status bar item's menu
+async function devMenu() {
+  /** @type {Array<import("vscode").QuickPickItem & { run: () => any }>} */
+  const items = [
+    { label: "$(note) " + t("Note for review…"), run: devNote },
+    { label: "$(go-to-file) " + t("Open today's log"), run: openDevFile },
+    { label: "$(folder-opened) " + t("Open dev log folder"), run: openDevFolder },
+    { label: "$(debug-stop) " + t("Stop dev log"), run: stopDevLog },
+  ];
+  const pick = await vscode.window.showQuickPick(items, { title: t("SessionLens dev log") });
+  if (pick) await pick.run();
+}
+
 /* The migrations, in order, then the session store (phase 7: one function, so the integration tests can run it
    again on data they wrote in the old formats). Each step logs its own failure and the next one still runs. */
 function runMigrations(context) {
@@ -1901,6 +2109,15 @@ function activate(context) {
     host.log = (m) => out.appendLine(`[${new Date().toISOString()}] ${m}`);
     host.output = out;
   }
+  {
+    // the Output channel's lines go to the developer's log too, while it is on (0.1.141)
+    const toOutput = host.log;
+    host.log = (m) => {
+      toOutput(m);
+      devWrite("host", { text: String(m) });
+    };
+  }
+  dev.context = context;
   host.storeOpen = false;
   host.store = createStore({ dir: path.join(context.globalStorageUri.fsPath, "sessions"), log: (m) => host.log("store: " + m) });
   groupsFile = path.join(context.globalStorageUri.fsPath, "groups.json");
@@ -1949,7 +2166,13 @@ function activate(context) {
     vscode.commands.registerCommand("sessionlens.clearSessionFilter", () => setSessionFilter({ text: "", red: false, open: false })),
     vscode.commands.registerCommand("sessionlens.recordCursorRuns", () => recordCursorRuns(context)),
     vscode.commands.registerCommand("sessionlens.stopRecordingCursorRuns", () => stopRecordingCursorRuns()),
+    vscode.commands.registerCommand("sessionlens.devLogStart", () => startDevLog()),
+    vscode.commands.registerCommand("sessionlens.devLogStop", () => stopDevLog()),
+    vscode.commands.registerCommand("sessionlens.devLogOpenFolder", () => openDevFolder()),
+    vscode.commands.registerCommand("sessionlens.devLogNote", () => devNote()),
+    vscode.commands.registerCommand("sessionlens.devLogMenu", () => devMenu()),
   );
+  applyDevLog("start of the window");
   // the two commands are in the palette in Cursor only (an unset key is false: nothing is set in VS Code)
   if (inCursor()) setContextKey("sessionlens.inCursor", true);
   maintainCursorHook(context);
@@ -1957,6 +2180,10 @@ function activate(context) {
   if (vscode.workspace.onDidChangeConfiguration) {
     context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration(CONFIG + ".devLog")) {
+          dev.picked = null; // the setting holds the choice now
+          applyDevLog("setting");
+        }
         if (e.affectsConfiguration(CONFIG + ".sessionsGroupBy")) {
           groupByPicked = null; // the setting holds the choice now (this window's write, or one from elsewhere)
           if (sessionsTreeProvider) sessionsTreeProvider.refresh();
@@ -2004,7 +2231,10 @@ function testApi(context) {
   };
 }
 
-function deactivate() {}
+function deactivate() {
+  // the last lines reach the file (VS Code waits for a promise returned here)
+  return dev.log ? dev.log.flush() : undefined;
+}
 
 module.exports = {
   activate,
@@ -2021,5 +2251,10 @@ module.exports = {
     setHome(fn) {
       cursorHome = fn;
     },
+    // the home folder of ~/.sessionlens/dev (0.1.141), and the log itself
+    setDevHome(fn) {
+      devHome = fn;
+    },
+    dev: () => dev,
   },
 };

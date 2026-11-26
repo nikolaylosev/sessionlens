@@ -566,6 +566,11 @@ SessionLens finds `agent` in `~/.local/bin`, where the installer puts it. Set a 
 - **Filter sessions…** — by a part of the name, task, profile or group, **Only Red**, **With findings without a verdict**; the same as the search button there. **Clear filter** shows every session again.
 - **Record Cursor agent runs** / **Stop recording Cursor agent runs** (in Cursor only, 0.1.130) — a Cursor Agent transcript keeps the agent's commands but not their output, so SessionLens cannot always tell a red test run from a green one. Record adds a hook to your `~/.cursor/hooks.json` (it asks first; your own hooks are kept, and the file as it was is saved as `hooks.json.sessionlens-backup`). After each command and file edit of the agent, Cursor then runs `~/.cursor/sessionlens/hook.sh` (`hook.cmd` on Windows, not yet tried on a real Cursor there), which writes the command's output and the edit to `~/.cursor/sessionlens/log/`. A Cursor Agent transcript you pick then gets its test runs' results and its files before and after each edit from there, and **Import again** in a session's tab reads it too. Reload the window after Record. Stop takes out only SessionLens's hook. The logs stay on your machine and are removed after 30 days. A project's `.cursor/hooks.json` is never touched.
 
+- **Start dev log** / **Stop dev log** / **Open dev log folder** / **Note for review…** (0.1.141) — a developer's log
+  of what you do in SessionLens and what it does in reply, to hand a run over to whoever works on SessionLens or its
+  rules: see [Your data](#your-data). While it is on, the status bar shows **SessionLens dev log**; a click on it
+  offers a note, today's log, its folder and Stop.
+
 **Settings** (Settings → Extensions → SessionLens, or `sessionlens.*` in `settings.json`):
 
 | Setting | Same as | Default |
@@ -577,14 +582,16 @@ SessionLens finds `agent` in `~/.local/bin`, where the installer puts it. Set a 
 | `sessionlens.rulesTarget` | Calibration → Target file | `claude` |
 | `sessionlens.sessionsGroupBy` | the button in the Sessions list's title | `date` |
 | `sessionlens.tokenPrices` | your prices per million tokens, for a session's cost (only in `settings.json`) | none |
+| `sessionlens.devLog` | **Start dev log** / **Stop dev log** | off |
 | `sessionlens.claudeCliPath`, `sessionlens.codexCliPath`, `sessionlens.cursorCliPath` | path to the `claude` / `codex` / `agent` command | found automatically |
 
-The first seven are user settings: Settings Sync carries them to your other machines, and a project's
+All but the CLI paths are user settings: Settings Sync carries them to your other machines, and a project's
 `.vscode/settings.json` cannot change them. The CLI paths are machine settings and are not synced. Values you had set
 in the panel before 0.1.103 are moved into these settings on the first start.
 
 The **SessionLens** Output channel lists migrations, CLI failures and how long each analysis took. It never contains
-transcript text, prompts, model replies or keys.
+transcript text, prompts, model replies or keys. The dev log does (prompts and replies, not keys): it is off unless you
+turn it on.
 
 ## Install
 
@@ -642,6 +649,16 @@ Everything stays on your machine, in VS Code's storage for this extension (ID `n
   the command and the end of its output (tokens in them are masked), and for each file edit the old and new text and
   the whole file, to `~/.cursor/sessionlens/log/<chat id>.jsonl` on your machine. No prompt, reply or file read is
   written. The logs are removed after 30 days; nothing from them is sent anywhere.
+- **The dev log** (only after **Start dev log**, 0.1.141). `~/.sessionlens/dev/<day>-<editor>.jsonl`, one JSON object
+  per line, each with its time and the window it came from: the version, your settings without keys and the number of
+  sessions when it starts; each import, Import again and analysis (counts by severity and check, what calibration
+  hid); each verdict with its finding, note and the verdict before it; Generate skill, Update a skill and Compress
+  with the files that came out and the check of the skill; every request to a model or a CLI as it was sent (your
+  rules, prompts, code of your sessions) with the answer and how long it took; the Output channel's lines; changed
+  settings and rule switches; the panel's own errors; and your notes for review. Every text is masked for secrets as
+  a model request is, and fields that hold keys are never written. A text over 200,000 characters is cut, a day's file
+  stops at 50 MB, and files older than 14 days are removed when the log starts. Nothing from it is sent anywhere:
+  you hand the file over yourself. **Stop dev log** stops writing and keeps the files.
 - **Model requests** go from the extension straight to the provider you choose, on your account. With Claude Code,
   Codex or Cursor as the provider they go through the `claude`, `codex` or `agent` command on your machine. Cursor
   keeps a copy of each request in `~/.cursor`, which SessionLens deletes after the answer (see
