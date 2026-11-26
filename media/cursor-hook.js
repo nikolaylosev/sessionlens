@@ -257,6 +257,8 @@ var require_i18n = __commonJS({
           trial_hint: "A new check: its findings are shown as low until it has 10 verdicts. Mark them True or False: with 10, it gets its own severity, or calibration demotes it or switches it off.",
           btn_ok: "Confirm",
           btn_fp: "False",
+          btn_later: "Later",
+          btn_later_hint: 'Not decided yet: to look at again. It counts for nothing: not for calibration, rules or a skill, and the finding stays under "no verdict".',
           ph_note: "comment",
           empty_filter: "Nothing matches the filter.",
           empty_findings: "Formal checks found nothing. That doesn't mean the session is good — skim the timeline.",
@@ -306,6 +308,7 @@ var require_i18n = __commonJS({
           md_confirmed: "### Confirmed findings",
           md_false: "### Rejected as false",
           md_undecided: "### No verdict (medium/low)",
+          md_later: "to review later",
           md_hidden: "### Hidden by calibration (low precision)",
           md_hidden_why: "precision {p}% over {n} {n|verdict|verdicts}",
           md_hidden_rest: "- and {n} medium or low {n|finding|findings}",
@@ -5266,6 +5269,7 @@ var require_lens = __commonJS({
         if (k <= n / 2) k = n - 1;
         return t.slice(0, k).replace(/[\s,;:.·/—–([{=-]+$/, "") + "…";
       }
+      const decided = (vd) => !!vd && (vd.v === "ok" || vd.v === "fp");
       function sessionSummary(s) {
         const findings = Array.isArray(s.findings) ? s.findings : [], verdicts = s.verdicts && typeof s.verdicts === "object" ? s.verdicts : {};
         const checkStats = {}, sourceStats = {}, confirmed = [];
@@ -5280,7 +5284,7 @@ var require_lens = __commonJS({
         for (const f of findings) {
           const k = fkey(f), vd = verdicts[k];
           count(f, vd);
-          if (!vd) open++;
+          if (!decided(vd)) open++;
           if (vd && vd.v === "ok")
             confirmed.push({ key: k, check: f.check, seq: f.seq, message: clip(f.message, 90), snippet: snippet(f), note: String(vd.note || "") });
         }
@@ -5434,6 +5438,7 @@ var require_lens = __commonJS({
         displayName,
         otherName,
         sessionSummary,
+        decided,
         profileInfo,
         isValidated,
         VALIDATED_PROFILES,

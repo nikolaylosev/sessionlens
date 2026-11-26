@@ -448,7 +448,7 @@ export function renderReview() {
   const F = state.filter;
   const srcOf = (f) => (f.source === "ai" ? "ai" : f.source === "spec" ? "spec" : f.source === "lint" ? "lint" : "formal");
   // sources toggle independently, like severities: turning one on must not hide the rest
-  const visible = s.findings.filter((f) => F.src[srcOf(f)] !== false && F.sev[f.severity] && (!F.undecided || !s.verdicts[fkey(f)]));
+  const visible = s.findings.filter((f) => F.src[srcOf(f)] !== false && F.sev[f.severity] && (!F.undecided || !Lens.decided(s.verdicts[fkey(f)])));
   $("#f-count").textContent = visible.length === s.findings.length ? `(${s.findings.length})` : T("f_of", { v: visible.length, n: s.findings.length });
   const cnt = { all: s.findings.length };
   for (const k of ["formal", "lint", "spec", "ai"]) cnt[k] = s.findings.filter((f) => srcOf(f) === k).length;
@@ -516,8 +516,8 @@ export function renderReview() {
           const ai = f.source === "ai",
             sp = f.source === "spec",
             src = f.source || "formal";
-          return `<div class="f ${esc(f.severity)} ${vd.v ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}${f.trial ? ` <span class="demoted" title="${esc(T("trial_hint"))}">${T("trial")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
-        <div class="vb"><button class="btn tiny ghost v-ok ${vd.v === "ok" ? "on" : ""}">${T("btn_ok")}</button><button class="btn tiny ghost v-fp ${vd.v === "fp" ? "on fp" : ""}">${T("btn_fp")}</button><input class="note" placeholder="${T("ph_note")}" value="${esc(vd.note || "")}"></div></div>`;
+          return `<div class="f ${esc(f.severity)} ${Lens.decided(vd) ? "done" : ""} ${ai ? "ai" : ""} ${sp ? "spec" : ""}" data-k="${esc(k)}"><div class="sev ${esc(f.severity)}">${esc(SEV[f.severity] || f.severity)} <span class="srctag ${esc(src)}">${esc(tagLabel(src, f))}</span>${f.demoted ? ` <span class="demoted">${T("demoted")}</span>` : ""}${f.trial ? ` <span class="demoted" title="${esc(T("trial_hint"))}">${T("trial")}</span>` : ""}</div><div class="msg">${esc(f.message)}</div>${f.evidence ? `<div class="chk">«${esc(f.evidence)}»</div>` : ""}${f.code ? `<details class="snip-d"><summary>${T("code_toggle")}</summary><pre class="snip">${esc(f.code)}</pre></details>` : ""}<div class="chk">${ai ? esc(LABEL[f.check] || f.check) : esc(f.check)}${f.seq >= 0 ? ` · <a href="#e${esc(f.seq)}">seq ${esc(f.seq)}</a>` : ""}</div>
+        <div class="vb"><button class="btn tiny ghost v-ok ${vd.v === "ok" ? "on" : ""}">${T("btn_ok")}</button><button class="btn tiny ghost v-fp ${vd.v === "fp" ? "on fp" : ""}">${T("btn_fp")}</button><button class="btn tiny ghost v-later ${vd.v === "later" ? "on later" : ""}" title="${esc(T("btn_later_hint"))}">${T("btn_later")}</button><input class="note" placeholder="${T("ph_note")}" value="${esc(vd.note || "")}"></div></div>`;
         })
         .join("")
     : `<div class="empty">${s.findings.length ? T("empty_filter") : T("empty_findings")}</div>`;
@@ -525,6 +525,7 @@ export function renderReview() {
     const k = d.dataset.k;
     d.querySelector(".v-ok").addEventListener("click", () => setVerdict(k, "ok", d.querySelector(".note").value));
     d.querySelector(".v-fp").addEventListener("click", () => setVerdict(k, "fp", d.querySelector(".note").value));
+    d.querySelector(".v-later").addEventListener("click", () => setVerdict(k, "later", d.querySelector(".note").value));
     d.querySelector(".note").addEventListener("change", (e) => {
       if (s.verdicts[k]) setVerdict(k, s.verdicts[k].v, e.target.value);
     });

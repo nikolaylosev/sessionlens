@@ -228,6 +228,7 @@ Panel tests should end with `assert.deepEqual(page.errors, [])` so that a script
 | File | What it guards |
 |---|---|
 | `render-snapshot.test.js` | Every sidebar view and a session tab for four profiles render the markup the snapshot recorded, and the render is the same on two runs. |
+| `verdict-later.test.js` | The verdict **Later** (0.1.140): `Lens.decided` (True and False decide, Later and none do not); a session's summary counts a Later finding as open, not in its check's verdicts or the confirmed list; a rule's evidence quotes a finding with no step instead of "seq -1" (cut at 80); in the panel a third button that saves Later with its note, keeps the finding undecided and under the "no verdict" filter after a reload; the review .md lists it under "No verdict" with its note, not among the confirmed. |
 | `panel-storage.test.js` | The sidebar starts from session summaries only; a tab loads only its own session; a verdict writes exactly one session; a Rules checkbox writes once and re-analyzes in the right places; a conflicting write from another window is merged. Also the Calibration snapshot. |
 | `calibration-loop.test.js` | A check switched off by calibration stays off when sessions are analyzed again (regex and an engine check). |
 | `calibration-ui.test.js` | The Calibration table per check and source, "on by hand" and the ⓘ mark on the Rules tab, the source in a session's line of disabled checks, `hardcoded_secret` as "not calibrated" with its reason. |
