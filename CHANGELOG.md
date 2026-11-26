@@ -17,6 +17,13 @@
   was reported as "not in the plan". In one of our sessions this was a new unit test that the second plan named and
   you approved. Now each change is compared with the last plan you answered before it. A report at the end of a request
   is not taken for a plan, even when it mentions one, such as "marked in PLAN.md".
+- **The model review sees your task and the plan you approved in full.** The review gets a shortened transcript of the
+  session, where each message was cut to 400 characters. So the model saw only the start of a long task or plan, and
+  not your answers to the plan's questions. In one of our sessions two of the model's eight findings went against what
+  you had decided in the plan: a test tag you chose, and a strict log check the task asked for. Now the prompt has your
+  messages in full, each after the agent's message it answers, and the review and verification prompts say that a
+  choice you made or approved is a decision, not a defect. This makes the prompt longer: in that session, from about
+  52,000 to 83,000 characters. The built-in prompts on the Model rules tab show the new sentence.
 
 ## 0.1.139
 

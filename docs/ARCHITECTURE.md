@@ -780,6 +780,13 @@ sequenceDiagram
   runs with the last one's result, messages) and the user's messages among them follow it, up to 20% of the room.
   Until 0.1.126 the end was cut, and the model did not see the last test run in 15 of the owner's 20 long sessions
   with runs.
+- **The person's messages in full** (`requestsOf()` in `ai.js`, since 0.1.140): a part of the prompt before the code,
+  each message of the person after the agent's last message before it (the task, the plan with its questions, the
+  approval), each at most 16 000 characters, 40 000 in all (3 000 for a local model; over the room, the first request
+  and the last ones that fit). The transcript keeps 400 characters of a message, so in the owner's session the model
+  saw 400 of the 9 000 characters of the plan the person approved, and 2 of its 8 findings went against that plan's
+  decisions. The review and verify prompts say that a choice the person made or approved there is a decision, not a
+  defect. On that session the prompt grew from about 52 000 to 83 000 characters.
 - **What is sent:** each model button says it on hover (README, "Your data"). Since 0.1.116 every prompt has its
   secrets masked (`LensAI.maskSecrets`, which is `Lens.redactSecrets`) where it is built, and `callModel()` masks
   again; the verifier checks quotes against the masked text that was sent.
