@@ -65,6 +65,12 @@
   the comment and leaves the finding undecided: it counts for nothing, the "no verdict" filter shows it, and the PR
   report lists it under "No verdict" with the comment. A proposed rule's evidence now quotes a finding of the model
   instead of saying "seq -1", since such a finding has no step.
+- **The specification your task names, read by the agent, is offered as the review's specification.** When your task
+  says "Specification: docs/spec.md", SessionLens says "no specification" (low) until you add it on the session's tab.
+  In several of our sessions the agent had read the whole file, so the review could take it from there, as it
+  already does with a test plan the agent saved. Now it does: the Specification section offers the file first, with the number of
+  its requirements, and the finding says the session has it. Nothing is taken without your click. A file read only in
+  part is not offered. A Claude Code session imported before shows **Import again**.
 
 ## 0.1.139
 

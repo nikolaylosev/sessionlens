@@ -233,3 +233,121 @@ test("a document of test cases written in a real import is offered: the import k
   const json = text.replace("docs/test-cases.md", "package.json");
   assert.equal(Lens.importAny(json, cfg, {}).find((e) => e.kind === "write").doc_content, undefined);
 });
+
+/* The specification the person named, read whole (0.1.140): the import keeps its text on the Read, the tab offers it
+   first, and no_spec says the session has it. In one of our sessions the task named docs/spec.md, the agent read it
+   whole, and the review said "no specification" with no way to take it. A part read, or a document nobody named,
+   keeps no text. */
+test("the specification the task names, read whole: kept, offered first, and no_spec says the session has it", () => {
+  const SPEC = "# Cart\n\n- Totals: the cart shows the sum of its items.\n- Discounts: SAVE10 takes 10% off.\n- Empty: an empty cart says so.\n";
+  const TOTAL = "/w/shop/tests/cart.spec.ts";
+  const read = (id, file, f) => [
+    { type: "assistant", cwd: "/w/shop", message: { role: "assistant", content: [{ type: "tool_use", id, name: "Read", input: { file_path: file } }] } },
+    {
+      type: "user",
+      cwd: "/w/shop",
+      toolUseResult: { type: "text", file: Object.assign({ filePath: file, content: SPEC, startLine: 1, numLines: 6, totalLines: 6 }, f) },
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: SPEC }] },
+    },
+  ];
+  const session = (ask, reads) =>
+    Lens.importAny(
+      [
+        { type: "user", cwd: "/w/shop", message: { role: "user", content: ask } },
+        ...reads,
+        {
+          type: "assistant",
+          cwd: "/w/shop",
+          message: { role: "assistant", content: [{ type: "tool_use", id: "w", name: "Write", input: { file_path: TOTAL, content: pw("Total is shown") } }] },
+        },
+        { type: "user", cwd: "/w/shop", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "w", content: "ok" }] } },
+      ]
+        .map((l) => JSON.stringify(l))
+        .join("\n"),
+      cfg,
+      {},
+    );
+  const noSpec = (ev) => LensSpec.checks(LensSpec.parse(""), ev, "typescript").findings.map((f) => `${f.severity}: ${f.message}`);
+  const ev = session("Write the cart tests. Specification: docs/spec.md", [...read("r1", "/w/shop/README.md"), ...read("r2", "/w/shop/docs/spec.md")]);
+  assert.deepEqual(
+    ev.filter((e) => e.kind === "read").map((e) => [e.file, e.doc_content === SPEC]),
+    [
+      ["README.md", false],
+      ["docs/spec.md", true],
+    ],
+  );
+  assert.deepEqual(
+    LensSpec.offers([...ev, write(9, "docs/cases.md", "### CART-01. One\n### CART-02. Two\n")]).map((o) => [o.file, o.kind, o.n]),
+    [
+      ["docs/spec.md", "named", 3],
+      ["docs/cases.md", "cases", 2],
+    ],
+  );
+  assert.deepEqual(noSpec(ev), [
+    "low: The task names a specification (docs/spec.md), and the session has its text, but the review does not have it: take it under Specification to check which tests cover the requirements",
+  ]);
+  // read in part, or named only after the read: no text, so nothing to offer, and no_spec as before
+  for (const ev2 of [
+    session("Write the cart tests. Specification: docs/spec.md", read("r2", "/w/shop/docs/spec.md", { startLine: 2, numLines: 3 })),
+    session("Write the cart tests. Specification: docs/spec.md", read("r2", "/w/shop/docs/spec.md", { truncatedByTokenCap: true })),
+  ]) {
+    assert.equal(ev2.find((e) => e.kind === "read").doc_content, undefined);
+    assert.deepEqual(LensSpec.offers(ev2), []);
+    assert.match(noSpec(ev2)[0], /but the review does not have it: add it/);
+  }
+  // the specification of another name: the document read is offered as nothing
+  const other = session("Write the cart tests. Specification: specs/cart.md", read("r2", "/w/shop/docs/spec.md"));
+  assert.equal(other.find((e) => e.kind === "read").doc_content, undefined);
+  // a session imported before keeps no text: Import again
+  const old = { profile: "qa-ts", importGen: 18, events: ev.map((e) => (e.kind === "read" ? { ...e, doc_content: undefined } : e)) };
+  assert.ok(Lens.IMPORT_GEN >= 19);
+  assert.equal(Lens.needsReimport(old), true);
+  assert.equal(Lens.needsReimport({ ...old, events: ev }), false);
+});
+
+test("the tab offers the named specification the agent read, with its own line", async () => {
+  const SPEC = "# Cart\n\n- Totals: the cart shows the sum.\n- Discounts: SAVE10 takes 10% off.\n";
+  const text = [
+    { type: "user", cwd: "/w/shop", message: { role: "user", content: "Write the cart tests. Specification: docs/spec.md" } },
+    {
+      type: "assistant",
+      cwd: "/w/shop",
+      message: { role: "assistant", content: [{ type: "tool_use", id: "r", name: "Read", input: { file_path: "/w/shop/docs/spec.md" } }] },
+    },
+    {
+      type: "user",
+      cwd: "/w/shop",
+      toolUseResult: { type: "text", file: { filePath: "/w/shop/docs/spec.md", content: SPEC, startLine: 1, numLines: 5, totalLines: 5 } },
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "r", content: SPEC }] },
+    },
+    {
+      type: "assistant",
+      cwd: "/w/shop",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "w", name: "Write", input: { file_path: "/w/shop/tests/cart.spec.ts", content: pw("Total is shown") } }],
+      },
+    },
+    { type: "user", cwd: "/w/shop", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "w", content: "ok" }] } },
+  ]
+    .map((l) => JSON.stringify(l))
+    .join("\n");
+  const host = bootHost({ globalState: { settings: { profile: "qa-ts", rulesTarget: "claude", modelPool: [], defaultModelId: null, lint: false } } });
+  const sb = await openPage(host);
+  await sb.ready();
+  sb.document.querySelector("#paste").value = text;
+  sb.document.querySelector("#paste-name").value = "cart";
+  click(sb, "#paste-go");
+  await until(() => puts(sb).length);
+  await sb.idle();
+  const id = puts(sb).pop().payload.session.id;
+  sb.close();
+  const tab = await openPage(host, { sessionId: id });
+  await tab.ready();
+  assert.equal(
+    tab.document.querySelector("#spec-offer").textContent,
+    "The task names docs/spec.md as the specification, and the session has its text: 2 requirements.Use as specification",
+  );
+  assert.deepEqual(tab.errors, []);
+  tab.close();
+});

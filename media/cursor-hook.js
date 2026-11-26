@@ -69,6 +69,7 @@ var require_i18n = __commonJS({
           r_expected_failure: "An expected failure hides a live bug behind a green suite. Report the bug first and say in the test which ticket keeps it red.",
           no_spec: "No specification: impossible to tell which checks are requirements and which are the agent's guesses",
           no_spec_named: "The task names a specification ({file}), but the review does not have it: add it to check which tests cover the requirements",
+          no_spec_named_here: "The task names a specification ({file}), and the session has its text, but the review does not have it: take it under Specification to check which tests cover the requirements",
           uncovered: "Requirement {id} has no test: “{text}”",
           unlinked: "Test {name} references no requirement — what does it check?",
           oos: "There is a test for something explicitly out of scope: “{text}”",
@@ -236,6 +237,7 @@ var require_i18n = __commonJS({
           spec_offer_plan: "The agent saved a test plan, {f}: {n} {n|scenario|scenarios}.",
           spec_offer_cases: "The agent wrote test cases, {f}: {n} with IDs.",
           spec_offer_use: "Use as specification",
+          spec_offer_named: "The task names {f} as the specification, and the session has its text: {n} {n|requirement|requirements}.",
           spec_auto: " · numbered automatically, coverage not checked",
           spec_unparsed: "(text given, no requirements recognised — number them or use R1., R2.)",
           spec_count: "({n} {n|requirement|requirements}{oos})",
@@ -2411,6 +2413,12 @@ var require_lens = __commonJS({
         let seq = 0, cwd = "";
         const base = (f) => files[f] ?? null;
         const short = (f) => cwd && f.startsWith(cwd + "/") ? f.slice(cwd.length + 1) : f;
+        const named = [];
+        const namedBefore = (f) => {
+          const rel = short(f);
+          const tail2 = rel.split("/").slice(-2).join("/");
+          return named.some((t) => t.includes(rel) || tail2.includes("/") && t.includes(tail2));
+        };
         const { recs, types, main: main2 } = claudeRecords(text);
         for (const rec of recs) {
           if (!rec || typeof rec !== "object") continue;
@@ -2445,6 +2453,7 @@ var require_lens = __commonJS({
               if (!text2) continue;
               const r = think(by({ seq: seq++, ts, kind: role === "assistant" ? "message" : "user", text: text2 }));
               if (r.kind === "user") delete thoughts[""];
+              if (r.kind === "user" && !agent) named.push(text2);
               if (r.kind === "message") attachCodeFromText(r);
               out.push(r);
             } else if (b.type === "tool_use" && role === "assistant") {
@@ -2527,8 +2536,10 @@ var require_lens = __commonJS({
                 }
               }
               const rf = r.tool === "Read" && tur && typeof tur === "object" ? tur.file : null;
-              if (rf && typeof rf.filePath === "string" && typeof rf.content === "string" && rf.startLine === 1 && rf.numLines === rf.totalLines && !rf.truncatedByTokenCap)
+              if (rf && typeof rf.filePath === "string" && typeof rf.content === "string" && rf.startLine === 1 && rf.numLines === rf.totalLines && !rf.truncatedByTokenCap) {
                 files[rf.filePath] = rf.content;
+                if (DOC_RX.test(rf.filePath) && namedBefore(rf.filePath)) r.doc_content = rf.content.slice(0, 1e5);
+              }
               const c = b.content;
               const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x && x.text || "").join("\n") : JSON.stringify(c || "");
               r.text = t.slice(0, 3e3);
@@ -3493,7 +3504,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 18;
+      const IMPORT_GEN = 19;
       const SHELL_EDIT = /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
       function shellEditsBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
@@ -3568,6 +3579,17 @@ var require_lens = __commonJS({
           return false;
         });
       }
+      function namedDocRead(s) {
+        const said = [];
+        for (const e of s.events) {
+          if (e.kind === "user") said.push(String(e.text || ""));
+          else if (e.kind === "read" && e.tool === "Read" && DOC_RX.test(e.file || "") && e.doc_content == null) {
+            const tail2 = String(e.file).split("/").slice(-2).join("/");
+            if (said.some((t) => t.includes(e.file) || tail2.includes("/") && t.includes(tail2))) return true;
+          }
+        }
+        return false;
+      }
       function needsReimport(s) {
         if (!s || !Array.isArray(s.events) || s.importGen >= IMPORT_GEN) return false;
         if ((s.importGen || 0) < 3 && codexChangesBefore121(s)) return true;
@@ -3582,6 +3604,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
         if ((s.importGen || 0) < 18 && s.events.some((e) => e.kind === "run_other" && runsScript(e.cmd) && (parseTests(e.text || "", profile(s.profile)) || (e.text || "").length >= 3e3)))
           return true;
+        if ((s.importGen || 0) < 19 && namedDocRead(s)) return true;
         if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
         if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;

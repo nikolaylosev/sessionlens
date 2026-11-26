@@ -364,7 +364,7 @@ Needs a specification on the Review tab.
 
 | Check | Default | Raised when |
 |---|---|---|
-| `no_spec` | High | There is no specification, so requirements and guesses cannot be told apart |
+| `no_spec` | High | There is no specification, so requirements and guesses cannot be told apart (low when your message names it; when the session has that file's text, the Specification section offers it) |
 | `spec_uncovered` | High | A requirement has no test |
 | `test_without_requirement` | Medium | A test references no requirement |
 | `out_of_scope_tested` | Medium | Something marked out of scope is tested |

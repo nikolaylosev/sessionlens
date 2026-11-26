@@ -1973,7 +1973,7 @@ ${en.raw}`).join("\n\n\n");
     const offers = (s.spec || "").trim() ? [] : LensSpec.offers(s.events).slice(0, 3);
     $("#spec-offer").hidden = !offers.length;
     $("#spec-offer").innerHTML = offers.map(
-      (o, i) => `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : "spec_offer_cases", { f: o.file, n: o.n }))}</span><button class="btn tiny" data-offer="${i}">${esc(T("spec_offer_use"))}</button></div>`
+      (o, i) => `<div class="row actions"><span class="muted">${esc(T(o.kind === "plan" ? "spec_offer_plan" : o.kind === "named" ? "spec_offer_named" : "spec_offer_cases", { f: o.file, n: o.n }))}</span><button class="btn tiny" data-offer="${i}">${esc(T("spec_offer_use"))}</button></div>`
     ).join("");
     $("#spec-count").textContent = s.specParsed && s.specParsed.n ? T("spec_count", { n: s.specParsed.n, oos: s.specParsed.oos ? T("spec_oos", { n: s.specParsed.oos }) : "" }) + (s.specParsed.hasIds ? "" : T("spec_auto")) : (s.spec || "").trim() ? T("spec_unparsed") : T("spec_none");
     $("#spec-d").open = !s.spec;
