@@ -530,6 +530,13 @@ flowchart TD
   file the command also wrote from a here-document keeps that step, with the text of the diff. A Read of a whole file
   (`toolUseResult.file` from line 1, all lines, not cut) gives the session its text as it is then. Without a diff
   (an older Claude Code, `unavailable`, a file past `moreFiles`) a command's edits are not known, as before.
+  Since 0.1.140 a file the command changed before it ran its tests is an `edit` step **before** the run
+  (`changedBeforeRun`): its name comes before the first part of the command that runs tests (`f=a.spec.ts && perl -pi
+  … $f && npx playwright test`), or the command does not name it and a folder of it comes before the run (`npx
+  prettier --write src tests; npx vitest run`, `.`), not as the folder of a `cd`. The steps of the command and its
+  files keep consecutive numbers, and the reasoning before the command goes with the first edit. A file named only
+  after the run, or whose folder comes only after it (`pytest; ruff format .`), stays after it, and so does every
+  file when another call came between the command and its result.
   The diff lists every file that changed while the command ran, whoever changed it, so a file is taken only when it is
   the command's (`commandOwns`): in the folder its shell was in, or at or under a path the command names (also inside a
   script's quotes), read from that folder or one the command `cd`s to. In the owner's session a test run in `qa-ts/`

@@ -2279,6 +2279,19 @@ var require_lens = __commonJS({
         ];
         return words.some((w) => dirs.some((d) => under(resolve(w, d))));
       }
+      function changedBeforeRun(cmd, file, cfg) {
+        const text = String(cmd || "");
+        const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
+        if (!run) return false;
+        const path2 = String(file || "");
+        const name = path2.split("/").pop();
+        if (!name) return false;
+        const at = text.search(new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`));
+        if (at >= 0) return at < run.index;
+        const head2 = text.slice(0, run.index).replace(/(?:^|[;&|\n(])\s*cd\s+\S+/g, " ");
+        const words = (head2.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).map((w) => w.replace(/^\.\//, "").replace(/\/+$/, ""));
+        return words.some((w) => w === "." || /^[\w.-]+(?:\/[\w.-]+)*$/.test(w) && !w.startsWith("-") && ("/" + path2).includes("/" + w + "/"));
+      }
       const SUBAGENT_LINE = "sessionlens-subagent";
       function joinSubagents(text, subs) {
         const parts = [String(text || "").replace(/\n+$/, "")];
@@ -2442,17 +2455,18 @@ var require_lens = __commonJS({
               if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
                 const heredocs = heredocsOf[b.tool_use_id || ""] || [];
                 const sh = shellOf[b.tool_use_id || ""] || {};
+                const from = out.length;
                 for (const d of tur.bashEditDiff.files) {
                   const full = d && typeof d.filePath === "string" ? d.filePath : "";
                   if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
                   if (!commandOwns(full, sh.cmd, sh.dir)) continue;
                   const h = heredocs.find((y) => y.file === full);
-                  const made = d.hunks.every((k) => !k.oldStart && !k.oldLines);
-                  const o0 = made ? null : h ? h.before : base(full);
-                  const applied = made ? { text: hunkLines(d.hunks, "+") } : o0 == null ? null : applyHunks(o0, d.hunks);
+                  const made2 = d.hunks.every((k) => !k.oldStart && !k.oldLines);
+                  const o0 = made2 ? null : h ? h.before : base(full);
+                  const applied = made2 ? { text: hunkLines(d.hunks, "+") } : o0 == null ? null : applyHunks(o0, d.hunks);
                   const o = applied ? o0 : null;
                   const after = applied ? applied.text : hunkLines(d.hunks, " +");
-                  const x = h ? h.x : by({ seq: seq++, ts, kind: made ? "write" : "edit", tool: "Bash", file: short(full), cmd: "" });
+                  const x = h ? h.x : by({ seq: seq++, ts, kind: made2 ? "write" : "edit", tool: "Bash", file: short(full), cmd: "" });
                   if (!h) keepBefore(x, full, o, cfg);
                   delete x.assert_delta;
                   if (o != null && isCode(full, cfg)) {
@@ -2469,6 +2483,17 @@ var require_lens = __commonJS({
                     x.fragment_only = true;
                   }
                   if (!h) out.push(x);
+                }
+                const made = out.slice(from);
+                const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg));
+                if (first.length && out[from - 1] === r) {
+                  const order = [...first, r, ...made.filter((x) => !first.includes(x))];
+                  order.forEach((x, i) => x.seq = r.seq + i);
+                  out.splice(from - 1, order.length, ...order);
+                  if (r.thought) {
+                    first[0].thought = r.thought;
+                    delete r.thought;
+                  }
                 }
               }
               const c = b.content;
@@ -3408,7 +3433,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 16;
+      const IMPORT_GEN = 17;
       const SHELL_EDIT = /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
       function shellEditsBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
@@ -3471,6 +3496,18 @@ var require_lens = __commonJS({
         const cut = (w) => String(w.reason || "").replace(/^comparison → truthiness: /, "").split(" → ").some((half) => half.length === 40);
         return s.events.some((e) => e.assert_delta && Array.isArray(e.assert_delta.weakened) && e.assert_delta.weakened.some(cut));
       }
+      function editsAfterOwnRun(s) {
+        const cfg = profile(s.profile);
+        return s.events.some((e, i) => {
+          if (e.kind !== "run_tests") return false;
+          for (let j = i + 1; j < s.events.length; j++) {
+            const x = s.events[j];
+            if (x.tool !== "Bash" || x.cmd || !["edit", "write"].includes(x.kind)) return false;
+            if (changedBeforeRun(e.cmd, x.file, cfg)) return true;
+          }
+          return false;
+        });
+      }
       function needsReimport(s) {
         if (!s || !Array.isArray(s.events) || s.importGen >= IMPORT_GEN) return false;
         if ((s.importGen || 0) < 3 && codexChangesBefore121(s)) return true;
@@ -3483,6 +3520,7 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
         if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+        if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
         if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;
         if ((s.importGen || 0) < 10 && s.events.some((e) => e.kind === "write" && !e.file && playwrightTestTool(e.tool) === "write")) return true;

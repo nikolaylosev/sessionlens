@@ -1312,6 +1312,27 @@
     return words.some((w) => dirs.some((d) => under(resolve(w, d))));
   }
 
+  /* Whether a command changed a file before it ran its tests (0.1.140): `f=a.spec.ts && perl -0pi -e '…' $f && npx
+     playwright test`, `python3 - <<EOF … Path("src/api.test.ts") … EOF` and then `pnpm test`. Claude Code's diff of the
+     files comes with the command's result, so each such edit was a step after the run: when the run was red, a fix right
+     after a failure, though the run had tested the edited file (the owner's session, #269/#270). The file's name comes
+     before the first part of the command that runs tests; or the command does not name the file, and a folder of it
+     comes before the run (`npx prettier --write src tests; npx vitest run`, `ruff format .`), not as the folder of a
+     `cd`. A file named only after the run, or whose folder comes only after it, stays after it. */
+  function changedBeforeRun(cmd, file, cfg) {
+    const text = String(cmd || "");
+    const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
+    if (!run) return false;
+    const path = String(file || "");
+    const name = path.split("/").pop();
+    if (!name) return false;
+    const at = text.search(new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`));
+    if (at >= 0) return at < run.index;
+    const head = text.slice(0, run.index).replace(/(?:^|[;&|\n(])\s*cd\s+\S+/g, " ");
+    const words = (head.match(/[^\s;&|()<>='"`,[\]{}]+/g) || []).map((w) => w.replace(/^\.\//, "").replace(/\/+$/, ""));
+    return words.some((w) => w === "." || (/^[\w.-]+(?:\/[\w.-]+)*$/.test(w) && !w.startsWith("-") && ("/" + path).includes("/" + w + "/")));
+  }
+
   /* Claude Code keeps a subagent's steps (the Agent tool: Playwright's planner, generator and healer, Explore…) in
      <session>/subagents/agent-<id>.jsonl, next to agent-<id>.meta.json with its agentType; the session's own file has
      only the Agent call and its answer. The host appends those files to the session's text (0.1.127): a line
@@ -1531,6 +1552,7 @@
           if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
             const heredocs = heredocsOf[b.tool_use_id || ""] || [];
             const sh = shellOf[b.tool_use_id || ""] || {};
+            const from = out.length; // the steps of the files it changed start here
             for (const d of tur.bashEditDiff.files) {
               const full = d && typeof d.filePath === "string" ? d.filePath : "";
               if (!full || SCRATCH_FILE.test(full) || !Array.isArray(d.hunks) || !d.hunks.length) continue;
@@ -1560,6 +1582,19 @@
                 x.fragment_only = true;
               }
               if (!h) out.push(x);
+            }
+            /* the files it changed before its tests ran go before the run (changedBeforeRun), with the reasoning before
+               the command; only when nothing came between the command and its result (a call made along with it) */
+            const made = out.slice(from);
+            const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg));
+            if (first.length && out[from - 1] === r) {
+              const order = [...first, r, ...made.filter((x) => !first.includes(x))];
+              order.forEach((x, i) => (x.seq = r.seq + i));
+              out.splice(from - 1, order.length, ...order);
+              if (r.thought) {
+                first[0].thought = r.thought;
+                delete r.thought;
+              }
             }
           }
           const c = b.content;
@@ -2787,8 +2822,10 @@
         from the folder its shell was in (`dir`), and the files a command changed, from Claude Code's diff of them
         (bashEditDiff; 0.1.139).
      16: a test or a function with fewer assertions keeps the assertions the file's other blocks gained in that edit
-        (`added`), so assert_weakened sees one moved within the file (0.1.140). */
-  const IMPORT_GEN = 16;
+        (`added`), so assert_weakened sees one moved within the file (0.1.140).
+     17: a file a Claude Code command changed before it ran its tests is a step before the run, not after it
+        (changedBeforeRun, 0.1.140). */
+  const IMPORT_GEN = 17;
   /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
      at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
      cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
@@ -2911,6 +2948,20 @@
   /* A session imported before 0.1.113 may hide test_deleted and config_weakened findings that a new import shows: it
      wrote or edited a test file or a runner config and has none of what the 0.1.113 import keeps for them. A session
      imported with 0.1.113 that only wrote new files looks the same; importing it again changes nothing there. */
+  /* A session imported before 0.1.140 (IMPORT_GEN 17) with a test run right before an edit from its own command's diff
+     (a Bash step with no command of its own) that the command made before it ran its tests. */
+  function editsAfterOwnRun(s) {
+    const cfg = profile(s.profile);
+    return s.events.some((e, i) => {
+      if (e.kind !== "run_tests") return false;
+      for (let j = i + 1; j < s.events.length; j++) {
+        const x = s.events[j];
+        if (x.tool !== "Bash" || x.cmd || !["edit", "write"].includes(x.kind)) return false;
+        if (changedBeforeRun(e.cmd, x.file, cfg)) return true;
+      }
+      return false;
+    });
+  }
   function needsReimport(s) {
     if (!s || !Array.isArray(s.events) || s.importGen >= IMPORT_GEN) return false;
     if ((s.importGen || 0) < 3 && codexChangesBefore121(s)) return true;
@@ -2923,6 +2974,8 @@
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
     if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+    // a run followed by a file its own command changed before it (0.1.140)
+    if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
     // fewer assertions in an edit, without what the file's other blocks gained in it (0.1.140)
     if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
     // a write or a run of Playwright's test agents stored as a plain tool step (0.1.127)

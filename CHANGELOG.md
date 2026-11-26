@@ -41,6 +41,14 @@
   agreed, yet each was a "raw locator" finding. Now a raw or positional locator is not reported when the comment on
   its line, or right above it, says `locator-exception` with a reason, and a raw locator is not reported when you
   quoted its selector in a message.
+- **A change a command makes before it runs the tests comes before that run.** Agents often change a file and run
+  the tests in one command, such as `sed -i … a.spec.ts && npx playwright test`. Claude Code reports the changed file
+  with the command's result, so SessionLens put the change after the run. When the run failed, the change read as a
+  fix right after a failure with no triage, though the run had already tested it; when the agent then said the tests
+  pass, the change read as made after the last run. Now a change to a file the command names before its test run, or
+  to a file in a folder it names there (a formatter), is a step before the run. In our sessions this took out 279
+  findings and added 207. Most of the added ones are the same check on the right change: a fix after the failure that
+  came before the command. A session imported before shows **Import again**.
 
 ## 0.1.139
 
