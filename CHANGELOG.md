@@ -49,6 +49,15 @@
   to a file in a folder it names there (a formatter), is a step before the run. In our sessions this took out 279
   findings and added 207. Most of the added ones are the same check on the right change: a fix after the failure that
   came before the command. A session imported before shows **Import again**.
+- **Tests run through a package script are test runs.** Agents often run tests through a script of the project, such
+  as `npm run -s unit -- tests/unit/log.spec.ts`. The command does not name the test runner, so SessionLens read it as
+  some other command: in one of our sessions the agent ran its unit tests this way 12 times, and no check saw those
+  runs or their failures. Now a command is a test run when it runs a script whose name says it tests (`unit`, `test:e2e`,
+  `check`, `ci`…, or a runner through `pnpm exec`) and its output has a test result. A build, a type check or a lint
+  script is not one, even when its output has "passed" in it. In our sessions 131 findings of product code changed
+  "right after a failing run" became medium, as a green run came between; three "tests never run" and "claims tests
+  pass" findings went away; and 30 fixes right after a failure, and 10 deleted test files that the last run did not
+  run, are now seen. A session imported before shows **Import again**.
 
 ## 0.1.139
 

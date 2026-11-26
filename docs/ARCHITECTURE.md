@@ -474,6 +474,12 @@ flowchart TD
   `run_tests` (it matches the profile's runner and does not only list the tests, `isTestRun`) or `run_other`, and
   the runner's output is parsed into
   passed/failed counts by `runners.*` (pytest, jest/Playwright, JUnit, dotnet, go, newman, karate).
+  **A package script's run** (since 0.1.140, `testResult`): a `run_other` command is `run_tests` when its output reads
+  as a test result and a part of it starts with `npm`/`pnpm`/`yarn`/`bun` (after variables and `time`) and runs a
+  script, or a runner by `exec`/`dlx`/`x`, whose name says it tests: a part of the name, split at `: . _ -`, is in
+  `TEST_SCRIPT` (`unit`, `test:e2e`, `check`, `ci`, `vitest`…) and none is in `NOT_TEST_SCRIPT` (`lint`, `build`,
+  `typecheck`, `format`…). The command's text in quotes and in here-documents is blanked first (`shellText`), so a
+  script named inside `node -e '…'` or a commit message is none. Codex and the plain transcript read it the same way.
   **The agent's reasoning** (since 0.1.139): Claude Code's `thinking` blocks (often with no text) give no step; their
   last 2,000 characters go with the agent's next step as `thought` (per agent, a subagent's with its own steps; a
   message of the person ends it), so the steps keep their numbers. `fix_after_fail_without_triage` reads it as half a
