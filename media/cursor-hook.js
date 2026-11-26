@@ -2115,6 +2115,80 @@ var require_lens = __commonJS({
       function isTestRun(cmd, cfg) {
         return cmd.split(/&&|\|\|?|;|\n/).some((part) => cfg.test_runner_patterns.some((p) => part.includes(p)) && !LIST_ONLY.test(part) && !NOT_A_RUN.test(part));
       }
+      const SCRIPT_RUN = /^\s*\(?\s*(?:\w+=\S*\s+)*(?:time\s+)?(?:npm|pnpm|yarn|bun)\s+(?:-{1,2}[\w-]+\s+)*(?:(?:run(?:-script)?|exec|dlx|x)\s+(?:-{1,2}[\w-]+\s+)*)?([\w:.-]+)/;
+      const TEST_SCRIPT = /* @__PURE__ */ new Set([
+        "test",
+        "tests",
+        "t",
+        "spec",
+        "specs",
+        "unit",
+        "units",
+        "e2e",
+        "it",
+        "integration",
+        "acceptance",
+        "smoke",
+        "regression",
+        "check",
+        "checks",
+        "ci",
+        "verify",
+        "coverage",
+        "cov",
+        "vitest",
+        "jest",
+        "mocha",
+        "ava",
+        "tap",
+        "playwright",
+        "pw",
+        "cypress",
+        "cy",
+        "pytest"
+      ]);
+      const NOT_TEST_SCRIPT = /* @__PURE__ */ new Set(["lint", "eslint", "build", "typecheck", "tsc", "types", "format", "fmt", "prettier"]);
+      const testScript = (part) => {
+        const m = SCRIPT_RUN.exec(part);
+        if (m && m[1].toLowerCase().split(/[:._-]/).some((w) => NOT_TEST_SCRIPT.has(w)))
+          return false;
+        return !!m && m[1].toLowerCase().split(/[:._-]/).some((w) => TEST_SCRIPT.has(w));
+      };
+      function shellText(cmd) {
+        const t = String(cmd || "");
+        let out = "";
+        for (let i = 0; i < t.length; i++) {
+          const c = t[i];
+          const h = c === "<" && /^<<-?\s*(['"]?)([\w-]+)\1/.exec(t.slice(i));
+          if (h) {
+            const end = t.indexOf("\n", i);
+            const body = end < 0 ? -1 : t.slice(end + 1).search(new RegExp(`^\\s*${h[2]}\\s*$`, "m"));
+            if (body < 0) {
+              out += t.slice(i);
+              break;
+            }
+            const stop = end + 1 + body;
+            out += t.slice(i, end + 1) + t.slice(end + 1, stop).replace(/[^\n]/g, " ");
+            i = stop - 1;
+          } else if (c === "'" || c === '"') {
+            let j = i + 1;
+            while (j < t.length && t[j] !== c) j += c === '"' && t[j] === "\\" ? 2 : 1;
+            out += c + t.slice(i + 1, j).replace(/[^\n]/g, " ") + (t[j] || "");
+            i = j;
+          } else out += c;
+        }
+        return out;
+      }
+      const runsScript = (cmd) => shellText(cmd).split(/&&|\|\|?|;|\n/).some((part) => testScript(part) && !LIST_ONLY.test(part) && !NOT_A_RUN.test(part));
+      function testResult(r, out, cfg) {
+        if (r.kind !== "run_tests" && !(r.kind === "run_other" && runsScript(r.cmd))) return null;
+        const tr = parseTests(out, cfg);
+        if (!tr) return null;
+        r.kind = "run_tests";
+        r.tests = tr;
+        r.exit_code = tr.failed || tr.errors ? 1 : 0;
+        return tr;
+      }
       const PW_TEST = { generator_write_test: "write", planner_save_plan: "write", test_run: "run", test_debug: "run" };
       function playwrightTestTool(tool) {
         const p = mcpParts(tool);
@@ -2279,9 +2353,9 @@ var require_lens = __commonJS({
         ];
         return words.some((w) => dirs.some((d) => under(resolve(w, d))));
       }
-      function changedBeforeRun(cmd, file, cfg) {
+      function changedBeforeRun(cmd, file, cfg, scripts) {
         const text = String(cmd || "");
-        const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
+        const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg) || scripts && runsScript(m[0]));
         if (!run) return false;
         const path2 = String(file || "");
         const name = path2.split("/").pop();
@@ -2452,6 +2526,10 @@ var require_lens = __commonJS({
               const rf = r.tool === "Read" && tur && typeof tur === "object" ? tur.file : null;
               if (rf && typeof rf.filePath === "string" && typeof rf.content === "string" && rf.startLine === 1 && rf.numLines === rf.totalLines && !rf.truncatedByTokenCap)
                 files[rf.filePath] = rf.content;
+              const c = b.content;
+              const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x && x.text || "").join("\n") : JSON.stringify(c || "");
+              r.text = t.slice(0, 3e3);
+              testResult(r, t, cfg);
               if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
                 const heredocs = heredocsOf[b.tool_use_id || ""] || [];
                 const sh = shellOf[b.tool_use_id || ""] || {};
@@ -2485,7 +2563,7 @@ var require_lens = __commonJS({
                   if (!h) out.push(x);
                 }
                 const made = out.slice(from);
-                const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg));
+                const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg, r.kind === "run_tests"));
                 if (first.length && out[from - 1] === r) {
                   const order = [...first, r, ...made.filter((x) => !first.includes(x))];
                   order.forEach((x, i) => x.seq = r.seq + i);
@@ -2494,16 +2572,6 @@ var require_lens = __commonJS({
                     first[0].thought = r.thought;
                     delete r.thought;
                   }
-                }
-              }
-              const c = b.content;
-              const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x && x.text || "").join("\n") : JSON.stringify(c || "");
-              r.text = t.slice(0, 3e3);
-              if (r.kind === "run_tests") {
-                const tr = parseTests(t, cfg);
-                if (tr) {
-                  r.tests = tr;
-                  r.exit_code = tr.failed || tr.errors ? 1 : 0;
                 }
               }
               if (b.is_error) r.exit_code = r.exit_code ?? 1;
@@ -2689,13 +2757,7 @@ var require_lens = __commonJS({
             const o = p.output;
             const t = typeof o === "string" ? o : Array.isArray(o) ? o.map((x) => x && x.text || "").join("\n") : JSON.stringify(o || "");
             r.text = t.slice(0, 3e3);
-            if (r.kind === "run_tests") {
-              const tr = parseTests(t, cfg);
-              if (tr) {
-                r.tests = tr;
-                r.exit_code = tr.failed || tr.errors ? 1 : 0;
-              }
-            }
+            testResult(r, t, cfg);
             continue;
           }
         }
@@ -3095,14 +3157,9 @@ var require_lens = __commonJS({
             buf.push(m[1]);
             continue;
           }
-          if (last && last.kind === "run_tests" && /\d+ (passed|failed|total)|Tests run:|--- (?:FAIL|PASS)|^ok\s|^FAIL\s/.test(line)) {
-            const tr = parseTests(line, cfg);
-            if (tr) {
-              last.tests = tr;
-              last.exit_code = tr.failed || tr.errors ? 1 : 0;
-              last.text = ((last.text || "") + "\n" + line).slice(-3e3);
-              continue;
-            }
+          if (last && /\d+ (passed|failed|total)|Tests run:|--- (?:FAIL|PASS)|^ok\s|^FAIL\s/.test(line) && testResult(last, line, cfg)) {
+            last.text = ((last.text || "") + "\n" + line).slice(-3e3);
+            continue;
           }
           if (last && last.kind === "run_tests" && /^FAILED/.test(line)) {
             last.tests = last.tests || { passed: 0, failed: 0, errors: 0, failed_names: [] };
@@ -3433,7 +3490,7 @@ var require_lens = __commonJS({
         if (!Array.isArray(events) || !events.length || events.some((e) => e.kind !== "user" && e.kind !== "message")) return false;
         return /"type"\s*:\s*"(?:tool_call|tool_use|function_call|tool-call)"|"tool_calls"\s*:\s*\[/.test(t.slice(0, 2e6));
       }
-      const IMPORT_GEN = 17;
+      const IMPORT_GEN = 18;
       const SHELL_EDIT = /(?:^|[;&|\n(]\s*)(?:sed\s+(?:-\S+\s+)*-[a-zA-Z]*i|perl\s+-[a-zA-Z]*i)|\bpython3?\b[^\n]*(?:<<|-c)[\s\S]*?(?:open\([^)]*['"][wa]|write_text\()|\bnode\s+-e[\s\S]*?(?:writeFileSync|appendFileSync)/;
       function shellEditsBefore139(s) {
         if (!s || s.agent !== "claude-code") return false;
@@ -3503,7 +3560,7 @@ var require_lens = __commonJS({
           for (let j = i + 1; j < s.events.length; j++) {
             const x = s.events[j];
             if (x.tool !== "Bash" || x.cmd || !["edit", "write"].includes(x.kind)) return false;
-            if (changedBeforeRun(e.cmd, x.file, cfg)) return true;
+            if (changedBeforeRun(e.cmd, x.file, cfg, true)) return true;
           }
           return false;
         });
@@ -3520,6 +3577,8 @@ var require_lens = __commonJS({
         if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
         if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
         if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+        if ((s.importGen || 0) < 18 && s.events.some((e) => e.kind === "run_other" && runsScript(e.cmd) && (parseTests(e.text || "", profile(s.profile)) || (e.text || "").length >= 3e3)))
+          return true;
         if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
         if ((s.importGen || 0) < 16 && s.events.some((e) => e.assert_delta && (e.assert_delta.removed || []).some((r) => !Array.isArray(r.added)))) return true;
         if ((s.importGen || 0) < 9 && s.events.some((e) => e.kind === "tool" && playwrightTestTool(e.tool))) return true;

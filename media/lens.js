@@ -1077,6 +1077,83 @@
   function isTestRun(cmd, cfg) {
     return cmd.split(/&&|\|\|?|;|\n/).some((part) => cfg.test_runner_patterns.some((p) => part.includes(p)) && !LIST_ONLY.test(part) && !NOT_A_RUN.test(part));
   }
+  /* A package script that ran tests (0.1.140): `npm run -s unit -- tests/unit/log.spec.ts`, `yarn e2e`, `pnpm exec
+     vitest run`. The runner is in package.json, which the session may never show, so the command alone does not tell:
+     in the owner's session the agent ran its unit tests 12 times as `npm run -s unit`, and each was "another command",
+     so no check saw those runs or their failures. Such a step is a test run when its output reads as one (parseTests)
+     and a part of the command (shellText: not inside quotes or a here-document) starts with npm, pnpm, yarn or bun,
+     after variables and `time`, running a script or a runner whose name says it tests: a part of the name, split at
+     : . _ -, is in TEST_SCRIPT and none is in NOT_TEST_SCRIPT. Not build, typecheck or lint:tests: their output can hold
+     "N passed" in a file they print. */
+  const SCRIPT_RUN =
+    /^\s*\(?\s*(?:\w+=\S*\s+)*(?:time\s+)?(?:npm|pnpm|yarn|bun)\s+(?:-{1,2}[\w-]+\s+)*(?:(?:run(?:-script)?|exec|dlx|x)\s+(?:-{1,2}[\w-]+\s+)*)?([\w:.-]+)/;
+  // prettier-ignore
+  const TEST_SCRIPT = new Set([
+    "test", "tests", "t", "spec", "specs", "unit", "units", "e2e", "it", "integration", "acceptance", "smoke", "regression",
+    "check", "checks", "ci", "verify", "coverage", "cov", "vitest", "jest", "mocha", "ava", "tap", "playwright", "pw",
+    "cypress", "cy", "pytest",
+  ]);
+  // a name with one of these in it checks something else: lint:tests, build:test, format:spec
+  const NOT_TEST_SCRIPT = new Set(["lint", "eslint", "build", "typecheck", "tsc", "types", "format", "fmt", "prettier"]);
+  const testScript = (part) => {
+    const m = SCRIPT_RUN.exec(part);
+    if (
+      m &&
+      m[1]
+        .toLowerCase()
+        .split(/[:._-]/)
+        .some((w) => NOT_TEST_SCRIPT.has(w))
+    )
+      return false;
+    return (
+      !!m &&
+      m[1]
+        .toLowerCase()
+        .split(/[:._-]/)
+        .some((w) => TEST_SCRIPT.has(w))
+    );
+  };
+  /* the shell's own text of a command: what is in quotes and the bodies of here-documents blanked (a script for node -e
+     or python3, a commit message), so that their lines, | and ; are not parts of the command */
+  function shellText(cmd) {
+    const t = String(cmd || "");
+    let out = "";
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      const h = c === "<" && /^<<-?\s*(['"]?)([\w-]+)\1/.exec(t.slice(i));
+      if (h) {
+        const end = t.indexOf("\n", i);
+        const body = end < 0 ? -1 : t.slice(end + 1).search(new RegExp(`^\\s*${h[2]}\\s*$`, "m"));
+        if (body < 0) {
+          out += t.slice(i);
+          break;
+        }
+        const stop = end + 1 + body;
+        out += t.slice(i, end + 1) + t.slice(end + 1, stop).replace(/[^\n]/g, " ");
+        i = stop - 1;
+      } else if (c === "'" || c === '"') {
+        let j = i + 1;
+        while (j < t.length && t[j] !== c) j += c === '"' && t[j] === "\\" ? 2 : 1;
+        out += c + t.slice(i + 1, j).replace(/[^\n]/g, " ") + (t[j] || "");
+        i = j;
+      } else out += c;
+    }
+    return out;
+  }
+  const runsScript = (cmd) =>
+    shellText(cmd)
+      .split(/&&|\|\|?|;|\n/)
+      .some((part) => testScript(part) && !LIST_ONLY.test(part) && !NOT_A_RUN.test(part));
+  // a step's kind and test result from its command and output: a script's run becomes run_tests when its output has one
+  function testResult(r, out, cfg) {
+    if (r.kind !== "run_tests" && !(r.kind === "run_other" && runsScript(r.cmd))) return null;
+    const tr = parseTests(out, cfg);
+    if (!tr) return null;
+    r.kind = "run_tests";
+    r.tests = tr;
+    r.exit_code = tr.failed || tr.errors ? 1 : 0;
+    return tr;
+  }
   /* Playwright's test agents (npx playwright init-agents: planner, generator, healer) work through Playwright's MCP
      server, "playwright-test" (0.1.127). The generator writes a test with generator_write_test {fileName, code}, the
      planner a plan with planner_save_plan {fileName, …}; test_run {locations} and test_debug {test}
@@ -1319,9 +1396,10 @@
      before the first part of the command that runs tests; or the command does not name the file, and a folder of it
      comes before the run (`npx prettier --write src tests; npx vitest run`, `ruff format .`), not as the folder of a
      `cd`. A file named only after the run, or whose folder comes only after it, stays after it. */
-  function changedBeforeRun(cmd, file, cfg) {
+  function changedBeforeRun(cmd, file, cfg, scripts) {
     const text = String(cmd || "");
-    const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg));
+    // scripts: the step is a test run by its output (testResult), so a package script's part may be the run
+    const run = [...text.matchAll(/[^;&|\n]+/g)].find((m) => isTestRun(m[0], cfg) || (scripts && runsScript(m[0])));
     if (!run) return false;
     const path = String(file || "");
     const name = path.split("/").pop();
@@ -1549,6 +1627,11 @@
             !rf.truncatedByTokenCap
           )
             files[rf.filePath] = rf.content;
+          // the output, and a test run's result: before the command's files, which go before a run they came before
+          const c = b.content;
+          const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (x && x.text) || "").join("\n") : JSON.stringify(c || "");
+          r.text = t.slice(0, 3000);
+          testResult(r, t, cfg);
           if (r.tool === "Bash" && tur && typeof tur === "object" && tur.bashEditDiff && Array.isArray(tur.bashEditDiff.files)) {
             const heredocs = heredocsOf[b.tool_use_id || ""] || [];
             const sh = shellOf[b.tool_use_id || ""] || {};
@@ -1586,7 +1669,7 @@
             /* the files it changed before its tests ran go before the run (changedBeforeRun), with the reasoning before
                the command; only when nothing came between the command and its result (a call made along with it) */
             const made = out.slice(from);
-            const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg));
+            const first = made.filter((x) => changedBeforeRun(sh.cmd, x.file, cfg, r.kind === "run_tests"));
             if (first.length && out[from - 1] === r) {
               const order = [...first, r, ...made.filter((x) => !first.includes(x))];
               order.forEach((x, i) => (x.seq = r.seq + i));
@@ -1595,16 +1678,6 @@
                 first[0].thought = r.thought;
                 delete r.thought;
               }
-            }
-          }
-          const c = b.content;
-          const t = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (x && x.text) || "").join("\n") : JSON.stringify(c || "");
-          r.text = t.slice(0, 3000);
-          if (r.kind === "run_tests") {
-            const tr = parseTests(t, cfg);
-            if (tr) {
-              r.tests = tr;
-              r.exit_code = tr.failed || tr.errors ? 1 : 0;
             }
           }
           if (b.is_error) r.exit_code = r.exit_code ?? 1;
@@ -1846,13 +1919,7 @@
         const o = p.output;
         const t = typeof o === "string" ? o : Array.isArray(o) ? o.map((x) => (x && x.text) || "").join("\n") : JSON.stringify(o || "");
         r.text = t.slice(0, 3000);
-        if (r.kind === "run_tests") {
-          const tr = parseTests(t, cfg);
-          if (tr) {
-            r.tests = tr;
-            r.exit_code = tr.failed || tr.errors ? 1 : 0;
-          }
-        }
+        testResult(r, t, cfg);
         continue;
       }
     }
@@ -2364,14 +2431,9 @@
         buf.push(m[1]);
         continue;
       }
-      if (last && last.kind === "run_tests" && /\d+ (passed|failed|total)|Tests run:|--- (?:FAIL|PASS)|^ok\s|^FAIL\s/.test(line)) {
-        const tr = parseTests(line, cfg);
-        if (tr) {
-          last.tests = tr;
-          last.exit_code = tr.failed || tr.errors ? 1 : 0;
-          last.text = ((last.text || "") + "\n" + line).slice(-3000);
-          continue;
-        }
+      if (last && /\d+ (passed|failed|total)|Tests run:|--- (?:FAIL|PASS)|^ok\s|^FAIL\s/.test(line) && testResult(last, line, cfg)) {
+        last.text = ((last.text || "") + "\n" + line).slice(-3000);
+        continue;
       }
       if (last && last.kind === "run_tests" && /^FAILED/.test(line)) {
         last.tests = last.tests || { passed: 0, failed: 0, errors: 0, failed_names: [] };
@@ -2824,8 +2886,10 @@
      16: a test or a function with fewer assertions keeps the assertions the file's other blocks gained in that edit
         (`added`), so assert_weakened sees one moved within the file (0.1.140).
      17: a file a Claude Code command changed before it ran its tests is a step before the run, not after it
-        (changedBeforeRun, 0.1.140). */
-  const IMPORT_GEN = 17;
+        (changedBeforeRun, 0.1.140).
+     18: a package script's command whose output reads as a test result is a test run (`npm run -s unit`, testResult,
+        0.1.140). */
+  const IMPORT_GEN = 18;
   /* A Claude Code session imported before 0.1.139 whose shell left the session's folder: a file a command wrote may sit
      at a path that does not exist, and a command's step has no `dir`. With the text kept, the text says so: a record's
      cwd other than the first one. Without it, a file written by a shell command stands for it: a stored step does not
@@ -2957,7 +3021,7 @@
       for (let j = i + 1; j < s.events.length; j++) {
         const x = s.events[j];
         if (x.tool !== "Bash" || x.cmd || !["edit", "write"].includes(x.kind)) return false;
-        if (changedBeforeRun(e.cmd, x.file, cfg)) return true;
+        if (changedBeforeRun(e.cmd, x.file, cfg, true)) return true;
       }
       return false;
     });
@@ -2974,6 +3038,13 @@
     if ((s.importGen || 0) < 10 && cursorEditsMissing(s)) return true;
     if ((s.importGen || 0) < 14 && cursorRunsUnknown(s)) return true;
     if ((s.importGen || 0) < 15 && (requestCopiesBefore139(s) || shellMovedBefore139(s) || shellEditsBefore139(s) || thinkingBefore139(s))) return true;
+    /* a package script's command kept as another command whose output reads as a test result, or was cut where the
+       result may be (the step keeps 3,000 characters of it; 0.1.140) */
+    if (
+      (s.importGen || 0) < 18 &&
+      s.events.some((e) => e.kind === "run_other" && runsScript(e.cmd) && (parseTests(e.text || "", profile(s.profile)) || (e.text || "").length >= 3000))
+    )
+      return true;
     // a run followed by a file its own command changed before it (0.1.140)
     if ((s.importGen || 0) < 17 && editsAfterOwnRun(s)) return true;
     // fewer assertions in an edit, without what the file's other blocks gained in it (0.1.140)

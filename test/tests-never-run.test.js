@@ -99,7 +99,13 @@ test("a test script run through npm, pnpm or yarn is a run of the runner (0.1.12
     assert.deepEqual(ran("qa-ts", "e2e/cart.spec.ts", cmd), [], cmd);
   for (const cmd of ["npm test", "npm run test:e2e", "npm run cypress:run"]) assert.deepEqual(ran("qa-cypress", "cypress/e2e/cart.cy.ts", cmd), [], cmd);
   assert.deepEqual(ran("qa-api", "tests/cart.test.ts", "npm run test:api"), [], "qa-api");
-  assert.deepEqual(ran("qa-ts", "e2e/cart.spec.ts", "npm run build"), [never(1)], "another script is not a run");
+  // another script is a run by its output since 0.1.140 (`npm run -s unit`): one with no test result is none
+  const built = found("qa-ts", [
+    ["write", "e2e/cart.spec.ts", TS],
+    ["bash", "npm run build", "vite v5.4.0 building for production...\n✓ built in 1.20s"],
+  ]);
+  assert.deepEqual(built, [never(1)], "another script with no test result is not a run");
+  assert.deepEqual(ran("qa-ts", "e2e/cart.spec.ts", "npm run -s unit -- tests/unit/log.spec.ts"), [], "a script whose output is a test result");
 });
 
 test("a command that only lists the tests is not a run (0.1.122; before, a run with no result)", () => {
