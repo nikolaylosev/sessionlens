@@ -246,32 +246,27 @@ export function initCalibration() {
       if (choice === null) return;
       if (choice === "overwrite") overwriteId = prevList[0].id;
     }
-    const ex = $("#gen-skill-examples").checked ? await buildExamples(pickedRuleKeys()) : { files: [], rows: [], masked: 0 };
-    // the model only learns which example files exist, so it can link to them; their content is never sent
-    const exList = ex.rows.length
-      ? "\n\n## Example files\n" +
-        [...new Set(ex.rows.map((r) => r.k))]
-          .map(
-            (k) =>
-              `- ${k}: ` +
-              ex.rows
-                .filter((r) => r.k === k)
-                .map((r) => r.path)
-                .join(", "),
-          )
-          .join("\n") +
-        "\n"
-      : "";
+    const keys = pickedRuleKeys();
+    const full = await skillSessions(keys);
+    // the sessions' whole files go to the skill's history, outside the skill; the model never sees them (0.1.141)
+    const ex = $("#gen-skill-examples").checked
+      ? LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS })
+      : { files: [], rows: [], masked: 0 };
     // without the evidence's sessions and steps: a skill keeps no history (0.1.141)
-    const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body) + exList;
+    const md = T("rules_title", { f: rulesTargetLabel() }) + "\n\n" + LensRules.skillInput(body);
     btn.disabled = true;
     st.textContent = T("gen_skill_wait");
     try {
       const r = await LensAI.generateSkill(md, state.settings, undefined, rulesTargetLabel());
-      r.files = r.files.filter((f) => !/^examples\//.test(f.path)).concat(ex.files); // examples come from real sessions only
+      // the skill as the model wrote it, its line that names the history, and the history (0.1.141)
+      const own = r.files
+        .filter((f) => !/^(?:examples|skill-history)\//.test(f.path))
+        .map((f) => (f.path === "SKILL.md" ? { ...f, content: f.content.replace(/\s*$/, "\n\n" + LensRules.historyLine(r.skill_name) + "\n") } : f));
+      const history = LensRules.skillHistory(keys, (k) => reviewedFor(k, full), { name: r.skill_name, at: new Date().toISOString(), bad: ex.files.length > 0 });
+      r.files = own.concat(history, ex.files);
       // checked without a model: sizes, numbering, history, the examples' names and rules, the script (0.1.141)
       try {
-        r.check = LensRules.checkSkill(r.files, await skillContext(pickedRuleKeys()));
+        r.check = LensRules.checkSkill(r.files, await skillContext(full));
       } catch (e) {
         r.check = null;
       }
@@ -663,35 +658,34 @@ export function confirmedFor(k, full) {
   return out;
 }
 
-export async function buildExamples(keys) {
-  // only the sessions with a confirmed finding of a picked rule are read, BATCH at a time
-  const full = {};
-  await fetchSessions(
-    metas()
-      .filter((m) => (m.confirmed || []).some((c) => keys.includes(c.check)))
-      .map((m) => m.id),
-    (s) => {
-      full[s.id] = s;
-    },
-  );
-  // the folder itself is LensRules.skillExamples (0.1.139: one copy of a file two rules need)
-  return LensRules.skillExamples(keys, (k) => confirmedFor(k, full), { perRule: EXAMPLE_FILES_PER_RULE, maxChars: EXAMPLE_MAX_CHARS });
-}
-
 /* What a generated skill is checked against (0.1.141): the code the sessions of its rules wrote (a name in its examples
    that none of it has may be invented), and the checks of their profile on a snippet: the lint engine and the regex
    checks that read code alone. A check that needs a session (a run, a plan, a number that needs its test) is left out. */
 const SNIPPET_CHECKS = new Set(["sleep_or_skip_added", "focused_test", "debug_leftover", "weak_assert", "fragile_wait", "hardcoded_secret"]);
-async function skillContext(keys) {
+// the sessions a skill of these rules is made from: each with a finding of one of them (0.1.141: for the history too)
+async function skillSessions(keys) {
   const full = {};
   await fetchSessions(
     metas()
-      .filter((m) => (m.confirmed || []).some((c) => keys.includes(c.check)))
+      .filter((m) => !isDemo(m) && (keys.some((k) => m.checkStats && m.checkStats[k]) || (m.confirmed || []).some((c) => keys.includes(c.check))))
       .map((m) => m.id),
     (s) => {
       full[s.id] = s;
     },
   );
+  return full;
+}
+// every finding of a check with a verdict, shown or hidden by calibration: the history's reviews
+function reviewedFor(k, full) {
+  const out = [];
+  for (const s of Object.values(full))
+    for (const f of [...(s.findings || []), ...(s.calibHidden || [])]) {
+      const vd = s.verdicts && s.verdicts[fkey(f)];
+      if (f.check === k && vd) out.push({ s, f, vd });
+    }
+  return out;
+}
+async function skillContext(full) {
   const sessions = Object.values(full);
   const code = sessions.flatMap((s) => (s.events || []).map((e) => e.new_content).filter((t) => typeof t === "string"));
   const count = {};

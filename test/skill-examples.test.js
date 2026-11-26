@@ -1,5 +1,5 @@
 "use strict";
-/* A skill's examples/ folder (LensRules.skillExamples, 0.1.139; until then inside the panel's buildExamples, untested).
+/* A skill's examples/ folder, skill-history/bad/ since 0.1.141 (LensRules.skillExamples, 0.1.139; until then inside the panel's buildExamples, untested).
    One file at one step is one copy: in the owner's skill raw_locator/ and positional_locator/ held the same two files
    byte for byte, since both rules had a confirmed finding on them at the same step. Now the second rule refers to the
    first one's copy, and the README keeps a row per rule. A row also says when the session changed the file later: the
@@ -29,15 +29,15 @@ test("one file at one step is one copy, referred to by every rule that needs it"
   });
   assert.deepEqual(
     r.files.map((f) => f.path),
-    ["examples/README.md", "examples/raw_locator/1-login.ts", "examples/magic_number/1-totp.spec.ts"],
+    ["skill-history/bad/README.md", "skill-history/bad/raw_locator/1-login.ts", "skill-history/bad/magic_number/1-totp.spec.ts"],
   );
   assert.equal(r.files[1].content, LOGIN);
   assert.deepEqual(
     r.rows.map((x) => `${x.k} → ${x.path}`),
     [
-      "raw_locator → examples/raw_locator/1-login.ts",
-      "positional_locator → examples/raw_locator/1-login.ts",
-      "magic_number → examples/magic_number/1-totp.spec.ts",
+      "raw_locator → skill-history/bad/raw_locator/1-login.ts",
+      "positional_locator → skill-history/bad/raw_locator/1-login.ts",
+      "magic_number → skill-history/bad/magic_number/1-totp.spec.ts",
     ],
   );
   const readme = r.files[0].content.split("\n").filter((l) => l.startsWith("| `"));
@@ -55,7 +55,7 @@ test("the same file at another step is another version, so another copy", () => 
   });
   assert.deepEqual(
     r.files.map((f) => f.path),
-    ["examples/README.md", "examples/raw_locator/1-login.ts", "examples/positional_locator/1-login.ts"],
+    ["skill-history/bad/README.md", "skill-history/bad/raw_locator/1-login.ts", "skill-history/bad/positional_locator/1-login.ts"],
   );
   assert.equal(r.files[2].content, LOGIN + "// changed\n");
   assert.ok(
@@ -78,7 +78,7 @@ test("per rule: one session first, at most perRule, a finding on the same file c
   );
   assert.deepEqual(
     r.files.map((f) => f.path),
-    ["examples/README.md", "examples/raw_locator/1-login.ts", "examples/raw_locator/2-cart.ts"],
+    ["skill-history/bad/README.md", "skill-history/bad/raw_locator/1-login.ts", "skill-history/bad/raw_locator/2-cart.ts"],
   );
 });
 

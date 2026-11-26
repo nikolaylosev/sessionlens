@@ -841,8 +841,8 @@ with real newline characters>"}. No prose outside the JSON, no code fences aroun
      places, two numberings P-xx and AP-xx that did not match, examples with functions the code does not have):
      SKILL.md under 8,000 characters, one file of rules with one entry per rule (bad / good / why), one numbering P-NN
      used by every file and the script, no history in the skill (no dates, sessions, steps or verdicts), and a script
-     whose labels are the rule numbers. It never writes an examples/ folder itself: the app assembles that from real
-     files of the sessions (secrets masked) and the model only links to them. */
+     whose labels are the rule numbers. The history and the sessions' whole files stay out of the skill: the app keeps them
+     in skill-history/ (LensRules.skillHistory) and adds the line of SKILL.md that names it. */
   const GENERATE_SKILL_TPL = `You turn a set of confirmed {TARGET} rules (each with a rule statement, one or two
 real bad snippets pulled from actual sessions, sometimes a known-good snippet, and sometimes the reviewers' notes) into
 an Agent Skill package, written in {LANG}, in this exact shape — study it before writing anything:
@@ -879,11 +879,8 @@ an Agent Skill package, written in {LANG}, in this exact shape — study it befo
   placeholder and say in a comment that it is one.
 - Every Good example follows every rule of the skill, not only its own (a positive check before a negative one, no raw
   locator, no fixed wait…).
-  Do NOT write any file under "examples/": sessionlens adds that folder itself, from real files of the sessions.
-  When the input ends with an "## Example files" list, end the rules.md section of every rule (check id) listed there
-  with a line "**Real example:** \`<path>\`" naming the files listed for that rule exactly as listed (a file may be
-  listed for two rules and sit in the other rule's folder). Never invent an example path and never write example
-  code of your own.
+- Do NOT write any file under "examples/" or "skill-history/": sessionlens keeps the review history and the whole files
+  of the sessions outside the skill, and adds the one line of SKILL.md that names them.
 
 Reply ONLY with a JSON object: {"skill_name": "...", "files": [{"path": "...", "content": "..."}, ...]}. No
 prose outside the JSON, no code fences around the JSON itself. Each file's "content" is the complete file text

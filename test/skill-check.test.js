@@ -162,10 +162,14 @@ test("the owner's own format: Russian labels, plain or bold, with a note before 
 test("the script: rule numbers as labels, file names in hits, the examples left out, patterns tried on the examples", () => {
   const sh = (s) => keys(LensRules.checkSkill(files({ "scripts/check_tour-tests.sh": s }), { code: CODE }));
   assert.deepEqual(sh(SCRIPT.replace("grep -rHnE", "grep -rnE")), ["warn grep_no_h"]);
-  const withExamples = (s) =>
-    keys(LensRules.checkSkill([...files({ "scripts/check_tour-tests.sh": s }), { path: "examples/README.md", content: "" }], { code: CODE }));
-  assert.deepEqual(withExamples(SCRIPT.replace(" --exclude-dir=examples", "")), ["warn no_exclude"]);
-  assert.deepEqual(sh(SCRIPT.replace(" --exclude-dir=examples", "")), [], "no examples/ to leave out");
+  // the copies of the sessions' files: examples/ in the skill (before 0.1.141) or the history's bad/
+  const withCopies = (s, dir) =>
+    keys(LensRules.checkSkill([...files({ "scripts/check_tour-tests.sh": s }), { path: dir + "README.md", content: "" }], { code: CODE }));
+  const noExclude = SCRIPT.replace(" --exclude-dir=examples --exclude-dir=skill-history", "");
+  assert.deepEqual(withCopies(noExclude, "examples/"), ["warn no_exclude"]);
+  assert.deepEqual(withCopies(noExclude, "skill-history/bad/"), ["warn no_exclude"]);
+  assert.deepEqual(withCopies(SCRIPT.replace(" --exclude-dir=examples", ""), "skill-history/bad/"), [], "skill-history left out");
+  assert.deepEqual(sh(noExclude), [], "no copies to leave out");
   assert.deepEqual(sh(SCRIPT.replace('check "P-02 fixed wait"', 'check "AP-05 fixed wait"')), ["error second_numbering", "error check_no_id"]);
   assert.deepEqual(sh(SCRIPT.replace('check "P-02 fixed wait"', 'check "P-09 fixed wait"')), ["error check_unknown P-09"]);
   assert.deepEqual(sh(SCRIPT.replace('"waitForTimeout\\("', '"sleep\\("')), ["warn check_misses P-02"]);

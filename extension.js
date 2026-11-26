@@ -760,9 +760,21 @@ function wireMessages(
         // root here and the two stay in sync without you having to edit either by hand.
         // skillName and every path were checked by validate.js (whitelisted characters, no .., backslash, colon, reserved names);
         // the resolved target is checked once more before anything is written
-        const root = vscode.Uri.joinPath(picked[0], "skills", msg.payload.skillName || "generated-skill");
-        const targets = msg.payload.files.map((f) => ({ f, uri: vscode.Uri.joinPath(root, ...f.path.split("/")) }));
-        if (!V.isInside(picked[0].fsPath, root.fsPath) || targets.some((t) => !V.isInside(root.fsPath, t.uri.fsPath))) {
+        const name = msg.payload.skillName || "generated-skill";
+        const root = vscode.Uri.joinPath(picked[0], "skills", name);
+        /* the skill's history (skill-history/…, 0.1.141) goes outside the skill, to .sessionlens/skill-history/<name>/
+           of the same folder: for people, and out of what an agent loads with the skill */
+        const history = vscode.Uri.joinPath(picked[0], ".sessionlens", "skill-history", name);
+        const targets = msg.payload.files.map((f) => {
+          const h = /^skill-history\//.test(f.path);
+          const base = h ? history : root;
+          return { f, base, uri: vscode.Uri.joinPath(base, ...(h ? f.path.slice("skill-history/".length) : f.path).split("/")) };
+        });
+        if (
+          !V.isInside(picked[0].fsPath, root.fsPath) ||
+          !V.isInside(picked[0].fsPath, history.fsPath) ||
+          targets.some((t) => !V.isInside(t.base.fsPath, t.uri.fsPath))
+        ) {
           reply({ error: "SessionLens: a file would land outside the skill folder" });
           return;
         }
@@ -771,7 +783,10 @@ function wireMessages(
           await vscode.workspace.fs.createDirectory(dirUri);
           await vscode.workspace.fs.writeFile(fileUri, Buffer.from(f.content, "utf8"));
         }
-        vscode.window.showInformationMessage(t("SessionLens: skill saved to {0}", root.fsPath));
+        const kept = targets.some((x) => x.base === history);
+        vscode.window.showInformationMessage(
+          kept ? t("SessionLens: skill saved to {0}, its history to {1}", root.fsPath, history.fsPath) : t("SessionLens: skill saved to {0}", root.fsPath),
+        );
         reply(root.fsPath);
       } else if (msg.type === "open:transcript") {
         const picked = await vscode.window.showOpenDialog({
